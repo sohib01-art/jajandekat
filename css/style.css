@@ -146,7 +146,7 @@ main{ flex:1; padding:0 18px; }
 .duration-row button.picked{ border-color:var(--brand); color:var(--brand); background:var(--brand-dim); }
 
 .setup-form{ display:flex; flex-direction:column; gap:10px; margin-top:14px; text-align:left; }
-.setup-form input{
+.setup-form input, .setup-form select{
   background:var(--surface-2); border:1px solid var(--stroke); border-radius:10px;
   padding:10px 12px; color:var(--text); font-family:inherit; font-size:13px;
 }
