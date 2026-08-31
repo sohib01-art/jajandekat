@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>JajanDekat</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1C1917">
+
+<!-- Leaflet (peta gratis, tanpa API key) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Supabase client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand-row">
+      <div>
+        <div class="brand">Jajan<span>Dekat</span></div>
+        <div class="tagline">Cek dulu, baru jalan.</div>
+      </div>
+    </div>
+    <div class="mode-toggle">
+      <button id="btn-pembeli" class="active">🧑 Pembeli</button>
+      <button id="btn-pedagang">🛒 Pedagang</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="loading">Memuat data pedagang…</div>
+  </main>
+
+  <nav class="bottom">
+    <div class="nav-item active" data-view="status"><div class="nav-icon">🟢</div>Status</div>
+    <div class="nav-item" data-view="peta"><div class="nav-icon">🗺️</div>Peta</div>
+    <div class="nav-item" data-view="cari"><div class="nav-icon">🔍</div>Cari</div>
+  </nav>
+
+  <div class="toast" id="toast">
+    <span class="toast-emoji">🔔</span>
+    <span id="toast-text"></span>
+  </div>
+
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

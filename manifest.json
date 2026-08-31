@@ -1,0 +1,10 @@
+{
+  "name": "JajanDekat",
+  "short_name": "JajanDekat",
+  "description": "Cek dulu, baru jalan — cari pedagang keliling yang sedang jualan di sekitarmu.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1C1917",
+  "theme_color": "#1C1917",
+  "icons": []
+}
