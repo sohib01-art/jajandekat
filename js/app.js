@@ -202,14 +202,26 @@ function renderPedagang() {
     main.innerHTML = `
       <div class="vendor-hero">
         <div class="vendor-hero-emoji">🛒</div>
-        <div class="vendor-hero-name">Pilih akun pedagang Anda</div>
+        <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
+        <div class="setup-form">
+          <input id="reg-name" type="text" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
+          <input id="reg-category" type="text" placeholder="Kategori, misal: Bakso / Sate / Gorengan" />
+          <input id="reg-emoji" type="text" placeholder="Emoji makanan (contoh: 🍜)" maxlength="2" />
+          <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp (contoh: 6281234567890)" />
+          <button onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
+        </div>
+        <div id="reg-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
+      </div>
+
+      ${vendors.length ? `
+        <div class="section-label" style="text-align:left;">Sudah pernah daftar? Masuk ke akun lama</div>
         <div class="setup-form">
           <select id="pick-vendor" style="background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);">
-            ${optionsHtml || '<option>Belum ada pedagang terdaftar</option>'}
+            ${optionsHtml}
           </select>
           <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
         </div>
-      </div>
+      ` : ''}
     `;
     return;
   }
@@ -250,6 +262,34 @@ function renderPedagang() {
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
   `;
 }
+
+window.__registerVendor = async function () {
+  const name = document.getElementById('reg-name').value.trim();
+  const category = document.getElementById('reg-category').value.trim();
+  const emoji = document.getElementById('reg-emoji').value.trim() || '🍜';
+  const whatsapp = document.getElementById('reg-whatsapp').value.trim();
+  const errEl = document.getElementById('reg-error');
+
+  if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
+
+  errEl.textContent = 'Mendaftarkan...';
+  try {
+    const { data, error } = await supabase
+      .from('vendors')
+      .insert({ name, category, emoji, whatsapp })
+      .select()
+      .single();
+
+    if (error) { errEl.textContent = 'Gagal mendaftar: ' + error.message; return; }
+
+    vendors.push(data);
+    myVendorId = data.id;
+    localStorage.setItem('jd_my_vendor_id', myVendorId);
+    renderPedagang();
+  } catch (e) {
+    errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
+  }
+};
 
 window.__pickVendor = function () {
   const sel = document.getElementById('pick-vendor');
