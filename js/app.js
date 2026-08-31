@@ -5,8 +5,14 @@
 
 const isConfigured = !SUPABASE_URL.includes("ISI-PROJECT-ID");
 let supabase = null;
-if (isConfigured) {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let initError = null;
+try {
+  if (isConfigured) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) {
+  initError = e;
+  console.error('Gagal membuat koneksi Supabase:', e);
 }
 
 // Identitas pembeli sederhana tanpa login (device id disimpan di localStorage)
@@ -29,6 +35,19 @@ let markers = {};
 const main = document.getElementById('main');
 const btnPembeli = document.getElementById('btn-pembeli');
 const btnPedagang = document.getElementById('btn-pedagang');
+
+// Pasang tombol menu PALING AWAL, sebelum kode lain yang mungkin gagal —
+// supaya menu tetap bisa diklik walau ada masalah koneksi/data.
+btnPembeli.onclick = () => {
+  mode = 'pembeli';
+  btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
+  renderPembeli();
+};
+btnPedagang.onclick = () => {
+  mode = 'pedagang';
+  btnPedagang.classList.add('active'); btnPembeli.classList.remove('active');
+  renderPedagang();
+};
 
 function showToast(text) {
   const t = document.getElementById('toast');
@@ -284,25 +303,35 @@ window.__toggleFollow = async function (vendorId) {
   await toggleFollowDb(vendorId, isFollowing);
 };
 
-// ---------- MODE SWITCH ----------
-btnPembeli.onclick = () => {
-  mode = 'pembeli';
-  btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
-  renderPembeli();
-};
-btnPedagang.onclick = () => {
-  mode = 'pedagang';
-  btnPedagang.classList.add('active'); btnPembeli.classList.remove('active');
-  renderPedagang();
-};
+// ---------- ERROR SCREEN ----------
+function renderError(message) {
+  main.innerHTML = `
+    <div class="vendor-hero" style="margin-top:24px;">
+      <div class="vendor-hero-emoji">⚠️</div>
+      <div class="vendor-hero-name">Gagal memuat data</div>
+      <div class="vendor-hero-status" style="margin-top:10px; line-height:1.6;">
+        ${message}
+      </div>
+    </div>
+  `;
+}
 
 // ---------- INIT ----------
 async function init() {
+  if (initError) {
+    renderError('Tidak bisa membuat koneksi ke Supabase. Cek internet Anda, lalu tarik layar ke bawah untuk refresh halaman ini.');
+    return;
+  }
   if (!isConfigured) { renderSetupNeeded(); return; }
-  vendors = await fetchVendors();
-  const followList = await fetchFollows();
-  followedIds = new Set(followList);
-  subscribeRealtime();
-  renderPembeli();
+  try {
+    vendors = await fetchVendors();
+    const followList = await fetchFollows();
+    followedIds = new Set(followList);
+    subscribeRealtime();
+    renderPembeli();
+  } catch (e) {
+    console.error(e);
+    renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Tarik layar ke bawah untuk mencoba lagi.');
+  }
 }
 init();
