@@ -72,15 +72,22 @@ function renderSetupNeeded() {
 }
 
 // ---------- DATA LAYER ----------
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Waktu habis: ${label} tidak merespons dalam ${ms/1000} detik.`)), ms))
+  ]);
+}
+
 async function fetchVendors() {
-  const { data, error } = await supabase.from('vendors').select('*').order('name');
-  if (error) { console.error(error); return []; }
+  const { data, error } = await withTimeout(supabase.from('vendors').select('*').order('name'), 10000, 'Ambil data pedagang');
+  if (error) { console.error(error); throw error; }
   return data;
 }
 
 async function fetchFollows() {
-  const { data, error } = await supabase.from('follows').select('vendor_id').eq('device_id', deviceId);
-  if (error) { console.error(error); return []; }
+  const { data, error } = await withTimeout(supabase.from('follows').select('vendor_id').eq('device_id', deviceId), 10000, 'Ambil data pengikut');
+  if (error) { console.error(error); throw error; }
   return data.map(f => f.vendor_id);
 }
 
@@ -371,7 +378,7 @@ async function init() {
     renderPembeli();
   } catch (e) {
     console.error(e);
-    renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Tarik layar ke bawah untuk mencoba lagi.');
+    renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
   }
 }
 init();
