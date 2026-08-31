@@ -1,0 +1,18 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Setiap hari jam 06:00 UTC (13:00 WITA) — cukup untuk mencegah pause 7 hari
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping tabel vendors
+        run: |
+          curl -s -X GET \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/vendors?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
