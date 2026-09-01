@@ -109,6 +109,12 @@ main{ flex:1; padding:0 18px; }
 .status-text.nonaktif{ color:var(--text-faint); }
 .vendor-sub{ font-size:11px; color:var(--text-faint); margin-top:2px; }
 
+.premium-badge{
+  display:inline-block; background:linear-gradient(135deg, #FFD86B, #FF6B4A);
+  color:#fff; font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:999px;
+  vertical-align:middle; margin-left:3px;
+}
+
 .follow-btn{
   border:none; background:var(--surface-2); color:var(--brand);
   font-family:'Inter'; font-weight:700; font-size:11px; padding:8px 13px;
