@@ -707,4 +707,39 @@ async function init() {
     renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
   }
 }
+// ---------- TOMBOL INSTAL APLIKASI (PWA) ----------
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  if (document.getElementById('install-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.style.cssText = `
+    position:fixed; bottom:78px; left:50%; transform:translateX(-50%);
+    max-width:440px; width:calc(100% - 32px); background:var(--brand); color:#fff;
+    border-radius:14px; padding:12px 14px; display:flex; align-items:center; gap:10px;
+    box-shadow:0 10px 30px -8px rgba(0,0,0,.3); z-index:90; font-family:'Inter';
+  `;
+  banner.innerHTML = `
+    <span style="font-size:20px;">📲</span>
+    <div style="flex:1;font-size:12.5px;font-weight:600;">Instal JajanDekat ke layar utama HP-mu</div>
+    <button id="install-btn" style="background:#fff;color:var(--brand);border:none;border-radius:8px;padding:7px 12px;font-weight:700;font-size:11.5px;">Instal</button>
+    <button id="install-dismiss" style="background:transparent;color:#fff;border:none;font-size:16px;padding:0 4px;">✕</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('install-btn').onclick = async () => {
+    banner.remove();
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+  };
+  document.getElementById('install-dismiss').onclick = () => banner.remove();
+}
+
 init();
