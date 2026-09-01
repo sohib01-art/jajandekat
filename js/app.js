@@ -4,11 +4,11 @@
 // ============================================
 
 const isConfigured = !SUPABASE_URL.includes("ISI-PROJECT-ID");
-let supabase = null;
+let sb = null;
 let initError = null;
 try {
   if (isConfigured) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 } catch (e) {
   initError = e;
@@ -80,22 +80,22 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(supabase.from('vendors').select('*').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('*').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
 
 async function fetchFollows() {
-  const { data, error } = await withTimeout(supabase.from('follows').select('vendor_id').eq('device_id', deviceId), 10000, 'Ambil data pengikut');
+  const { data, error } = await withTimeout(sb.from('follows').select('vendor_id').eq('device_id', deviceId), 10000, 'Ambil data pengikut');
   if (error) { console.error(error); throw error; }
   return data.map(f => f.vendor_id);
 }
 
 async function toggleFollowDb(vendorId, isFollowing) {
   if (isFollowing) {
-    await supabase.from('follows').delete().eq('device_id', deviceId).eq('vendor_id', vendorId);
+    await sb.from('follows').delete().eq('device_id', deviceId).eq('vendor_id', vendorId);
   } else {
-    await supabase.from('follows').insert({ device_id: deviceId, vendor_id: vendorId });
+    await sb.from('follows').insert({ device_id: deviceId, vendor_id: vendorId });
   }
 }
 
@@ -108,13 +108,13 @@ async function setVendorStatus(vendorId, active, untilMinutes, lat, lng) {
   } else {
     payload.active_until = null;
   }
-  const { error } = await supabase.from('vendors').update(payload).eq('id', vendorId);
+  const { error } = await sb.from('vendors').update(payload).eq('id', vendorId);
   if (error) console.error(error);
 }
 
 // ---------- REALTIME ----------
 function subscribeRealtime() {
-  supabase.channel('public:vendors')
+  sb.channel('public:vendors')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vendors' }, (payload) => {
       const updated = payload.new;
       const idx = vendors.findIndex(v => v.id === updated.id);
@@ -281,7 +281,7 @@ window.__registerVendor = async function () {
 
   errEl.textContent = 'Mendaftarkan...';
   try {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('vendors')
       .insert({ name, category, emoji, whatsapp })
       .select()
