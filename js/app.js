@@ -115,19 +115,59 @@ async function toggleFollowDb(vendorId, isFollowing) {
   }
 }
 
-async function setVendorStatus(vendorId, active, untilMinutes, lat, lng) {
+async function setVendorStatus(vendorId, active, untilMinutes, lat, lng, photoUrl) {
   const payload = { active };
   if (active) {
     payload.active_until = new Date(Date.now() + untilMinutes * 60000).toISOString();
     if (lat != null) payload.lat = lat;
     if (lng != null) payload.lng = lng;
+    if (photoUrl !== undefined) payload.photo_url = photoUrl;
   } else {
     payload.active_until = null;
+    payload.photo_url = null; // foto ikut hilang begitu selesai jualan
   }
   const { error } = await sb.from('vendors').update(payload).eq('id', vendorId);
   if (error) console.error(error);
 }
 
+// ---------- FOTO DAGANGAN (sementara, ikut terhapus saat selesai jualan) ----------
+function compressImage(file, maxWidth = 800, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadVendorPhoto(vendorId, file) {
+  const blob = await compressImage(file);
+  const path = `${vendorId}/${Date.now()}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function deleteVendorPhotoByUrl(photoUrl) {
+  if (!photoUrl) return;
+  try {
+    const path = photoUrl.split('/vendor-photos/')[1];
+    if (path) await sb.storage.from('vendor-photos').remove([path]);
+  } catch (e) { console.error('Gagal hapus foto lama:', e); }
+}
 // ---------- REALTIME ----------
 function subscribeRealtime() {
   sb.channel('public:vendors')
@@ -177,7 +217,7 @@ function renderVendorListHtml(list) {
       : null;
     return `
       <div class="vendor-card">
-        <div class="vendor-emoji">${v.emoji || '🍜'}</div>
+        <div class="vendor-emoji" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
         <div class="vendor-info">
           <div class="vendor-name">${v.name}</div>
           <div class="vendor-meta">
@@ -258,10 +298,21 @@ function renderMap() {
 // ---------- VENDOR VIEW ----------
 let myVendorId = localStorage.getItem('jd_my_vendor_id') || null;
 let pickedDuration = 120;
+let selectedEmoji = '🍜';
+
+window.__pickEmoji = function (e) {
+  selectedEmoji = e;
+  renderPedagang();
+};
 
 function renderPedagang() {
   if (!myVendorId) {
     const optionsHtml = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+    const emojiChoices = ['🍜','🍲','🍢','🥟','🍚','🍦','🥤','🍌','🍧','🍰','🌽','🍡','🍗','🥞','🍔','🌭'];
+    const emojiHtml = emojiChoices.map(e => `
+      <button type="button" class="emoji-choice ${e === selectedEmoji ? 'picked' : ''}" onclick="window.__pickEmoji('${e}')">${e}</button>
+    `).join('');
+
     main.innerHTML = `
       <div class="vendor-hero">
         <div class="vendor-hero-emoji">🛒</div>
@@ -269,7 +320,8 @@ function renderPedagang() {
         <div class="setup-form">
           <input id="reg-name" type="text" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
           <input id="reg-category" type="text" placeholder="Kategori, misal: Bakso / Sate / Gorengan" />
-          <input id="reg-emoji" type="text" placeholder="Emoji makanan (contoh: 🍜)" maxlength="2" />
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Pilih emoji makanan</div>
+          <div class="emoji-grid">${emojiHtml}</div>
           <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp (contoh: 6281234567890)" />
           <button onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
         </div>
@@ -305,6 +357,23 @@ function renderPedagang() {
         ${v.active ? '🟢 SEDANG JUALAN · sampai ' + untilStr : '🔴 Belum jualan hari ini'}
       </div>
 
+      ${v.active && v.photo_url ? `
+        <img src="${v.photo_url}" style="width:100%;border-radius:14px;margin-top:14px;display:block;" />
+      ` : ''}
+
+      ${!v.active ? `
+        <div style="margin-top:16px;">
+          <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="window.__onPhotoSelected(event)" />
+          <div id="photo-zone" onclick="document.getElementById('photo-input').click()" style="
+            border:1.5px dashed var(--stroke); border-radius:14px; padding:16px;
+            text-align:center; cursor:pointer; color:var(--text-dim); font-size:12.5px;">
+            ${pendingPhotoPreview
+              ? `<img src="${pendingPhotoPreview}" style="width:100%;border-radius:10px;margin-bottom:8px;" /><span style="color:var(--brand);">Ganti foto</span>`
+              : '📷 Ambil foto dagangan (opsional)'}
+          </div>
+        </div>
+      ` : ''}
+
       <button class="big-toggle ${v.active ? 'on' : 'off'}" onclick="window.__toggleStatus()">
         ${v.active
           ? '🔴 SELESAI JUALAN <small>Tekan untuk berhenti</small>'
@@ -326,10 +395,25 @@ function renderPedagang() {
   `;
 }
 
+let pendingPhotoFile = null;
+let pendingPhotoPreview = null;
+
+window.__onPhotoSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    pendingPhotoPreview = e.target.result;
+    renderPedagang();
+  };
+  reader.readAsDataURL(file);
+};
+
 window.__registerVendor = async function () {
   const name = document.getElementById('reg-name').value.trim();
   const category = document.getElementById('reg-category').value.trim();
-  const emoji = document.getElementById('reg-emoji').value.trim() || '🍜';
+  const emoji = selectedEmoji;
   const whatsapp = document.getElementById('reg-whatsapp').value.trim();
   const errEl = document.getElementById('reg-error');
 
@@ -348,6 +432,7 @@ window.__registerVendor = async function () {
     vendors.push(data);
     myVendorId = data.id;
     localStorage.setItem('jd_my_vendor_id', myVendorId);
+    selectedEmoji = '🍜';
     renderPedagang();
   } catch (e) {
     errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
@@ -377,21 +462,34 @@ window.__toggleStatus = async function () {
   const v = vendors.find(v => v.id === myVendorId);
   if (!v) return;
   if (v.active) {
+    await deleteVendorPhotoByUrl(v.photo_url);
     await setVendorStatus(v.id, false);
-    v.active = false; v.active_until = null;
+    v.active = false; v.active_until = null; v.photo_url = null;
   } else {
     // Ambil lokasi nyata dari browser (gratis, bawaan HP)
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
-      await setVendorStatus(v.id, true, pickedDuration, latitude, longitude);
-      v.active = true; v.lat = latitude; v.lng = longitude;
+      let photoUrl = null;
+      if (pendingPhotoFile) {
+        try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
+        catch (e) { console.error('Gagal upload foto:', e); }
+      }
+      await setVendorStatus(v.id, true, pickedDuration, latitude, longitude, photoUrl);
+      v.active = true; v.lat = latitude; v.lng = longitude; v.photo_url = photoUrl;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
+      pendingPhotoFile = null; pendingPhotoPreview = null;
       renderPedagang();
     }, async () => {
       // Kalau lokasi ditolak, tetap aktifkan status tanpa koordinat
-      await setVendorStatus(v.id, true, pickedDuration, null, null);
-      v.active = true;
+      let photoUrl = null;
+      if (pendingPhotoFile) {
+        try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
+        catch (e) { console.error('Gagal upload foto:', e); }
+      }
+      await setVendorStatus(v.id, true, pickedDuration, null, null, photoUrl);
+      v.active = true; v.photo_url = photoUrl;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
+      pendingPhotoFile = null; pendingPhotoPreview = null;
       renderPedagang();
     });
     return;
