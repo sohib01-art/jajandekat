@@ -338,7 +338,7 @@ function renderPedagang() {
           <input id="reg-category" type="text" placeholder="Kategori, misal: Bakso / Sate / Gorengan" />
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Pilih emoji makanan</div>
           <div class="emoji-grid">${emojiHtml}</div>
-          <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp (contoh: 6281234567890)" />
+          <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
           <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
           <button onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
         </div>
@@ -353,6 +353,9 @@ function renderPedagang() {
           </select>
           <input id="pick-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Masukkan PIN akun ini" />
           <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
+          <a href="#" onclick="window.__forgotPin(); return false;" style="text-align:center;font-size:11.5px;color:var(--text-faint);text-decoration:underline;">
+            Lupa PIN? Hubungi admin
+          </a>
         </div>
         <div id="pick-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
       ` : ''}
@@ -436,6 +439,7 @@ function renderPedagang() {
 
 let pendingPhotoFile = null;
 let pendingPhotoPreview = null;
+let confirmedDuplicateName = false;
 
 window.__onPhotoSelected = function (event) {
   const file = event.target.files[0];
@@ -458,7 +462,24 @@ window.__registerVendor = async function () {
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
+  if (!whatsapp) { errEl.textContent = 'Nomor WhatsApp wajib diisi (jadi penanda akun Anda).'; return; }
   if (!/^\d{4}$/.test(pin)) { errEl.textContent = 'PIN wajib 4 angka.'; return; }
+
+  // Cegah satu nomor WA didaftarkan dua kali
+  const dupe = vendors.find(v => v.whatsapp === whatsapp);
+  if (dupe) {
+    errEl.textContent = `Nomor ini sudah terdaftar sebagai "${dupe.name}". Masuk pakai PIN di bawah, atau hubungi admin kalau lupa PIN.`;
+    return;
+  }
+
+  // Nama sama tapi WA beda — boleh lanjut, tapi beri peringatan dulu (butuh klik sekali lagi)
+  const nameDupe = vendors.find(v => v.name.trim().toLowerCase() === name.toLowerCase());
+  if (nameDupe && !confirmedDuplicateName) {
+    errEl.textContent = `Sudah ada pedagang bernama "${nameDupe.name}" terdaftar. Kalau ini memang usaha berbeda, tekan "Daftar Sekarang" sekali lagi untuk lanjut.`;
+    confirmedDuplicateName = true;
+    return;
+  }
+  confirmedDuplicateName = false;
 
   errEl.textContent = 'Mendaftarkan...';
   try {
@@ -478,6 +499,13 @@ window.__registerVendor = async function () {
   } catch (e) {
     errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
   }
+};
+
+window.__forgotPin = function () {
+  const sel = document.getElementById('pick-vendor');
+  const vendorName = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+  const msg = `Halo, saya lupa PIN akun pedagang JajanDekat saya. Nama usaha: ${vendorName}`;
+  window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
 window.__pickVendor = function () {
@@ -574,6 +602,92 @@ function renderError(message) {
     </div>
   `;
 }
+
+// ---------- SUPER ADMIN (tersembunyi — tap logo 5x) ----------
+let tapCount = 0;
+let tapTimer = null;
+let isSuperAdmin = false;
+
+const brandTapZone = document.getElementById('brand-tap-zone');
+if (brandTapZone) {
+  brandTapZone.addEventListener('click', () => {
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { tapCount = 0; }, 1500);
+    if (tapCount >= 5) {
+      tapCount = 0;
+      const pw = prompt('Password admin:');
+      if (pw === SUPER_ADMIN_PASSWORD) {
+        isSuperAdmin = true;
+        renderAdminDashboard();
+      } else if (pw !== null) {
+        alert('Password salah.');
+      }
+    }
+  });
+}
+
+async function renderAdminDashboard() {
+  document.getElementById('mode-toggle-wrap').style.display = 'none';
+  document.querySelector('nav.bottom').style.display = 'none';
+
+  main.innerHTML = `
+    <div class="section-label">🔒 Dashboard Admin</div>
+    <div id="admin-list" class="vendor-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat...</div></div>
+    <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
+  `;
+
+  const { data, error } = await sb.from('vendors').select('*').order('created_at', { ascending: false });
+  const listEl = document.getElementById('admin-list');
+  if (error) { listEl.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat: ${error.message}</div>`; return; }
+
+  listEl.innerHTML = data.map(v => `
+    <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:10px;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div class="vendor-emoji" style="${v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;` : ''}">${v.photo_url ? '' : (v.emoji || '🍜')}</div>
+        <div class="vendor-info">
+          <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
+          <div class="vendor-sub mono">PIN: ${v.pin || '(belum ada)'} · WA: ${v.whatsapp || '-'}</div>
+          <div class="vendor-sub">${v.category || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="follow-btn" onclick="window.__adminResetPin('${v.id}','${v.name.replace(/'/g, "\\'")}')">🔑 Reset PIN</button>
+        <button class="follow-btn ${v.is_premium ? 'following' : ''}" onclick="window.__adminTogglePremium('${v.id}', ${v.is_premium})">⭐ ${v.is_premium ? 'Cabut Premium' : 'Jadikan Premium'}</button>
+        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️ Hapus</button>
+      </div>
+    </div>
+  `).join('') || '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada pedagang terdaftar.</div>';
+}
+
+window.__exitAdmin = function () {
+  isSuperAdmin = false;
+  document.getElementById('mode-toggle-wrap').style.display = '';
+  document.querySelector('nav.bottom').style.display = '';
+  render_ExitToNormal();
+};
+function render_ExitToNormal() { mode === 'pembeli' ? renderPembeli() : renderPedagang(); }
+
+window.__adminResetPin = async function (id, name) {
+  const newPin = String(Math.floor(1000 + Math.random() * 9000));
+  const { error } = await sb.from('vendors').update({ pin: newPin }).eq('id', id);
+  if (error) { alert('Gagal reset: ' + error.message); return; }
+  alert(`PIN baru untuk "${name}": ${newPin}\n\nSampaikan ke pedagangnya lewat WhatsApp.`);
+  renderAdminDashboard();
+};
+
+window.__adminTogglePremium = async function (id, current) {
+  const { error } = await sb.from('vendors').update({ is_premium: !current }).eq('id', id);
+  if (error) { alert('Gagal ubah status: ' + error.message); return; }
+  renderAdminDashboard();
+};
+
+window.__adminDeleteVendor = async function (id, name) {
+  if (!confirm(`Yakin hapus akun "${name}"? Ini tidak bisa dibatalkan.`)) return;
+  const { error } = await sb.from('vendors').delete().eq('id', id);
+  if (error) { alert('Gagal hapus: ' + error.message); return; }
+  renderAdminDashboard();
+};
 
 // ---------- INIT ----------
 async function init() {
