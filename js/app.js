@@ -195,7 +195,7 @@ function renderPembeli() {
 
   const storyHtml = followed.map(v => `
     <button class="story ${v.active ? 'on' : ''}" onclick="window.__toggleFollow('${v.id}')">
-      <div class="story-ring">${v.emoji || '🍜'}</div>
+      <div class="story-ring" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
       <div class="story-name">${v.name.split(' ')[0]}</div>
     </button>
   `).join('');
@@ -287,9 +287,12 @@ function renderMap() {
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
   vendors.filter(v => v.active && v.lat && v.lng).forEach(v => {
+    const iconHtml = v.photo_url
+      ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${v.photo_url}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
+      : `<div style="font-size:22px;filter:drop-shadow(0 0 6px #3DDC97)">${v.emoji || '🍜'}</div>`;
     const icon = L.divIcon({
-      html: `<div style="font-size:22px;filter:drop-shadow(0 0 6px #3DDC97)">${v.emoji || '🍜'}</div>`,
-      className: '', iconSize: [30, 30]
+      html: iconHtml,
+      className: '', iconSize: [34, 34]
     });
     markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(v.name);
   });
@@ -351,15 +354,11 @@ function renderPedagang() {
 
   main.innerHTML = `
     <div class="vendor-hero">
-      <div class="vendor-hero-emoji">${v.emoji || '🍜'}</div>
+      <div class="vendor-hero-emoji" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
       <div class="vendor-hero-name">${v.name}</div>
       <div class="vendor-hero-status ${v.active ? 'live' : ''} mono">
         ${v.active ? '🟢 SEDANG JUALAN · sampai ' + untilStr : '🔴 Belum jualan hari ini'}
       </div>
-
-      ${v.active && v.photo_url ? `
-        <img src="${v.photo_url}" style="width:100%;border-radius:14px;margin-top:14px;display:block;" />
-      ` : ''}
 
       ${!v.active ? `
         <div style="margin-top:16px;">
