@@ -16,19 +16,19 @@
 <!-- Supabase client -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=13">
 </head>
 <body>
 <div id="app">
 
   <header>
     <div class="brand-row">
-      <div>
+      <div id="brand-tap-zone">
         <div class="brand">Jajan<span>Dekat</span></div>
         <div class="tagline">Cek dulu, baru jalan.</div>
       </div>
     </div>
-    <div class="mode-toggle">
+    <div class="mode-toggle" id="mode-toggle-wrap">
       <button id="btn-pembeli" class="active">🧑 Pembeli</button>
       <button id="btn-pedagang">🛒 Pedagang</button>
     </div>
@@ -51,8 +51,8 @@
 
 </div>
 
-<script src="js/config.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
+<script src="js/config.js?v=13"></script>
+<script src="js/app.js?v=13"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
