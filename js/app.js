@@ -222,7 +222,8 @@ function renderPembeli() {
 
 function renderVendorListHtml(list) {
   if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
-  return list.map(v => {
+  const sorted = [...list].sort((a, b) => (b.is_premium ? 1 : 0) - (a.is_premium ? 1 : 0));
+  return sorted.map(v => {
     const following = followedIds.has(v.id);
     const untilStr = v.active_until
       ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
@@ -231,7 +232,7 @@ function renderVendorListHtml(list) {
       <div class="vendor-card">
         <div class="vendor-emoji" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
         <div class="vendor-info">
-          <div class="vendor-name">${v.name}</div>
+          <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐ Premium</span>' : ''}</div>
           <div class="vendor-meta">
             <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
             <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
@@ -404,6 +405,30 @@ function renderPedagang() {
           `).join('')}
         </div>
       ` : ''}
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      ${v.is_premium ? `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:20px;">⭐</span>
+          <div>
+            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Akun Premium Aktif</div>
+            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Terima kasih sudah mendukung JajanDekat!</div>
+          </div>
+        </div>
+      ` : `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="font-size:20px;">⭐</span>
+          <div>
+            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Upgrade ke Premium</div>
+            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Tampil di atas daftar + badge terpercaya</div>
+          </div>
+        </div>
+        <a href="https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau upgrade ke Premium JajanDekat.')}"
+           target="_blank" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;">
+          💬 Hubungi Admin via WhatsApp
+        </a>
+      `}
     </div>
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
   `;
