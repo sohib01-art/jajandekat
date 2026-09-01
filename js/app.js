@@ -49,6 +49,22 @@ btnPedagang.onclick = () => {
   renderPedagang();
 };
 
+// Pasang tombol nav bawah (Status / Peta / Cari) — hanya berlaku di mode Pembeli
+let bottomView = 'status';
+document.querySelectorAll('nav.bottom .nav-item').forEach(el => {
+  el.onclick = () => {
+    bottomView = el.dataset.view;
+    document.querySelectorAll('nav.bottom .nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    // Nav bawah selalu membawa ke mode Pembeli
+    if (mode !== 'pembeli') {
+      mode = 'pembeli';
+      btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
+    }
+    renderPembeli();
+  };
+});
+
 function showToast(text) {
   const t = document.getElementById('toast');
   document.getElementById('toast-text').textContent = text;
@@ -132,6 +148,9 @@ function subscribeRealtime() {
 
 // ---------- BUYER VIEW ----------
 function renderPembeli() {
+  if (bottomView === 'peta') return renderPetaView();
+  if (bottomView === 'cari') return renderCariView();
+
   const followed = vendors.filter(v => followedIds.has(v.id));
 
   const storyHtml = followed.map(v => `
@@ -141,7 +160,17 @@ function renderPembeli() {
     </button>
   `).join('');
 
-  const listHtml = vendors.map(v => {
+  main.innerHTML = `
+    <div class="section-label">Pedagang yang kamu ikuti</div>
+    <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
+    <div class="section-label">Semua pedagang</div>
+    <div class="vendor-list">${renderVendorListHtml(vendors)}</div>
+  `;
+}
+
+function renderVendorListHtml(list) {
+  if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
+  return list.map(v => {
     const following = followedIds.has(v.id);
     const untilStr = v.active_until
       ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
@@ -165,15 +194,42 @@ function renderPembeli() {
       </div>
     `;
   }).join('');
+}
 
+// ---------- PETA VIEW (tab "Peta") ----------
+function renderPetaView() {
+  const activeVendors = vendors.filter(v => v.active && v.lat && v.lng);
   main.innerHTML = `
-    <div class="section-label">Pedagang yang kamu ikuti</div>
-    <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
-    <div id="map"></div>
-    <div class="section-label">Semua pedagang</div>
-    <div class="vendor-list">${listHtml || '<div style="color:var(--text-faint);font-size:13px;">Belum ada pedagang terdaftar.</div>'}</div>
+    <div class="section-label">Peta pedagang yang sedang jualan</div>
+    <div id="map" style="height:calc(100vh - 300px); min-height:300px;"></div>
+    <div class="section-label">${activeVendors.length} pedagang aktif di peta</div>
+    <div class="vendor-list">${renderVendorListHtml(activeVendors)}</div>
   `;
   renderMap();
+}
+
+// ---------- CARI VIEW (tab "Cari") ----------
+function renderCariView() {
+  main.innerHTML = `
+    <div class="section-label">Cari pedagang</div>
+    <input id="search-input" type="text" placeholder="Ketik nama atau kategori, misal: bakso"
+      style="width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:12px;
+      padding:12px 14px;color:var(--text);font-family:inherit;font-size:14px;margin-bottom:6px;" />
+    <div id="search-results" class="vendor-list" style="margin-top:14px;"></div>
+  `;
+  const input = document.getElementById('search-input');
+  const results = document.getElementById('search-results');
+
+  function runSearch() {
+    const q = input.value.trim().toLowerCase();
+    const filtered = !q ? vendors : vendors.filter(v =>
+      v.name.toLowerCase().includes(q) || (v.category || '').toLowerCase().includes(q)
+    );
+    results.innerHTML = renderVendorListHtml(filtered);
+  }
+  input.oninput = runSearch;
+  input.focus();
+  runSearch();
 }
 
 function renderMap() {
