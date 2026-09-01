@@ -26,6 +26,42 @@ function getDeviceId() {
 }
 const deviceId = getDeviceId();
 
+// ---------- WEB PUSH: minta izin & simpan langganan ----------
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+let pushAsked = false;
+async function ensurePushSubscription() {
+  if (pushAsked) return;
+  pushAsked = true;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    const json = sub.toJSON();
+    await sb.from('push_subscriptions').upsert({
+      device_id: deviceId,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+    }, { onConflict: 'endpoint' });
+  } catch (e) {
+    console.error('Gagal langganan push:', e);
+  }
+}
+
 let vendors = [];
 let followedIds = new Set();
 let mode = 'pembeli';
@@ -540,6 +576,14 @@ window.__setDuration = function (mins) {
   renderPedagang();
 };
 
+async function sendPushToFollowers(vendorId, vendorName) {
+  try {
+    await sb.functions.invoke('send-vendor-push', { body: { vendor_id: vendorId, vendor_name: vendorName } });
+  } catch (e) {
+    console.error('Gagal kirim notifikasi push:', e); // tidak fatal, status tetap aktif walau notif gagal
+  }
+}
+
 window.__toggleStatus = async function () {
   const v = vendors.find(v => v.id === myVendorId);
   if (!v) return;
@@ -560,6 +604,7 @@ window.__toggleStatus = async function () {
       v.active = true; v.lat = latitude; v.lng = longitude; v.photo_url = photoUrl;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
       pendingPhotoFile = null; pendingPhotoPreview = null;
+      sendPushToFollowers(v.id, v.name);
       renderPedagang();
     }, async () => {
       // Kalau lokasi ditolak, tetap aktifkan status tanpa koordinat
@@ -572,6 +617,7 @@ window.__toggleStatus = async function () {
       v.active = true; v.photo_url = photoUrl;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
       pendingPhotoFile = null; pendingPhotoPreview = null;
+      sendPushToFollowers(v.id, v.name);
       renderPedagang();
     });
     return;
@@ -589,6 +635,7 @@ window.__toggleFollow = async function (vendorId) {
   if (isFollowing) followedIds.delete(vendorId); else followedIds.add(vendorId);
   renderPembeli();
   await toggleFollowDb(vendorId, isFollowing);
+  if (!isFollowing) ensurePushSubscription(); // baru follow -> saat inilah momen terbaik minta izin notifikasi
 };
 
 // ---------- ERROR SCREEN ----------
