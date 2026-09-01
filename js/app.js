@@ -29,6 +29,7 @@ const deviceId = getDeviceId();
 let vendors = [];
 let followedIds = new Set();
 let mode = 'pembeli';
+let activeCat = 'semua';
 let map = null;
 let markers = {};
 
@@ -200,11 +201,22 @@ function renderPembeli() {
     </button>
   `).join('');
 
+  const catList = ['semua', ...Array.from(new Set(vendors.map(v => v.category).filter(Boolean)))];
+  const catIcons = { semua: '🍲', Bakso: '🍜', Sate: '🍢', Gorengan: '🥟', Es: '🍦', Mie: '🍲' };
+  const catRowHtml = catList.map(c => `
+    <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c}')">
+      <div class="cat-circle">${catIcons[c] || '🍽️'}</div>
+      <div class="cat-label">${c === 'semua' ? 'Semua' : c}</div>
+    </button>
+  `).join('');
+  const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => v.category === activeCat);
+
   main.innerHTML = `
+    <div class="cat-row">${catRowHtml}</div>
     <div class="section-label">Pedagang yang kamu ikuti</div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
     <div class="section-label">Semua pedagang</div>
-    <div class="vendor-list">${renderVendorListHtml(vendors)}</div>
+    <div class="vendor-list">${renderVendorListHtml(filteredVendors)}</div>
   `;
 }
 
@@ -326,6 +338,7 @@ function renderPedagang() {
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Pilih emoji makanan</div>
           <div class="emoji-grid">${emojiHtml}</div>
           <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp (contoh: 6281234567890)" />
+          <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
           <button onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
         </div>
         <div id="reg-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
@@ -337,8 +350,10 @@ function renderPedagang() {
           <select id="pick-vendor" style="background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);">
             ${optionsHtml}
           </select>
+          <input id="pick-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Masukkan PIN akun ini" />
           <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
         </div>
+        <div id="pick-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
       ` : ''}
     `;
     return;
@@ -414,15 +429,17 @@ window.__registerVendor = async function () {
   const category = document.getElementById('reg-category').value.trim();
   const emoji = selectedEmoji;
   const whatsapp = document.getElementById('reg-whatsapp').value.trim();
+  const pin = document.getElementById('reg-pin').value.trim();
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
+  if (!/^\d{4}$/.test(pin)) { errEl.textContent = 'PIN wajib 4 angka.'; return; }
 
   errEl.textContent = 'Mendaftarkan...';
   try {
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, emoji, whatsapp })
+      .insert({ name, category, emoji, whatsapp, pin })
       .select()
       .single();
 
@@ -440,7 +457,19 @@ window.__registerVendor = async function () {
 
 window.__pickVendor = function () {
   const sel = document.getElementById('pick-vendor');
+  const pinInput = document.getElementById('pick-pin');
+  const errEl = document.getElementById('pick-error');
   if (!sel || !sel.value) return;
+
+  const v = vendors.find(v => v.id === sel.value);
+  const enteredPin = pinInput ? pinInput.value.trim() : '';
+
+  // Pedagang lama (sebelum fitur PIN ada) belum punya PIN — biarkan masuk tanpa PIN.
+  if (v && v.pin && v.pin !== enteredPin) {
+    errEl.textContent = 'PIN salah. Coba lagi.';
+    return;
+  }
+
   myVendorId = sel.value;
   localStorage.setItem('jd_my_vendor_id', myVendorId);
   renderPedagang();
@@ -494,6 +523,11 @@ window.__toggleStatus = async function () {
     return;
   }
   renderPedagang();
+};
+
+window.__setCat = function (c) {
+  activeCat = c;
+  renderPembeli();
 };
 
 window.__toggleFollow = async function (vendorId) {
