@@ -19,3 +19,7 @@ const ADMIN_WHATSAPP = "6285245174728";
 // Catatan: ini bukan keamanan tingkat tinggi (situs statis tanpa server),
 // hanya penghalang kasual — jangan simpan data sangat sensitif di sini.
 const SUPER_ADMIN_PASSWORD = "gantiPasswordIni123";
+
+// Kunci publik untuk Web Push (notifikasi sistem). Aman ditaruh di sini —
+// kunci publik memang dirancang untuk terlihat semua orang.
+const VAPID_PUBLIC_KEY = "BEihuKWy9okcKawjGs2vZMgrthBzCYuNdtov3WS5FNklpIalyirljyjffKnsjuZzJuFlpo7ItoYjG93qDTxQo0Y";
