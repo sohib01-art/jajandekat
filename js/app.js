@@ -360,7 +360,19 @@ function renderMap() {
       html: iconHtml,
       className: '', iconSize: [34, 34]
     });
-    markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(v.name);
+    const popupHtml = `
+      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;">
+        ${v.name}${v.is_premium ? ' ⭐' : ''}
+      </div>
+      ${v.is_premium && v.whatsapp ? `
+        <a href="https://wa.me/${v.whatsapp}" target="_blank"
+           style="display:inline-block;margin-top:6px;background:#25D366;color:#fff;text-decoration:none;
+           font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
+          💬 Chat via WhatsApp
+        </a>
+      ` : ''}
+    `;
+    markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(popupHtml);
   });
 }
 
@@ -448,6 +460,13 @@ function renderPedagang() {
         <div class="setup-form">
           <input id="reg-name" type="text" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
+          ${selectedCategories.length ? `
+            <div class="selected-cat-strip">
+              ${selectedCategories.map(label => `
+                <span class="selected-cat-pill">${label} <button type="button" onclick="window.__toggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
+              `).join('')}
+            </div>
+          ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih — tap ikon di bawah</div>`}
           <div class="cat-picker-grid">
             ${CATEGORY_OPTIONS.map(c => `
               <button type="button" class="cat-picker-item ${selectedCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__toggleCategory('${c.label.replace(/'/g, "\\'")}')">
