@@ -242,6 +242,11 @@ function subscribeRealtime() {
 }
 
 // ---------- BUYER VIEW ----------
+function normalizeCategory(s) {
+  if (!s) return s;
+  return s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+
 function renderPembeli() {
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
@@ -293,7 +298,7 @@ function renderVendorListHtml(list) {
               ${v.active ? 'SEDANG JUALAN · sampai ' + untilStr : 'Belum jualan'}
             </span>
           </div>
-          <div class="vendor-sub">${v.category || ''}</div>
+          <div class="vendor-sub">${v.category || ''}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
         </div>
         <button class="follow-btn ${following ? 'following' : ''}" onclick="window.__toggleFollow('${v.id}')">
           ${following ? '✓ Ikuti' : '+ Ikuti'}
@@ -444,6 +449,9 @@ function renderPedagang() {
               ? `<img src="${pendingPhotoPreview}" style="width:100%;border-radius:10px;margin-bottom:8px;" /><span style="color:var(--brand);">Ganti foto</span>`
               : '📷 Ambil foto dagangan (opsional)'}
           </div>
+          <div style="font-size:10px;color:var(--text-faint);margin-top:5px;text-align:left;">
+            Foto dagangan/gerobak saja. Foto tidak pantas akan dihapus tanpa pemberitahuan.
+          </div>
         </div>
       ` : ''}
 
@@ -511,7 +519,7 @@ window.__onPhotoSelected = function (event) {
 
 window.__registerVendor = async function () {
   const name = document.getElementById('reg-name').value.trim();
-  const category = document.getElementById('reg-category').value.trim();
+  const category = normalizeCategory(document.getElementById('reg-category').value.trim());
   const emoji = selectedEmoji;
   const whatsapp = document.getElementById('reg-whatsapp').value.trim();
   const pin = document.getElementById('reg-pin').value.trim();
@@ -545,7 +553,13 @@ window.__registerVendor = async function () {
       .select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
       .single();
 
-    if (error) { errEl.textContent = 'Gagal mendaftar: ' + error.message; return; }
+    if (error) {
+      const friendly = error.message.includes('vendors_whatsapp_unique')
+        ? 'Nomor WhatsApp ini sudah terdaftar. Masuk pakai PIN di bawah, atau hubungi admin kalau lupa PIN.'
+        : 'Gagal mendaftar: ' + error.message;
+      errEl.textContent = friendly;
+      return;
+    }
 
     vendors.push(data);
     myVendorId = data.id;
@@ -646,7 +660,15 @@ window.__toggleStatus = async function () {
       sendPushToFollowers(v.id, v.name);
       renderPedagang();
     }, async () => {
-      // Kalau lokasi ditolak, tetap aktifkan status tanpa koordinat
+      // Kalau lokasi ditolak, tetap aktifkan status tanpa koordinat — tapi beri tahu jelas dulu
+      const lanjut = confirm(
+        '⚠️ Izin lokasi ditolak/tidak aktif.\n\n' +
+        'Anda tetap bisa berstatus "sedang jualan", tapi pembeli TIDAK akan melihat Anda di Peta ' +
+        '(cuma muncul di daftar biasa tanpa lokasi).\n\n' +
+        'Tekan OK untuk tetap lanjut tanpa lokasi, atau Batal untuk mengaktifkan izin lokasi dulu di pengaturan HP.'
+      );
+      if (!lanjut) return;
+
       let photoUrl = null;
       if (pendingPhotoFile) {
         try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
@@ -658,7 +680,7 @@ window.__toggleStatus = async function () {
         alert('Gagal mengaktifkan status: ' + (e.message || 'PIN mungkin salah.'));
         return;
       }
-      v.active = true; v.photo_url = photoUrl;
+      v.active = true; v.photo_url = photoUrl; v.lat = null; v.lng = null;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
       pendingPhotoFile = null; pendingPhotoPreview = null;
       sendPushToFollowers(v.id, v.name);
@@ -748,7 +770,8 @@ async function renderAdminDashboard() {
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="follow-btn" onclick="window.__adminResetPin('${v.id}','${v.name.replace(/'/g, "\\'")}')">🔑 Reset PIN</button>
         <button class="follow-btn ${v.is_premium ? 'following' : ''}" onclick="window.__adminTogglePremium('${v.id}', ${v.is_premium})">⭐ ${v.is_premium ? 'Cabut Premium' : 'Jadikan Premium'}</button>
-        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️ Hapus</button>
+        ${v.photo_url ? `<button class="follow-btn" onclick="window.__adminRemovePhoto('${v.id}')">🖼️ Hapus Foto</button>` : ''}
+        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️ Hapus Akun</button>
       </div>
     </div>
   `).join('') || '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada pedagang terdaftar.</div>';
@@ -787,6 +810,15 @@ window.__adminTogglePremium = async function (id) {
     renderAdminDashboard();
   } catch (e) {
     alert('Gagal ubah status: ' + e.message);
+  }
+};
+
+window.__adminRemovePhoto = async function (id) {
+  try {
+    await callAdminAction('remove_photo', id);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal hapus foto: ' + e.message);
   }
 };
 
