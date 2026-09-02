@@ -470,7 +470,7 @@ function renderPedagang() {
           <div class="cat-picker-grid">
             ${CATEGORY_OPTIONS.map(c => `
               <button type="button" class="cat-picker-item ${selectedCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__toggleCategory('${c.label.replace(/'/g, "\\'")}')">
-                <img src="icons/${c.icon}.png" alt="${c.label}" />
+                <div class="cat-picker-icon-wrap"><img src="icons/${c.icon}.png" alt="${c.label}" /></div>
                 <span>${c.label}</span>
               </button>
             `).join('')}
@@ -508,7 +508,7 @@ function renderPedagang() {
   const untilStr = v.active_until
     ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
     : null;
-  const durations = [30, 60, 120, 240];
+  const durations = v.is_premium ? [30, 60, 120, 240, 480] : [30, 60, 120, 240];
 
   main.innerHTML = `
     <div class="vendor-hero">
@@ -553,12 +553,36 @@ function renderPedagang() {
     </div>
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🔗</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ajak Pedagang Lain, Dapat Bonus</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Rp1.000 untuk tiap pedagang yang daftar lewat link Anda dan jadi Premium</div>
+        </div>
+      </div>
+      <div id="referral-stats" style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Memuat statistik referral...</div>
+      <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;" onclick="window.__shareReferral('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+        📤 Bagikan Link Ajakan
+      </button>
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       ${v.is_premium ? `
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:20px;">⭐</span>
           <div>
             <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Akun Premium Aktif</div>
             <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Terima kasih sudah mendukung JajanDekat!</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <div style="flex:1;background:var(--bg);border-radius:12px;padding:10px;text-align:center;">
+            <div id="premium-follow-count" style="font-family:'Poppins';font-weight:800;font-size:18px;color:var(--brand);">...</div>
+            <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Pengikut</div>
+          </div>
+          <div style="flex:1;background:var(--bg);border-radius:12px;padding:10px;text-align:center;">
+            <div style="font-family:'Poppins';font-weight:800;font-size:18px;color:var(--brand);">8 jam</div>
+            <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Durasi maks.</div>
           </div>
         </div>
       ` : `
@@ -578,7 +602,32 @@ function renderPedagang() {
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
   `;
+
+  if (v.is_premium) {
+    sb.from('follows').select('id', { count: 'exact', head: true }).eq('vendor_id', v.id).then(({ count }) => {
+      const el = document.getElementById('premium-follow-count');
+      if (el) el.textContent = count ?? 0;
+    });
+  }
+
+  sb.from('vendors').select('id,is_premium', { count: 'exact' }).eq('referred_by_vendor_id', v.id).then(({ data: refs, count }) => {
+    const el = document.getElementById('referral-stats');
+    if (!el) return;
+    const premiumRefs = (refs || []).filter(r => r.is_premium).length;
+    el.innerHTML = `<b style="color:var(--text);">${count ?? 0}</b> pedagang daftar lewat link Anda · <b style="color:var(--brand);">${premiumRefs}</b> di antaranya sudah Premium (≈ Rp${(premiumRefs * 1000).toLocaleString('id-ID')} bonus)`;
+  });
 }
+
+window.__shareReferral = function (vendorId, vendorName) {
+  const code = vendorId.slice(0, 6).toUpperCase();
+  const link = `${location.origin}${location.pathname}?ref=${code}`;
+  const text = `Yuk daftar di JajanDekat! Aplikasi gratis buat pedagang keliling biar pembeli tahu kita lagi jualan di mana. Daftar lewat link ${vendorName} ini ya: ${link}`;
+  if (navigator.share) {
+    navigator.share({ title: 'JajanDekat', text, url: link }).catch(() => {});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+};
 
 let pendingPhotoFile = null;
 let pendingPhotoPreview = null;
@@ -628,9 +677,17 @@ window.__registerVendor = async function () {
 
   errEl.textContent = 'Mendaftarkan...';
   try {
+    // Deteksi kode referral dari link (?ref=KODE), cocokkan ke pedagang yang sudah dimuat
+    const refCode = new URLSearchParams(location.search).get('ref');
+    let referredByVendorId = null;
+    if (refCode) {
+      const referrer = vendors.find(v => v.id.toUpperCase().startsWith(refCode.toUpperCase()));
+      if (referrer) referredByVendorId = referrer.id;
+    }
+
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, whatsapp, pin })
+      .insert({ name, category, categories, emoji, whatsapp, pin, referred_by_vendor_id: referredByVendorId })
       .select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
       .single();
 
@@ -831,13 +888,47 @@ async function renderAdminDashboard() {
 
   main.innerHTML = `
     <div class="section-label">🔒 Dashboard Admin</div>
+    <div id="admin-stats" class="stat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;">
+      <div style="color:var(--text-faint);font-size:11px;grid-column:1/-1;">Memuat statistik...</div>
+    </div>
+    <div class="section-label" style="margin-top:6px;">Daftar Pedagang</div>
     <div id="admin-list" class="vendor-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat...</div></div>
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,referral_code').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
+  const statsEl = document.getElementById('admin-stats');
+
   if (error) { listEl.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat: ${error.message}</div>`; return; }
+
+  const { count: totalFollows } = await sb.from('follows').select('id', { count: 'exact', head: true });
+  const { count: totalReferred } = await sb.from('vendors').select('id', { count: 'exact', head: true }).not('referred_by_vendor_id', 'is', null);
+  const totalPedagang = data.length;
+  const aktifSekarang = data.filter(v => v.active).length;
+  const totalPremium = data.filter(v => v.is_premium).length;
+
+  statsEl.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
+      <div style="font-family:'Poppins';font-weight:800;font-size:17px;">${totalPedagang}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);">Total Pedagang</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
+      <div style="font-family:'Poppins';font-weight:800;font-size:17px;color:var(--aktif);">${aktifSekarang}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);">Aktif Sekarang</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
+      <div style="font-family:'Poppins';font-weight:800;font-size:17px;color:var(--brand);">${totalPremium}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);">Premium</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
+      <div style="font-family:'Poppins';font-weight:800;font-size:17px;">${totalFollows ?? 0}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);">Total Follow</div>
+    </div>
+  `;
+  document.getElementById('admin-stats').insertAdjacentHTML('afterend',
+    `<div style="font-size:11px;color:var(--text-faint);margin:2px 0 4px;">📤 ${totalReferred ?? 0} pedagang bergabung lewat link referral pedagang lain — cek satu-satu di daftar bawah untuk lihat siapa yang berhak dapat bonus.</div>`
+  );
 
   listEl.innerHTML = data.map(v => `
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:10px;">
