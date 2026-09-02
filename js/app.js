@@ -133,7 +133,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -242,11 +242,6 @@ function subscribeRealtime() {
 }
 
 // ---------- BUYER VIEW ----------
-function normalizeCategory(s) {
-  if (!s) return s;
-  return s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/^./, c => c.toUpperCase());
-}
-
 function renderPembeli() {
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
@@ -260,15 +255,15 @@ function renderPembeli() {
     </button>
   `).join('');
 
-  const catList = ['semua', ...Array.from(new Set(vendors.map(v => v.category).filter(Boolean)))];
-  const catIcons = { semua: '🍲', Bakso: '🍜', Sate: '🍢', Gorengan: '🥟', Es: '🍦', Mie: '🍲' };
+  const catList = ['semua', ...Array.from(new Set(vendors.flatMap(v => v.categories || []))).sort()];
+  const catIcons = { semua: '🍲', Nasi: '🍚', Mie: '🍜', Bakso: '🍜', Sate: '🍢', Gorengan: '🥟', Ayam: '🍗', Seafood: '🦐', Sayur: '🥗', 'Es & Minuman': '🍦', Jajanan: '🍌', 'Roti & Kue': '🍰' };
   const catRowHtml = catList.map(c => `
     <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c}')">
       <div class="cat-circle">${catIcons[c] || '🍽️'}</div>
       <div class="cat-label">${c === 'semua' ? 'Semua' : c}</div>
     </button>
   `).join('');
-  const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => v.category === activeCat);
+  const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => (v.categories || []).includes(activeCat));
 
   main.innerHTML = `
     <div class="cat-row">${catRowHtml}</div>
@@ -298,7 +293,7 @@ function renderVendorListHtml(list) {
               ${v.active ? 'SEDANG JUALAN · sampai ' + untilStr : 'Belum jualan'}
             </span>
           </div>
-          <div class="vendor-sub">${v.category || ''}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
+          <div class="vendor-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
         </div>
         <button class="follow-btn ${following ? 'following' : ''}" onclick="window.__toggleFollow('${v.id}')">
           ${following ? '✓ Ikuti' : '+ Ikuti'}
@@ -335,7 +330,7 @@ function renderCariView() {
   function runSearch() {
     const q = input.value.trim().toLowerCase();
     const filtered = !q ? vendors : vendors.filter(v =>
-      v.name.toLowerCase().includes(q) || (v.category || '').toLowerCase().includes(q)
+      v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q))
     );
     results.innerHTML = renderVendorListHtml(filtered);
   }
@@ -375,6 +370,14 @@ let myVendorId = localStorage.getItem('jd_my_vendor_id') || null;
 let myVendorPin = null; // hanya di memori (tidak disimpan permanen), diminta ulang tiap buka app baru
 let pickedDuration = 120;
 let selectedEmoji = '🍜';
+const CATEGORY_OPTIONS = ['Nasi', 'Mie', 'Bakso', 'Sate', 'Gorengan', 'Ayam', 'Seafood', 'Sayur', 'Es & Minuman', 'Jajanan', 'Roti & Kue', 'Lainnya'];
+let selectedCategories = [];
+
+window.__toggleCategory = function (c) {
+  if (selectedCategories.includes(c)) selectedCategories = selectedCategories.filter(x => x !== c);
+  else selectedCategories.push(c);
+  renderPedagang();
+};
 
 window.__pickEmoji = function (e) {
   selectedEmoji = e;
@@ -395,7 +398,13 @@ function renderPedagang() {
         <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
         <div class="setup-form">
           <input id="reg-name" type="text" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
-          <input id="reg-category" type="text" placeholder="Kategori, misal: Bakso / Sate / Gorengan" />
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
+          <div class="emoji-grid" style="grid-template-columns:repeat(3, 1fr);">
+            ${CATEGORY_OPTIONS.map(c => `
+              <button type="button" class="emoji-choice ${selectedCategories.includes(c) ? 'picked' : ''}"
+                style="font-size:11.5px;padding:8px 4px;" onclick="window.__toggleCategory('${c}')">${c}</button>
+            `).join('')}
+          </div>
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Pilih emoji makanan</div>
           <div class="emoji-grid">${emojiHtml}</div>
           <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
@@ -519,13 +528,15 @@ window.__onPhotoSelected = function (event) {
 
 window.__registerVendor = async function () {
   const name = document.getElementById('reg-name').value.trim();
-  const category = normalizeCategory(document.getElementById('reg-category').value.trim());
+  const categories = selectedCategories;
+  const category = categories[0] || null; // kolom lama, dijaga tetap terisi untuk kompatibilitas
   const emoji = selectedEmoji;
   const whatsapp = document.getElementById('reg-whatsapp').value.trim();
   const pin = document.getElementById('reg-pin').value.trim();
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
+  if (categories.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
   if (!whatsapp) { errEl.textContent = 'Nomor WhatsApp wajib diisi (jadi penanda akun Anda).'; return; }
   if (!/^\d{4}$/.test(pin)) { errEl.textContent = 'PIN wajib 4 angka.'; return; }
 
@@ -549,8 +560,8 @@ window.__registerVendor = async function () {
   try {
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, emoji, whatsapp, pin })
-      .select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
+      .insert({ name, category, categories, emoji, whatsapp, pin })
+      .select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
       .single();
 
     if (error) {
@@ -566,6 +577,7 @@ window.__registerVendor = async function () {
     myVendorPin = pin;
     localStorage.setItem('jd_my_vendor_id', myVendorId);
     selectedEmoji = '🍜';
+    selectedCategories = [];
     renderPedagang();
   } catch (e) {
     errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
@@ -753,7 +765,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   if (error) { listEl.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat: ${error.message}</div>`; return; }
 
@@ -764,7 +776,7 @@ async function renderAdminDashboard() {
         <div class="vendor-info">
           <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
           <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
-          <div class="vendor-sub">${v.category || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
+          <div class="vendor-sub">${(v.categories || []).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
