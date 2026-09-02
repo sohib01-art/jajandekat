@@ -256,10 +256,9 @@ function renderPembeli() {
   `).join('');
 
   const catList = ['semua', ...Array.from(new Set(vendors.flatMap(v => v.categories || []))).sort()];
-  const catIcons = { semua: '🍲', Nasi: '🍚', Mie: '🍜', Bakso: '🍜', Sate: '🍢', Gorengan: '🥟', Ayam: '🍗', Seafood: '🦐', Sayur: '🥗', 'Es & Minuman': '🍦', Jajanan: '🍌', 'Roti & Kue': '🍰' };
   const catRowHtml = catList.map(c => `
-    <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c}')">
-      <div class="cat-circle">${catIcons[c] || '🍽️'}</div>
+    <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c.replace(/'/g, "\\'")}')">
+      <div class="cat-circle">${c === 'semua' ? '🍽️' : `<img src="${categoryIconFile(c) || ''}" alt="${c}" />`}</div>
       <div class="cat-label">${c === 'semua' ? 'Semua' : c}</div>
     </button>
   `).join('');
@@ -370,7 +369,57 @@ let myVendorId = localStorage.getItem('jd_my_vendor_id') || null;
 let myVendorPin = null; // hanya di memori (tidak disimpan permanen), diminta ulang tiap buka app baru
 let pickedDuration = 120;
 let selectedEmoji = '🍜';
-const CATEGORY_OPTIONS = ['Nasi', 'Mie', 'Bakso', 'Sate', 'Gorengan', 'Ayam', 'Seafood', 'Sayur', 'Es & Minuman', 'Jajanan', 'Roti & Kue', 'Lainnya'];
+const CATEGORY_OPTIONS = [
+  { label: 'Bakso', icon: 'bakso' },
+  { label: 'Mi Ayam', icon: 'mi_ayam' },
+  { label: 'Siomay', icon: 'siomay' },
+  { label: 'Sate', icon: 'sate' },
+  { label: 'Gorengan', icon: 'gorengan' },
+  { label: 'Nasi', icon: 'nasi' },
+  { label: 'Jajanan', icon: 'jajanan' },
+  { label: 'Minuman', icon: 'minuman' },
+  { label: 'Kopi', icon: 'kopi' },
+  { label: 'Roti & Kue', icon: 'roti_kue' },
+  { label: 'Snack & Camilan', icon: 'snack_camilan' },
+  { label: 'Buah', icon: 'buah' },
+  { label: 'Sayur', icon: 'sayur' },
+  { label: 'Ikan & Seafood', icon: 'ikan_seafood' },
+  { label: 'Ayam & Daging', icon: 'ayam_daging' },
+  { label: 'Telur', icon: 'telur' },
+  { label: 'Sembako', icon: 'sembako' },
+  { label: 'Warung', icon: 'warung' },
+  { label: 'Toko Kelontong', icon: 'toko_kelontong' },
+  { label: 'Pakaian', icon: 'pakaian' },
+  { label: 'Sepatu & Sandal', icon: 'sepatu_sandal' },
+  { label: 'Tas & Koper', icon: 'tas_koper' },
+  { label: 'Aksesoris', icon: 'aksesoris' },
+  { label: 'Kosmetik', icon: 'kosmetik' },
+  { label: 'HP & Aksesoris', icon: 'hp_aksesoris' },
+  { label: 'Elektronik', icon: 'elektronik' },
+  { label: 'Alat Tulis', icon: 'alat_tulis' },
+  { label: 'Mainan', icon: 'mainan' },
+  { label: 'Bunga & Tanaman', icon: 'bunga_tanaman' },
+  { label: 'Peralatan & Perkakas', icon: 'peralatan_perkakas' },
+  { label: 'Rumah Tangga', icon: 'rumah_tangga' },
+  { label: 'Sabun & Perawatan', icon: 'sabun_perawatan' },
+  { label: 'BBM Eceran', icon: 'bbm_eceran' },
+  { label: 'Gas LPG', icon: 'gas_lpg' },
+  { label: 'Air Galon', icon: 'air_galon' },
+  { label: 'Pulsa & Token', icon: 'pulsa_token' },
+  { label: 'Fotokopi & Percetakan', icon: 'fotokopi_percetakan' },
+  { label: 'Pangkas Rambut', icon: 'pangkas_rambut' },
+  { label: 'Laundry', icon: 'laundry' },
+  { label: 'Bengkel / Jasa Perbaikan', icon: 'bengkel_jasa_perbaikan' },
+  { label: 'Jasa Antar', icon: 'jasa_antar' },
+  { label: 'Jasa Keliling', icon: 'jasa_keliling' },
+  { label: 'Bunga, Hadiah & Dekorasi', icon: 'bunga_hadiah_dekorasi' },
+  { label: 'Kerajinan', icon: 'kerajinan' },
+  { label: 'Lainnya', icon: 'lainnya' },
+];
+function categoryIconFile(label) {
+  const found = CATEGORY_OPTIONS.find(c => c.label === label);
+  return found ? `icons/${found.icon}.png` : null;
+}
 let selectedCategories = [];
 
 window.__toggleCategory = function (c) {
@@ -399,10 +448,12 @@ function renderPedagang() {
         <div class="setup-form">
           <input id="reg-name" type="text" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
-          <div class="emoji-grid" style="grid-template-columns:repeat(3, 1fr);">
+          <div class="cat-picker-grid">
             ${CATEGORY_OPTIONS.map(c => `
-              <button type="button" class="emoji-choice ${selectedCategories.includes(c) ? 'picked' : ''}"
-                style="font-size:11.5px;padding:8px 4px;" onclick="window.__toggleCategory('${c}')">${c}</button>
+              <button type="button" class="cat-picker-item ${selectedCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__toggleCategory('${c.label.replace(/'/g, "\\'")}')">
+                <img src="icons/${c.icon}.png" alt="${c.label}" />
+                <span>${c.label}</span>
+              </button>
             `).join('')}
           </div>
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Pilih emoji makanan</div>
