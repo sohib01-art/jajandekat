@@ -133,7 +133,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('*').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -153,18 +153,16 @@ async function toggleFollowDb(vendorId, isFollowing) {
 }
 
 async function setVendorStatus(vendorId, active, untilMinutes, lat, lng, photoUrl) {
-  const payload = { active };
-  if (active) {
-    payload.active_until = new Date(Date.now() + untilMinutes * 60000).toISOString();
-    if (lat != null) payload.lat = lat;
-    if (lng != null) payload.lng = lng;
-    if (photoUrl !== undefined) payload.photo_url = photoUrl;
-  } else {
-    payload.active_until = null;
-    payload.photo_url = null; // foto ikut hilang begitu selesai jualan
-  }
-  const { error } = await sb.from('vendors').update(payload).eq('id', vendorId);
-  if (error) console.error(error);
+  const { error } = await sb.rpc('set_vendor_status', {
+    p_vendor_id: vendorId,
+    p_pin: myVendorPin || '',
+    p_active: active,
+    p_duration_minutes: untilMinutes || null,
+    p_lat: lat,
+    p_lng: lng,
+    p_photo_url: photoUrl,
+  });
+  if (error) { console.error(error); throw error; }
 }
 
 // ---------- FOTO DAGANGAN (sementara, ikut terhapus saat selesai jualan) ----------
@@ -205,11 +203,31 @@ async function deleteVendorPhotoByUrl(photoUrl) {
     if (path) await sb.storage.from('vendor-photos').remove([path]);
   } catch (e) { console.error('Gagal hapus foto lama:', e); }
 }
+// ---------- EXPIRY (lapisan pengaman di sisi aplikasi, cron server jalan tiap 5 menit) ----------
+function normalizeExpiry(v) {
+  if (v.active && v.active_until && new Date(v.active_until) < new Date()) {
+    v.active = false; v.active_until = null; v.photo_url = null;
+  }
+  return v;
+}
+
+function checkAllExpiry() {
+  let changed = false;
+  vendors.forEach(v => {
+    const wasActive = v.active;
+    normalizeExpiry(v);
+    if (wasActive && !v.active) changed = true;
+  });
+  if (changed && mode === 'pembeli') renderPembeli();
+}
+setInterval(checkAllExpiry, 30000); // cek tiap 30 detik selagi app terbuka
+
 // ---------- REALTIME ----------
 function subscribeRealtime() {
   sb.channel('public:vendors')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vendors' }, (payload) => {
-      const updated = payload.new;
+      const updated = normalizeExpiry(payload.new);
+      delete updated.pin; // lapisan pertahanan tambahan — jangan sampai PIN ikut tersebar lewat realtime
       const idx = vendors.findIndex(v => v.id === updated.id);
       if (idx > -1) {
         const wasActive = vendors[idx].active;
@@ -349,6 +367,7 @@ function renderMap() {
 
 // ---------- VENDOR VIEW ----------
 let myVendorId = localStorage.getItem('jd_my_vendor_id') || null;
+let myVendorPin = null; // hanya di memori (tidak disimpan permanen), diminta ulang tiap buka app baru
 let pickedDuration = 120;
 let selectedEmoji = '🍜';
 
@@ -523,13 +542,14 @@ window.__registerVendor = async function () {
     const { data, error } = await sb
       .from('vendors')
       .insert({ name, category, emoji, whatsapp, pin })
-      .select()
+      .select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
       .single();
 
     if (error) { errEl.textContent = 'Gagal mendaftar: ' + error.message; return; }
 
     vendors.push(data);
     myVendorId = data.id;
+    myVendorPin = pin;
     localStorage.setItem('jd_my_vendor_id', myVendorId);
     selectedEmoji = '🍜';
     renderPedagang();
@@ -545,28 +565,28 @@ window.__forgotPin = function () {
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
-window.__pickVendor = function () {
+window.__pickVendor = async function () {
   const sel = document.getElementById('pick-vendor');
   const pinInput = document.getElementById('pick-pin');
   const errEl = document.getElementById('pick-error');
   if (!sel || !sel.value) return;
 
-  const v = vendors.find(v => v.id === sel.value);
   const enteredPin = pinInput ? pinInput.value.trim() : '';
+  errEl.textContent = 'Memeriksa...';
 
-  // Pedagang lama (sebelum fitur PIN ada) belum punya PIN — biarkan masuk tanpa PIN.
-  if (v && v.pin && v.pin !== enteredPin) {
-    errEl.textContent = 'PIN salah. Coba lagi.';
-    return;
-  }
+  const { data: ok, error } = await sb.rpc('verify_vendor_pin', { p_vendor_id: sel.value, p_pin: enteredPin });
+  if (error) { errEl.textContent = 'Gagal memeriksa PIN: ' + error.message; return; }
+  if (!ok) { errEl.textContent = 'PIN salah. Coba lagi.'; return; }
 
   myVendorId = sel.value;
+  myVendorPin = enteredPin;
   localStorage.setItem('jd_my_vendor_id', myVendorId);
   renderPedagang();
 };
 
 window.__logoutVendor = function () {
   myVendorId = null;
+  myVendorPin = null;
   localStorage.removeItem('jd_my_vendor_id');
   renderPedagang();
 };
@@ -587,10 +607,24 @@ async function sendPushToFollowers(vendorId, vendorName) {
 window.__toggleStatus = async function () {
   const v = vendors.find(v => v.id === myVendorId);
   if (!v) return;
+
+  // Sesi baru (habis refresh/buka app lagi) belum punya PIN di memori -> minta sekali
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return; // dibatalkan
+    const { data: ok, error } = await sb.rpc('verify_vendor_pin', { p_vendor_id: v.id, p_pin: enteredPin.trim() });
+    if (error || !ok) { alert('PIN salah.'); return; }
+    myVendorPin = enteredPin.trim();
+  }
   if (v.active) {
-    await deleteVendorPhotoByUrl(v.photo_url);
-    await setVendorStatus(v.id, false);
-    v.active = false; v.active_until = null; v.photo_url = null;
+    try {
+      await deleteVendorPhotoByUrl(v.photo_url);
+      await setVendorStatus(v.id, false);
+      v.active = false; v.active_until = null; v.photo_url = null;
+    } catch (e) {
+      alert('Gagal mengubah status: ' + (e.message || 'PIN mungkin salah.'));
+      return;
+    }
   } else {
     // Ambil lokasi nyata dari browser (gratis, bawaan HP)
     navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -600,7 +634,12 @@ window.__toggleStatus = async function () {
         try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
         catch (e) { console.error('Gagal upload foto:', e); }
       }
-      await setVendorStatus(v.id, true, pickedDuration, latitude, longitude, photoUrl);
+      try {
+        await setVendorStatus(v.id, true, pickedDuration, latitude, longitude, photoUrl);
+      } catch (e) {
+        alert('Gagal mengaktifkan status: ' + (e.message || 'PIN mungkin salah.'));
+        return;
+      }
       v.active = true; v.lat = latitude; v.lng = longitude; v.photo_url = photoUrl;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
       pendingPhotoFile = null; pendingPhotoPreview = null;
@@ -613,7 +652,12 @@ window.__toggleStatus = async function () {
         try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
         catch (e) { console.error('Gagal upload foto:', e); }
       }
-      await setVendorStatus(v.id, true, pickedDuration, null, null, photoUrl);
+      try {
+        await setVendorStatus(v.id, true, pickedDuration, null, null, photoUrl);
+      } catch (e) {
+        alert('Gagal mengaktifkan status: ' + (e.message || 'PIN mungkin salah.'));
+        return;
+      }
       v.active = true; v.photo_url = photoUrl;
       v.active_until = new Date(Date.now() + pickedDuration * 60000).toISOString();
       pendingPhotoFile = null; pendingPhotoPreview = null;
@@ -655,6 +699,7 @@ function renderError(message) {
 let tapCount = 0;
 let tapTimer = null;
 let isSuperAdmin = false;
+let adminPasswordCache = null;
 
 const brandTapZone = document.getElementById('brand-tap-zone');
 if (brandTapZone) {
@@ -667,6 +712,7 @@ if (brandTapZone) {
       const pw = prompt('Password admin:');
       if (pw === SUPER_ADMIN_PASSWORD) {
         isSuperAdmin = true;
+        adminPasswordCache = pw;
         renderAdminDashboard();
       } else if (pw !== null) {
         alert('Password salah.');
@@ -685,7 +731,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('*').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   if (error) { listEl.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat: ${error.message}</div>`; return; }
 
@@ -695,7 +741,7 @@ async function renderAdminDashboard() {
         <div class="vendor-emoji" style="${v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;` : ''}">${v.photo_url ? '' : (v.emoji || '🍜')}</div>
         <div class="vendor-info">
           <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
-          <div class="vendor-sub mono">PIN: ${v.pin || '(belum ada)'} · WA: ${v.whatsapp || '-'}</div>
+          <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
           <div class="vendor-sub">${v.category || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
         </div>
       </div>
@@ -716,25 +762,42 @@ window.__exitAdmin = function () {
 };
 function render_ExitToNormal() { mode === 'pembeli' ? renderPembeli() : renderPedagang(); }
 
+async function callAdminAction(action, vendorId) {
+  const { data, error } = await sb.functions.invoke('admin-action', {
+    body: { password: adminPasswordCache, action, vendor_id: vendorId },
+  });
+  if (error) throw error;
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
 window.__adminResetPin = async function (id, name) {
-  const newPin = String(Math.floor(1000 + Math.random() * 9000));
-  const { error } = await sb.from('vendors').update({ pin: newPin }).eq('id', id);
-  if (error) { alert('Gagal reset: ' + error.message); return; }
-  alert(`PIN baru untuk "${name}": ${newPin}\n\nSampaikan ke pedagangnya lewat WhatsApp.`);
-  renderAdminDashboard();
+  try {
+    const result = await callAdminAction('reset_pin', id);
+    alert(`PIN baru untuk "${name}": ${result.new_pin}\n\nSampaikan ke pedagangnya lewat WhatsApp.`);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal reset: ' + e.message);
+  }
 };
 
-window.__adminTogglePremium = async function (id, current) {
-  const { error } = await sb.from('vendors').update({ is_premium: !current }).eq('id', id);
-  if (error) { alert('Gagal ubah status: ' + error.message); return; }
-  renderAdminDashboard();
+window.__adminTogglePremium = async function (id) {
+  try {
+    await callAdminAction('toggle_premium', id);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal ubah status: ' + e.message);
+  }
 };
 
 window.__adminDeleteVendor = async function (id, name) {
   if (!confirm(`Yakin hapus akun "${name}"? Ini tidak bisa dibatalkan.`)) return;
-  const { error } = await sb.from('vendors').delete().eq('id', id);
-  if (error) { alert('Gagal hapus: ' + error.message); return; }
-  renderAdminDashboard();
+  try {
+    await callAdminAction('delete_vendor', id);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal hapus: ' + e.message);
+  }
 };
 
 // ---------- INIT ----------
@@ -745,7 +808,7 @@ async function init() {
   }
   if (!isConfigured) { renderSetupNeeded(); return; }
   try {
-    vendors = await fetchVendors();
+    vendors = (await fetchVendors()).map(normalizeExpiry);
     const followList = await fetchFollows();
     followedIds = new Set(followList);
     subscribeRealtime();
