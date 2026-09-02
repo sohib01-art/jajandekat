@@ -81,6 +81,16 @@ main{ flex:1; padding:0 18px; }
 .cat-picker-item.picked{ border-color:var(--brand); border-width:2px; background:var(--brand-dim); }
 .cat-picker-item.picked span{ color:var(--brand); font-weight:700; }
 
+.selected-cat-strip{ display:flex; flex-wrap:wrap; gap:6px; }
+.selected-cat-pill{
+  display:inline-flex; align-items:center; gap:5px; background:var(--brand-dim);
+  color:var(--brand); font-size:11px; font-weight:600; padding:5px 6px 5px 10px; border-radius:999px;
+}
+.selected-cat-pill button{
+  background:rgba(255,107,74,.2); border:none; color:var(--brand); border-radius:50%;
+  width:16px; height:16px; font-size:9px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
+}
+
 /* Story / pengikut */
 .stories{
   display:flex; gap:14px; overflow-x:auto; padding:4px 2px 12px;
