@@ -571,6 +571,21 @@ function renderPedagang() {
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       ${v.is_premium ? `
+        ${(() => {
+          if (!v.premium_until) return '';
+          const daysLeft = Math.ceil((new Date(v.premium_until) - new Date()) / (1000 * 60 * 60 * 24));
+          if (daysLeft > 10) return '';
+          const untilStr = new Date(v.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
+          return `
+            <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start;">
+              <span style="font-size:16px;">⏳</span>
+              <div style="font-size:11.5px;color:#8A6D00;line-height:1.5;">
+                ${daysLeft <= 0
+                  ? `Premium Anda <b>sudah habis</b>. Hubungi admin untuk perpanjang.`
+                  : `Premium Anda akan habis dalam <b>${daysLeft} hari</b> (${untilStr}). Hubungi admin untuk perpanjang.`}
+              </div>
+            </div>`;
+        })()}
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:20px;">⭐</span>
           <div>
@@ -730,6 +745,8 @@ window.__registerVendor = async function () {
     localStorage.setItem('jd_my_vendor_id', myVendorId);
     selectedEmoji = '🍜';
     selectedCategories = [];
+    sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId }).catch(() => {});
+    ensurePushSubscription();
     renderPedagang();
   } catch (e) {
     errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
@@ -759,6 +776,8 @@ window.__pickVendor = async function () {
   myVendorId = sel.value;
   myVendorPin = enteredPin;
   localStorage.setItem('jd_my_vendor_id', myVendorId);
+  sb.rpc('link_owner_device', { p_vendor_id: myVendorId, p_pin: enteredPin, p_device_id: deviceId }).catch(() => {});
+  ensurePushSubscription();
   renderPedagang();
 };
 
@@ -1031,7 +1050,9 @@ async function renderAdminDashboard() {
     </div>
   `);
 
-  listEl.innerHTML = data.map(v => `
+  listEl.innerHTML = data.map(v => {
+    const premiumUntilStr = v.premium_until ? new Date(v.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+    return `
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:10px;">
       <div style="display:flex;gap:10px;align-items:center;">
         <div class="vendor-emoji" style="${v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;` : ''}">${v.photo_url ? '' : (v.emoji || '🍜')}</div>
@@ -1039,16 +1060,25 @@ async function renderAdminDashboard() {
           <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
           <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
           <div class="vendor-sub">${(v.categories || []).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
+          ${v.is_premium ? `<div class="vendor-sub" style="color:var(--brand);">⭐ Premium sampai ${premiumUntilStr || '(tanpa batas — akun lama)'}</div>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="follow-btn" onclick="window.__adminResetPin('${v.id}','${v.name.replace(/'/g, "\\'")}')">🔑 Reset PIN</button>
-        <button class="follow-btn ${v.is_premium ? 'following' : ''}" onclick="window.__adminTogglePremium('${v.id}', ${v.is_premium})">⭐ ${v.is_premium ? 'Cabut Premium' : 'Jadikan Premium'}</button>
         ${v.photo_url ? `<button class="follow-btn" onclick="window.__adminRemovePhoto('${v.id}')">🖼️ Hapus Foto</button>` : ''}
         <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️ Hapus Akun</button>
       </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:10.5px;color:var(--text-faint);">Aktifkan Premium:</span>
+        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',1)">1 Bln</button>
+        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',3)">3 Bln</button>
+        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',6)">6 Bln</button>
+        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',12)">1 Thn</button>
+        ${v.is_premium ? `<button class="follow-btn" style="color:#f87171;" onclick="window.__adminCancelPremium('${v.id}')">✕ Cabut</button>` : ''}
+      </div>
     </div>
-  `).join('') || '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada pedagang terdaftar.</div>';
+  `;
+  }).join('') || '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada pedagang terdaftar.</div>';
 }
 
 window.__exitAdmin = function () {
@@ -1059,9 +1089,9 @@ window.__exitAdmin = function () {
 };
 function render_ExitToNormal() { mode === 'pembeli' ? renderPembeli() : renderPedagang(); }
 
-async function callAdminAction(action, vendorId) {
+async function callAdminAction(action, vendorId, extra = {}) {
   const { data, error } = await sb.functions.invoke('admin-action', {
-    body: { password: adminPasswordCache, action, vendor_id: vendorId },
+    body: { password: adminPasswordCache, action, vendor_id: vendorId, ...extra },
   });
   if (error) throw error;
   if (data && data.error) throw new Error(data.error);
@@ -1078,12 +1108,24 @@ window.__adminResetPin = async function (id, name) {
   }
 };
 
-window.__adminTogglePremium = async function (id) {
+window.__adminSetPremium = async function (id, months) {
   try {
-    await callAdminAction('toggle_premium', id);
+    const result = await callAdminAction('set_premium_duration', id, { months });
+    const untilStr = new Date(result.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    alert(`Premium diaktifkan sampai ${untilStr}.`);
     renderAdminDashboard();
   } catch (e) {
-    alert('Gagal ubah status: ' + e.message);
+    alert('Gagal mengaktifkan Premium: ' + e.message);
+  }
+};
+
+window.__adminCancelPremium = async function (id) {
+  if (!confirm('Cabut status Premium pedagang ini?')) return;
+  try {
+    await callAdminAction('cancel_premium', id);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal mencabut Premium: ' + e.message);
   }
 };
 
