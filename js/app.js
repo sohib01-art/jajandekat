@@ -648,6 +648,26 @@ window.__onPhotoSelected = function (event) {
   reader.readAsDataURL(file);
 };
 
+// Deteksi kabupaten/kota otomatis dari GPS, pakai layanan gratis OpenStreetMap (Nominatim)
+function detectRegion() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const { latitude, longitude } = pos.coords;
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
+        const json = await res.json();
+        const addr = json.address || {};
+        const region = addr.county || addr.city || addr.state_district || addr.city_district || addr.state || null;
+        resolve(region);
+      } catch (e) {
+        console.error('Gagal deteksi wilayah:', e);
+        resolve(null);
+      }
+    }, () => resolve(null), { timeout: 8000 });
+  });
+}
+
 window.__registerVendor = async function () {
   const name = document.getElementById('reg-name').value.trim();
   const categories = selectedCategories;
@@ -688,9 +708,11 @@ window.__registerVendor = async function () {
       if (referrer) referredByVendorId = referrer.id;
     }
 
+    const region = await detectRegion(); // otomatis, tidak menghalangi kalau ditolak/gagal
+
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, whatsapp, pin, referred_by_vendor_id: referredByVendorId })
+      .insert({ name, category, categories, emoji, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region })
       .select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
       .single();
 
@@ -891,7 +913,7 @@ async function renderAdminDashboard() {
 
   main.innerHTML = `
     <div class="section-label">🔒 Dashboard Admin</div>
-    <div id="admin-stats" class="stat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;">
+    <div id="admin-stats" class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;">
       <div style="color:var(--text-faint);font-size:11px;grid-column:1/-1;">Memuat statistik...</div>
     </div>
     <div class="section-label" style="margin-top:6px;">Daftar Pedagang</div>
@@ -899,13 +921,15 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,region').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
   if (error) { listEl.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat: ${error.message}</div>`; return; }
 
   const { count: totalFollows } = await sb.from('follows').select('id', { count: 'exact', head: true });
+  const { data: allFollowDevices } = await sb.from('follows').select('device_id');
+  const uniqueBuyers = new Set((allFollowDevices || []).map(f => f.device_id)).size;
   const { count: totalReferred } = await sb.from('vendors').select('id', { count: 'exact', head: true }).not('referred_by_vendor_id', 'is', null);
   const totalPedagang = data.length;
   const aktifSekarang = data.filter(v => v.active).length;
@@ -928,10 +952,84 @@ async function renderAdminDashboard() {
       <div style="font-family:'Poppins';font-weight:800;font-size:17px;">${totalFollows ?? 0}</div>
       <div style="font-size:9.5px;color:var(--text-faint);">Total Follow</div>
     </div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
+      <div style="font-family:'Poppins';font-weight:800;font-size:17px;color:var(--live-icon, var(--aktif));">${uniqueBuyers}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);">Pembeli Unik</div>
+    </div>
   `;
-  document.getElementById('admin-stats').insertAdjacentHTML('afterend',
-    `<div style="font-size:11px;color:var(--text-faint);margin:2px 0 4px;">📤 ${totalReferred ?? 0} pedagang bergabung lewat link referral pedagang lain — cek satu-satu di daftar bawah untuk lihat siapa yang berhak dapat bonus.</div>`
-  );
+  // Ringkasan sebaran wilayah (kabupaten/kota), dari deteksi GPS otomatis saat daftar
+  const regionCounts = {};
+  data.forEach(v => {
+    const r = v.region || 'Belum terdeteksi';
+    regionCounts[r] = (regionCounts[r] || 0) + 1;
+  });
+  const sortedRegions = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
+  const regionHtml = sortedRegions.map(([region, count]) => {
+    const pct = Math.round((count / totalPedagang) * 100);
+    return `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;">
+          <span style="font-weight:600;">${region}</span>
+          <span style="color:var(--text-faint);">${count} pedagang (${pct}%)</span>
+        </div>
+        <div style="background:var(--stroke);border-radius:999px;height:6px;overflow:hidden;">
+          <div style="background:var(--brand);height:100%;width:${pct}%;"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Pertumbuhan pedagang per minggu (6 minggu terakhir)
+  const weekBuckets = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const weekStart = new Date(now); weekStart.setDate(now.getDate() - (i + 1) * 7);
+    const weekEnd = new Date(now); weekEnd.setDate(now.getDate() - i * 7);
+    const count = data.filter(v => {
+      const d = new Date(v.created_at);
+      return d > weekStart && d <= weekEnd;
+    }).length;
+    weekBuckets.push({ label: i === 0 ? 'Minggu ini' : `${i} mgu lalu`, count });
+  }
+  const maxWeekCount = Math.max(1, ...weekBuckets.map(w => w.count));
+  const growthHtml = weekBuckets.map(w => `
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:4px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text);">${w.count}</div>
+      <div style="width:100%;background:var(--stroke);border-radius:6px 6px 0 0;height:60px;display:flex;align-items:flex-end;overflow:hidden;">
+        <div style="width:100%;background:var(--brand);border-radius:6px 6px 0 0;height:${(w.count / maxWeekCount) * 100}%;"></div>
+      </div>
+      <div style="font-size:8.5px;color:var(--text-faint);text-align:center;">${w.label}</div>
+    </div>
+  `).join('');
+
+  // Kategori terpopuler
+  const catCounts = {};
+  data.forEach(v => (v.categories || []).forEach(c => { catCounts[c] = (catCounts[c] || 0) + 1; }));
+  const topCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const topCatsHtml = topCats.map(([cat, count], i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;${i < topCats.length - 1 ? 'border-bottom:1px solid var(--stroke);' : ''}">
+      <span style="font-size:12px;font-weight:600;">${i + 1}. ${cat}</span>
+      <span style="font-size:11px;color:var(--brand);font-weight:700;">${count} pedagang</span>
+    </div>
+  `).join('');
+
+  document.getElementById('admin-stats').insertAdjacentHTML('afterend', `
+    <div style="font-size:11px;color:var(--text-faint);margin:2px 0 4px;">📤 ${totalReferred ?? 0} pedagang bergabung lewat link referral pedagang lain — cek satu-satu di daftar bawah untuk lihat siapa yang berhak dapat bonus.</div>
+
+    <div class="section-label" style="margin-top:4px;">📈 Pertumbuhan Pedagang (6 Minggu Terakhir)</div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:14px;padding:14px 10px;margin-bottom:14px;display:flex;gap:6px;">
+      ${growthHtml}
+    </div>
+
+    <div class="section-label" style="margin-top:4px;">🏆 Kategori Terpopuler</div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:14px;padding:6px 14px;margin-bottom:14px;">
+      ${topCatsHtml || '<div style="color:var(--text-faint);font-size:11.5px;padding:8px 0;">Belum ada data.</div>'}
+    </div>
+
+    <div class="section-label" style="margin-top:4px;">📍 Sebaran per Kabupaten/Kota</div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:14px;padding:14px;margin-bottom:14px;">
+      ${regionHtml || '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada data.</div>'}
+    </div>
+  `);
 
   listEl.innerHTML = data.map(v => `
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:10px;">
