@@ -454,6 +454,24 @@ function renderPedagang() {
     `).join('');
 
     main.innerHTML = `
+      ${vendors.length ? `
+        <div class="vendor-hero" style="text-align:left;">
+          <div class="section-label" style="margin-top:0;">Sudah pernah daftar? Masuk ke akun lama</div>
+          <div class="setup-form">
+            <select id="pick-vendor" style="background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);">
+              ${optionsHtml}
+            </select>
+            <input id="pick-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Masukkan PIN akun ini" />
+            <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
+            <a href="#" onclick="window.__forgotPin(); return false;" style="text-align:center;font-size:11.5px;color:var(--text-faint);text-decoration:underline;">
+              Lupa PIN? Hubungi admin
+            </a>
+          </div>
+          <div id="pick-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div class="section-label" style="text-align:center;">— atau daftar baru di bawah —</div>
+      ` : ''}
+
       <div class="vendor-hero">
         <div class="vendor-hero-emoji">🛒</div>
         <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
@@ -483,21 +501,6 @@ function renderPedagang() {
         </div>
         <div id="reg-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
       </div>
-
-      ${vendors.length ? `
-        <div class="section-label" style="text-align:left;">Sudah pernah daftar? Masuk ke akun lama</div>
-        <div class="setup-form">
-          <select id="pick-vendor" style="background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);">
-            ${optionsHtml}
-          </select>
-          <input id="pick-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Masukkan PIN akun ini" />
-          <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
-          <a href="#" onclick="window.__forgotPin(); return false;" style="text-align:center;font-size:11.5px;color:var(--text-faint);text-decoration:underline;">
-            Lupa PIN? Hubungi admin
-          </a>
-        </div>
-        <div id="pick-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
-      ` : ''}
     `;
     return;
   }
@@ -896,7 +899,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,referral_code').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
