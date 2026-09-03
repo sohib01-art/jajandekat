@@ -133,7 +133,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,rating_avg,rating_count').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -282,7 +282,7 @@ function renderVendorListHtml(list) {
       ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : null;
     return `
-      <div class="vendor-card">
+      <div class="vendor-card" onclick="if(!event.target.closest('button')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="cursor:pointer;">
         <div class="vendor-emoji" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
         <div class="vendor-info">
           <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐ Premium</span>' : ''}</div>
@@ -293,8 +293,9 @@ function renderVendorListHtml(list) {
             </span>
           </div>
           <div class="vendor-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
+          <div class="vendor-sub" style="color:#F5A623;">${v.rating_count > 0 ? `⭐ ${v.rating_avg} (${v.rating_count} ulasan)` : 'Belum ada ulasan — jadi yang pertama!'}</div>
         </div>
-        <button class="follow-btn ${following ? 'following' : ''}" onclick="window.__toggleFollow('${v.id}')">
+        <button class="follow-btn ${following ? 'following' : ''}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">
           ${following ? '✓ Ikuti' : '+ Ikuti'}
         </button>
       </div>
@@ -389,11 +390,12 @@ function renderMap() {
         ${v.name}${v.is_premium ? ' ⭐' : ''}
       </div>
       ${v.is_premium && v.whatsapp ? `
-        <a href="https://wa.me/${v.whatsapp}" target="_blank"
+        <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
            style="display:inline-block;margin-top:6px;background:#25D366;color:#fff;text-decoration:none;
            font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
           💬 Chat via WhatsApp
         </a>
+        <div style="font-size:9px;color:#999;margin-top:5px;">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
       ` : ''}
     `;
     markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(popupHtml);
@@ -662,6 +664,7 @@ function renderPedagang() {
     </div>
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
+    <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
   `;
 
   renderVendorQr(v.id);
@@ -763,12 +766,20 @@ function detectRegion() {
   });
 }
 
+function normalizeWhatsapp(raw) {
+  if (!raw) return raw;
+  let n = raw.replace(/[^\d]/g, ''); // buang spasi, strip, tanda +, dll
+  if (n.startsWith('0')) n = '62' + n.slice(1);
+  else if (!n.startsWith('62')) n = '62' + n;
+  return n;
+}
+
 window.__registerVendor = async function () {
   const name = document.getElementById('reg-name').value.trim();
   const categories = selectedCategories;
   const category = categories[0] || null; // kolom lama, dijaga tetap terisi untuk kompatibilitas
   const emoji = selectedEmoji;
-  const whatsapp = document.getElementById('reg-whatsapp').value.trim();
+  const whatsapp = normalizeWhatsapp(document.getElementById('reg-whatsapp').value.trim());
   const pin = document.getElementById('reg-pin').value.trim();
   const errEl = document.getElementById('reg-error');
 
@@ -980,7 +991,56 @@ function renderError(message) {
   `;
 }
 
-// ---------- SUPER ADMIN (tersembunyi — tap logo 5x) ----------
+// ---------- RATING & ULASAN ----------
+let reviewModalRating = 5;
+
+window.__openReviewModal = function (vendorId, vendorName) {
+  reviewModalRating = 5;
+  const overlay = document.createElement('div');
+  overlay.id = 'review-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">Beri Ulasan</div>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:14px;">${vendorName}</div>
+      <div id="star-picker" style="display:flex;gap:6px;justify-content:center;font-size:32px;margin-bottom:14px;"></div>
+      <textarea id="review-comment" placeholder="Komentar (opsional)..." style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="document.getElementById('review-modal-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__submitReview('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Kirim Ulasan</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  renderStarPicker();
+};
+
+function renderStarPicker() {
+  const el = document.getElementById('star-picker');
+  if (!el) return;
+  el.innerHTML = [1, 2, 3, 4, 5].map(n => `
+    <span onclick="window.__setReviewRating(${n})" style="cursor:pointer;color:${n <= reviewModalRating ? '#F5A623' : '#E0DBD2'};">★</span>
+  `).join('');
+}
+
+window.__setReviewRating = function (n) {
+  reviewModalRating = n;
+  renderStarPicker();
+};
+
+window.__submitReview = async function (vendorId) {
+  const comment = document.getElementById('review-comment').value.trim();
+  try {
+    await sb.rpc('submit_review', { p_vendor_id: vendorId, p_device_id: deviceId, p_rating: reviewModalRating, p_comment: comment || null });
+    document.getElementById('review-modal-overlay').remove();
+    showToast('Terima kasih atas ulasannya! ⭐');
+    vendors = (await fetchVendors()).map(normalizeExpiry);
+    if (mode === 'pembeli') renderPembeli();
+  } catch (e) {
+    alert('Gagal mengirim ulasan: ' + e.message);
+  }
+};
+
 let tapCount = 0;
 let tapTimer = null;
 let isSuperAdmin = false;
@@ -1261,6 +1321,37 @@ async function init() {
   }
 }
 // ---------- TOMBOL INSTAL APLIKASI (PWA) ----------
+// ---------- UPDATE LOKASI BERKALA (biar posisi di peta ikut bergerak, bukan statis) ----------
+setInterval(() => {
+  if (mode !== 'pedagang' || !myVendorId || myVendorPin === null) return;
+  const v = vendors.find(v => v.id === myVendorId);
+  if (!v || !v.active || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    try {
+      await sb.rpc('update_vendor_location', { p_vendor_id: v.id, p_pin: myVendorPin, p_lat: latitude, p_lng: longitude });
+      v.lat = latitude; v.lng = longitude;
+    } catch (e) { console.error('Gagal update lokasi berkala:', e); }
+  }, () => {}, { timeout: 8000 });
+}, 5 * 60 * 1000); // tiap 5 menit
+
+// ---------- PENGINGAT "MASIH JUALAN?" (tiap 1 jam, selama app tetap terbuka) ----------
+setInterval(async () => {
+  if (mode !== 'pedagang' || !myVendorId) return;
+  const v = vendors.find(v => v.id === myVendorId);
+  if (!v || !v.active) return;
+  const masihJualan = confirm(`Masih jualan di sini, "${v.name}"?\n\nTekan OK kalau masih, Batal kalau sudah selesai (biar pembeli tidak salah datang).`);
+  if (!masihJualan) {
+    try {
+      await deleteVendorPhotoByUrl(v.photo_url);
+      await setVendorStatus(v.id, false);
+      v.active = false; v.active_until = null; v.photo_url = null;
+      renderPedagang();
+      showToast('Status diubah jadi Selesai Jualan. Sampai jumpa lagi! 👋');
+    } catch (e) { console.error(e); }
+  }
+}, 60 * 60 * 1000); // tiap 1 jam
+
 let deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
