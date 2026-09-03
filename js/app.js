@@ -322,6 +322,19 @@ function renderCariView() {
       style="width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:12px;
       padding:12px 14px;color:var(--text);font-family:inherit;font-size:14px;margin-bottom:6px;" />
     <div id="search-results" class="vendor-list" style="margin-top:14px;"></div>
+
+    <div class="vendor-hero" style="margin-top:20px;text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📢</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ajak Teman Pakai JajanDekat</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Makin banyak yang pakai, makin banyak pedagang mau daftar</div>
+        </div>
+      </div>
+      <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;" onclick="window.__shareApp()">
+        📤 Bagikan Aplikasi
+      </button>
+    </div>
   `;
   const input = document.getElementById('search-input');
   const results = document.getElementById('search-results');
@@ -337,6 +350,17 @@ function renderCariView() {
   input.focus();
   runSearch();
 }
+
+window.__shareApp = function () {
+  const link = `${location.origin}${location.pathname}`;
+  const text = `Cari pedagang keliling (bakso, sate, gorengan, dll) yang sedang jualan di sekitarmu — cek dulu, baru jalan! Coba JajanDekat: ${link}`;
+  if (navigator.share) {
+    navigator.share({ title: 'JajanDekat', text, url: link }).catch(() => {});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+};
+
 
 function renderMap() {
   const el = document.getElementById('map');
@@ -557,6 +581,25 @@ function renderPedagang() {
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📱</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">QR Code & Link Pengikut Baru</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Siapa saja yang scan atau klik ini langsung otomatis mengikuti Anda</div>
+        </div>
+      </div>
+      <div id="vendor-qr-box" style="display:flex;justify-content:center;background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="follow-btn" style="flex:1;padding:10px;background:#25D366;color:#fff;" onclick="window.__shareFollowQr('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+          💬 Bagikan
+        </button>
+        <button class="follow-btn" style="flex:1;padding:10px;" onclick="window.__downloadVendorQr('${v.name.replace(/'/g, "\\'")}')">
+          ⬇️ Unduh (Cetak)
+        </button>
+      </div>
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">🔗</span>
         <div>
           <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ajak Pedagang Lain, Dapat Bonus</div>
@@ -621,6 +664,8 @@ function renderPedagang() {
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
   `;
 
+  renderVendorQr(v.id);
+
   if (v.is_premium) {
     sb.from('follows').select('id', { count: 'exact', head: true }).eq('vendor_id', v.id).then(({ count }) => {
       const el = document.getElementById('premium-follow-count');
@@ -635,6 +680,41 @@ function renderPedagang() {
     el.innerHTML = `<b style="color:var(--text);">${count ?? 0}</b> pedagang daftar lewat link Anda · <b style="color:var(--brand);">${premiumRefs}</b> di antaranya sudah Premium (≈ Rp${(premiumRefs * 1000).toLocaleString('id-ID')} bonus)`;
   });
 }
+
+function followLinkFor(vendorId) {
+  const code = vendorId.slice(0, 6).toUpperCase();
+  return `${location.origin}${location.pathname}?follow=${code}`;
+}
+
+function renderVendorQr(vendorId) {
+  const box = document.getElementById('vendor-qr-box');
+  if (!box || typeof QRCode === 'undefined') return;
+  box.innerHTML = '';
+  new QRCode(box, {
+    text: followLinkFor(vendorId),
+    width: 160, height: 160,
+    colorDark: '#201A13', colorLight: '#ffffff',
+  });
+}
+
+window.__shareFollowQr = function (vendorId, vendorName) {
+  const link = followLinkFor(vendorId);
+  const text = `Yuk follow ${vendorName} di JajanDekat biar tahu kapan lagi jualan! Tap link ini: ${link}`;
+  if (navigator.share) {
+    navigator.share({ title: vendorName, text, url: link }).catch(() => {});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+};
+
+window.__downloadVendorQr = function (vendorName) {
+  const canvas = document.querySelector('#vendor-qr-box canvas');
+  if (!canvas) { alert('QR belum siap, coba lagi sebentar.'); return; }
+  const link = document.createElement('a');
+  link.download = `QR-JajanDekat-${vendorName.replace(/\s+/g, '-')}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+};
 
 window.__shareReferral = function (vendorId, vendorName) {
   const code = vendorId.slice(0, 6).toUpperCase();
@@ -1160,6 +1240,20 @@ async function init() {
     const followList = await fetchFollows();
     followedIds = new Set(followList);
     subscribeRealtime();
+
+    // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
+    const followCode = new URLSearchParams(location.search).get('follow');
+    if (followCode) {
+      const target = vendors.find(v => v.id.toUpperCase().startsWith(followCode.toUpperCase()));
+      if (target && !followedIds.has(target.id)) {
+        followedIds.add(target.id);
+        await toggleFollowDb(target.id, false);
+        showToast(`Kamu sekarang mengikuti ${target.name}! 🎉`);
+      }
+      // Bersihkan URL supaya tidak follow ulang kalau di-refresh
+      history.replaceState(null, '', location.pathname);
+    }
+
     renderPembeli();
   } catch (e) {
     console.error(e);
