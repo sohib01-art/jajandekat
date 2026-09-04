@@ -133,7 +133,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,rating_avg,rating_count').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,rating_avg,rating_count').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -250,7 +250,7 @@ function renderPembeli() {
 
   const storyHtml = followed.map(v => `
     <button class="story ${v.active ? 'on' : ''}" onclick="window.__toggleFollow('${v.id}')">
-      <div class="story-ring" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
+      <div class="story-ring" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
       <div class="story-name">${v.name.split(' ')[0]}</div>
     </button>
   `).join('');
@@ -283,7 +283,7 @@ function renderVendorListHtml(list) {
       : null;
     return `
       <div class="vendor-card" onclick="if(!event.target.closest('button')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="cursor:pointer;">
-        <div class="vendor-emoji" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
+        <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         <div class="vendor-info">
           <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐ Premium</span>' : ''}</div>
           <div class="vendor-meta">
@@ -380,6 +380,8 @@ function renderMap() {
   vendors.filter(v => v.active && v.lat && v.lng).forEach(v => {
     const iconHtml = v.photo_url
       ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${v.photo_url}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
+      : v.mode_icon
+      ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('mode_icons/${v.mode_icon}.png');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
       : `<div style="font-size:22px;filter:drop-shadow(0 0 6px #3DDC97)">${v.emoji || '🍜'}</div>`;
     const icon = L.divIcon({
       html: iconHtml,
@@ -407,6 +409,18 @@ let myVendorId = localStorage.getItem('jd_my_vendor_id') || null;
 let myVendorPin = null; // hanya di memori (tidak disimpan permanen), diminta ulang tiap buka app baru
 let pickedDuration = 120;
 let selectedEmoji = '🍜';
+let selectedModeIcon = null;
+const VENDOR_MODE_OPTIONS = [
+  { label: 'Warung/Kios Tetap', icon: 'warung' },
+  { label: 'Jualan dari Rumah', icon: 'rumahan' },
+  { label: 'Gerobak Dorong', icon: 'gerobak' },
+  { label: 'Keliling Jalan Kaki', icon: 'keliling_jalan' },
+  { label: 'Keliling Motor', icon: 'keliling_motor' },
+  { label: 'Mobil/Truk Jualan', icon: 'truk' },
+  { label: 'Lapak Pasar', icon: 'lapak_pasar' },
+  { label: 'Pesan via Aplikasi', icon: 'aplikasi' },
+  { label: 'Jasa Antar/Kurir', icon: 'kurir' },
+];
 const CATEGORY_OPTIONS = [
   { label: 'Bakso', icon: 'bakso' },
   { label: 'Mi Ayam', icon: 'mi_ayam' },
@@ -454,6 +468,18 @@ const CATEGORY_OPTIONS = [
   { label: 'Kerajinan', icon: 'kerajinan' },
   { label: 'Lainnya', icon: 'lainnya' },
 ];
+// Ikon vendor: foto dagangan (kalau aktif) > mode jualan (gambar) > emoji lama (fallback data lama)
+function vendorIconStyle(v) {
+  if (v.active && v.photo_url) return `background-image:url('${v.photo_url}');background-size:cover;background-position:center;`;
+  if (v.mode_icon) return `background-image:url('mode_icons/${v.mode_icon}.png');background-size:cover;background-position:center;`;
+  return '';
+}
+function vendorIconInner(v) {
+  if (v.active && v.photo_url) return '';
+  if (v.mode_icon) return '';
+  return v.emoji || '🍜';
+}
+
 function categoryIconFile(label) {
   const found = CATEGORY_OPTIONS.find(c => c.label === label);
   return found ? `icons/${found.icon}.png` : null;
@@ -471,13 +497,118 @@ window.__pickEmoji = function (e) {
   renderPedagang();
 };
 
+window.__pickModeIcon = function (icon) {
+  selectedModeIcon = icon;
+  renderPedagang();
+};
+
+// ---------- EDIT PROFIL TOKO ----------
+let editCategories = [];
+let editModeIcon = null;
+
+window.__openEditProfile = function (vendorId) {
+  const v = vendors.find(v => v.id === vendorId);
+  if (!v) return;
+  editCategories = [...(v.categories || [])];
+  editModeIcon = v.mode_icon || null;
+  renderEditProfile(vendorId);
+};
+
+function renderEditProfile(vendorId) {
+  const v = vendors.find(v => v.id === vendorId);
+  if (!v) return;
+
+  const catHtml = CATEGORY_OPTIONS.map(c => `
+    <button type="button" class="cat-picker-item ${editCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__editToggleCategory('${c.label.replace(/'/g, "\\'")}')">
+      <div class="cat-picker-icon-wrap"><img src="icons/${c.icon}.png" alt="${c.label}" /></div>
+      <span>${c.label}</span>
+    </button>
+  `).join('');
+
+  const modeHtml = VENDOR_MODE_OPTIONS.map(m => `
+    <button type="button" class="cat-picker-item ${editModeIcon === m.icon ? 'picked' : ''}" onclick="window.__editPickModeIcon('${m.icon}')">
+      <div class="cat-picker-icon-wrap"><img src="mode_icons/${m.icon}.png" alt="${m.label}" /></div>
+      <span>${m.label}</span>
+    </button>
+  `).join('');
+
+  main.innerHTML = `
+    <div class="vendor-hero" style="text-align:left;">
+      <div class="section-label" style="margin-top:0;">✏️ Edit Profil Toko</div>
+      <div class="setup-form">
+        <input id="edit-name" type="text" value="${v.name.replace(/"/g, '&quot;')}" placeholder="Nama usaha" />
+        <input id="edit-whatsapp" type="tel" value="${v.whatsapp || ''}" placeholder="Nomor WhatsApp" />
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Mode jualan Anda (pilih 1)</div>
+        <div class="cat-picker-grid">${modeHtml}</div>
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
+        ${editCategories.length ? `
+          <div class="selected-cat-strip">
+            ${editCategories.map(label => `
+              <span class="selected-cat-pill">${label} <button type="button" onclick="window.__editToggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
+            `).join('')}
+          </div>
+        ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih</div>`}
+        <div class="cat-picker-grid">${catHtml}</div>
+
+        <button onclick="window.__saveEditProfile('${vendorId}')">💾 Simpan Perubahan</button>
+        <button type="button" onclick="renderPedagang()" style="background:transparent;border:1px solid var(--stroke);color:var(--text-dim);">Batal</button>
+      </div>
+      <div id="edit-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
+    </div>
+  `;
+}
+
+window.__editToggleCategory = function (label) {
+  if (editCategories.includes(label)) editCategories = editCategories.filter(c => c !== label);
+  else editCategories.push(label);
+  renderEditProfile(myVendorId);
+};
+
+window.__editPickModeIcon = function (icon) {
+  editModeIcon = icon;
+  renderEditProfile(myVendorId);
+};
+
+window.__saveEditProfile = async function (vendorId) {
+  const errEl = document.getElementById('edit-error');
+  const name = document.getElementById('edit-name').value.trim();
+  const whatsapp = normalizeWhatsapp(document.getElementById('edit-whatsapp').value.trim());
+
+  if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
+  if (editCategories.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
+
+  // Sesi baru belum punya PIN di memori -> minta sekali (sama seperti alur toggle status)
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return;
+    const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: enteredPin.trim() });
+    if (!ok) { errEl.textContent = 'PIN salah.'; return; }
+    myVendorPin = enteredPin.trim();
+  }
+
+  errEl.textContent = 'Menyimpan...';
+  try {
+    const { error } = await sb.rpc('update_vendor_profile', {
+      p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
+      p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
+    });
+    if (error) throw error;
+
+    const v = vendors.find(v => v.id === vendorId);
+    v.name = name; v.categories = editCategories; v.category = editCategories[0] || null;
+    v.mode_icon = editModeIcon; v.whatsapp = whatsapp;
+    showToast('Profil toko berhasil diperbarui! ✅');
+    renderPedagang();
+  } catch (e) {
+    errEl.textContent = 'Gagal menyimpan: ' + e.message;
+  }
+};
+
 function renderPedagang() {
   if (!myVendorId) {
     const optionsHtml = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
-    const emojiChoices = ['🍜','🍲','🍢','🥟','🍚','🍦','🥤','🍌','🍧','🍰','🌽','🍡','🍗','🥞','🍔','🌭'];
-    const emojiHtml = emojiChoices.map(e => `
-      <button type="button" class="emoji-choice ${e === selectedEmoji ? 'picked' : ''}" onclick="window.__pickEmoji('${e}')">${e}</button>
-    `).join('');
 
     main.innerHTML = `
       ${vendors.length ? `
@@ -519,8 +650,15 @@ function renderPedagang() {
               </button>
             `).join('')}
           </div>
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Pilih emoji makanan</div>
-          <div class="emoji-grid">${emojiHtml}</div>
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Mode jualan Anda (pilih 1)</div>
+          <div class="cat-picker-grid">
+            ${VENDOR_MODE_OPTIONS.map(m => `
+              <button type="button" class="cat-picker-item ${selectedModeIcon === m.icon ? 'picked' : ''}" onclick="window.__pickModeIcon('${m.icon}')">
+                <div class="cat-picker-icon-wrap"><img src="mode_icons/${m.icon}.png" alt="${m.label}" /></div>
+                <span>${m.label}</span>
+              </button>
+            `).join('')}
+          </div>
           <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
           <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
           <button onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
@@ -541,7 +679,7 @@ function renderPedagang() {
 
   main.innerHTML = `
     <div class="vendor-hero">
-      <div class="vendor-hero-emoji" style="${v.active && v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;background-position:center;` : ''}">${v.active && v.photo_url ? '' : (v.emoji || '🍜')}</div>
+      <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
       <div class="vendor-hero-name">${v.name}</div>
       <div class="vendor-hero-status ${v.active ? 'live' : ''} mono">
         ${v.active ? '🟢 SEDANG JUALAN · sampai ' + untilStr : '🔴 Belum jualan hari ini'}
@@ -662,7 +800,8 @@ function renderPedagang() {
         </a>
       `}
     </div>
-    <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
+    <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
+    <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
   `;
@@ -779,12 +918,14 @@ window.__registerVendor = async function () {
   const categories = selectedCategories;
   const category = categories[0] || null; // kolom lama, dijaga tetap terisi untuk kompatibilitas
   const emoji = selectedEmoji;
+  const modeIcon = selectedModeIcon;
   const whatsapp = normalizeWhatsapp(document.getElementById('reg-whatsapp').value.trim());
   const pin = document.getElementById('reg-pin').value.trim();
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
   if (categories.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
+  if (!modeIcon) { errEl.textContent = 'Pilih mode jualan Anda.'; return; }
   if (!whatsapp) { errEl.textContent = 'Nomor WhatsApp wajib diisi (jadi penanda akun Anda).'; return; }
   if (!/^\d{4}$/.test(pin)) { errEl.textContent = 'PIN wajib 4 angka.'; return; }
 
@@ -818,8 +959,8 @@ window.__registerVendor = async function () {
 
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region })
-      .select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
+      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region })
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
       .single();
 
     if (error) {
@@ -835,6 +976,7 @@ window.__registerVendor = async function () {
     myVendorPin = pin;
     localStorage.setItem('jd_my_vendor_id', myVendorId);
     selectedEmoji = '🍜';
+    selectedModeIcon = null;
     selectedCategories = [];
     sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId }).catch(() => {});
     ensurePushSubscription();
@@ -1080,7 +1222,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,region').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,region').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -1195,7 +1337,7 @@ async function renderAdminDashboard() {
     return `
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:10px;">
       <div style="display:flex;gap:10px;align-items:center;">
-        <div class="vendor-emoji" style="${v.photo_url ? `background-image:url('${v.photo_url}');background-size:cover;` : ''}">${v.photo_url ? '' : (v.emoji || '🍜')}</div>
+        <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         <div class="vendor-info">
           <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
           <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
