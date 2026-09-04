@@ -25,6 +25,7 @@ function getDeviceId() {
   return id;
 }
 const deviceId = getDeviceId();
+let referralCodeFromLink = null;
 
 // ---------- WEB PUSH: minta izin & simpan langganan ----------
 function urlBase64ToUint8Array(base64String) {
@@ -133,7 +134,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,rating_avg,rating_count').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -144,11 +145,11 @@ async function fetchFollows() {
   return data.map(f => f.vendor_id);
 }
 
-async function toggleFollowDb(vendorId, isFollowing) {
+async function toggleFollowDb(vendorId, isFollowing, viaReferral = false) {
   if (isFollowing) {
     await sb.from('follows').delete().eq('device_id', deviceId).eq('vendor_id', vendorId);
   } else {
-    await sb.from('follows').insert({ device_id: deviceId, vendor_id: vendorId });
+    await sb.from('follows').insert({ device_id: deviceId, vendor_id: vendorId, via_referral: viaReferral });
   }
 }
 
@@ -293,7 +294,7 @@ function renderVendorListHtml(list) {
             </span>
           </div>
           <div class="vendor-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
-          <div class="vendor-sub" style="color:#F5A623;">${v.rating_count > 0 ? `⭐ ${v.rating_avg} (${v.rating_count} ulasan)` : 'Belum ada ulasan — jadi yang pertama!'}</div>
+          <div class="vendor-sub" style="color:var(--text-faint);font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
         </div>
         <button class="follow-btn ${following ? 'following' : ''}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">
           ${following ? '✓ Ikuti' : '+ Ikuti'}
@@ -740,15 +741,15 @@ function renderPedagang() {
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">🔗</span>
+        <span style="font-size:20px;">🎯</span>
         <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ajak Pedagang Lain, Dapat Bonus</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Rp1.000 untuk tiap pedagang yang daftar lewat link Anda dan jadi Premium</div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kampanye: Rekrut & Dapat Premium Gratis</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Ajak 1 pedagang lain (yang benar-benar aktif jualan) + 10 pembeli baru lewat link Anda → 1 bulan Premium GRATIS</div>
         </div>
       </div>
-      <div id="referral-stats" style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Memuat statistik referral...</div>
-      <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;" onclick="window.__shareReferral('${v.id}','${v.name.replace(/'/g, "\\'")}')">
-        📤 Bagikan Link Ajakan
+      <div id="campaign-progress" style="margin-bottom:10px;">Memuat progres...</div>
+      <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;" onclick="window.__shareFollowQr('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+        📤 Bagikan Link Rekrut
       </button>
     </div>
 
@@ -800,6 +801,17 @@ function renderPedagang() {
         </a>
       `}
     </div>
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">💬</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ulasan dari Pembeli (Privat)</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Cuma Anda & admin yang bisa lihat ini — jadikan masukan buat perbaikan</div>
+        </div>
+      </div>
+      <div id="my-reviews-list" style="font-size:12px;color:var(--text-faint);">Memuat ulasan...</div>
+    </div>
+
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
@@ -807,6 +819,7 @@ function renderPedagang() {
   `;
 
   renderVendorQr(v.id);
+  loadMyReviews(v.id);
 
   if (v.is_premium) {
     sb.from('follows').select('id', { count: 'exact', head: true }).eq('vendor_id', v.id).then(({ count }) => {
@@ -815,13 +828,70 @@ function renderPedagang() {
     });
   }
 
-  sb.from('vendors').select('id,is_premium', { count: 'exact' }).eq('referred_by_vendor_id', v.id).then(({ data: refs, count }) => {
-    const el = document.getElementById('referral-stats');
-    if (!el) return;
-    const premiumRefs = (refs || []).filter(r => r.is_premium).length;
-    el.innerHTML = `<b style="color:var(--text);">${count ?? 0}</b> pedagang daftar lewat link Anda · <b style="color:var(--brand);">${premiumRefs}</b> di antaranya sudah Premium (≈ Rp${(premiumRefs * 1000).toLocaleString('id-ID')} bonus)`;
-  });
+  loadCampaignProgress(v.id);
 }
+
+async function loadCampaignProgress(vendorId) {
+  const el = document.getElementById('campaign-progress');
+  if (!el) return;
+
+  const [{ data: recruitedVendors }, { count: referredBuyers }] = await Promise.all([
+    sb.from('vendors').select('id,name,activation_count').eq('referred_by_vendor_id', vendorId),
+    sb.from('follows').select('id', { count: 'exact', head: true }).eq('vendor_id', vendorId).eq('via_referral', true),
+  ]);
+
+  const validVendorRecruit = (recruitedVendors || []).find(r => r.activation_count >= 3);
+  const vendorDone = !!validVendorRecruit;
+  const buyerCount = Math.min(referredBuyers ?? 0, 10);
+  const buyerDone = buyerCount >= 10;
+  const allDone = vendorDone && buyerDone;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="font-size:14px;">${vendorDone ? '✅' : '⬜'}</span>
+      <span style="font-size:11.5px;">1 pedagang aktif direkrut ${vendorDone ? `(${validVendorRecruit.name})` : '— belum ada yang memenuhi syarat'}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:14px;">${buyerDone ? '✅' : '⬜'}</span>
+      <span style="font-size:11.5px;">${buyerCount}/10 pembeli baru lewat link Anda</span>
+    </div>
+    <div style="background:var(--stroke);border-radius:999px;height:7px;overflow:hidden;margin-bottom:6px;">
+      <div style="background:${allDone ? 'var(--aktif)' : 'var(--brand)'};height:100%;width:${((buyerCount / 10) * 0.5 + (vendorDone ? 0.5 : 0)) * 100}%;transition:width .3s;"></div>
+    </div>
+    ${allDone
+      ? '<div style="font-size:11.5px;color:var(--aktif);font-weight:700;">🎉 Syarat terpenuhi! Admin akan meninjau dan mengaktifkan Premium Anda dalam 1-2 hari.</div>'
+      : '<div style="font-size:10.5px;color:var(--text-faint);">Pedagang dihitung sah setelah aktif jualan minimal 3x. Pembeli dihitung dari yang follow lewat link/QR Anda.</div>'}
+  `;
+}
+
+async function loadMyReviews(vendorId) {
+  const el = document.getElementById('my-reviews-list');
+  if (!el) return;
+  el.innerHTML = `<button class="follow-btn" style="width:100%;padding:10px;" onclick="window.__revealMyReviews('${vendorId}')">🔒 Tap untuk lihat ulasan (perlu PIN)</button>`;
+}
+
+window.__revealMyReviews = async function (vendorId) {
+  const el = document.getElementById('my-reviews-list');
+  if (!el) return;
+  let pin = myVendorPin;
+  if (pin === null) {
+    pin = prompt('Masukkan PIN akun Anda:');
+    if (pin === null) return;
+    pin = pin.trim();
+  }
+  el.innerHTML = 'Memuat...';
+  const { data, error } = await sb.rpc('get_my_reviews', { p_vendor_id: vendorId, p_pin: pin });
+  if (error) { el.innerHTML = `<span style="color:#f87171;">PIN salah atau gagal memuat.</span>`; return; }
+  myVendorPin = pin;
+  if (!data || data.length === 0) { el.innerHTML = 'Belum ada ulasan masuk.'; return; }
+  el.innerHTML = data.map(r => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--stroke);">
+      <div style="color:#F5A623;font-size:13px;">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</div>
+      ${r.comment ? `<div style="font-size:12px;color:var(--text);margin-top:3px;">${r.comment}</div>` : ''}
+      <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+    </div>
+  `).join('');
+};
 
 function followLinkFor(vendorId) {
   const code = vendorId.slice(0, 6).toUpperCase();
@@ -856,17 +926,6 @@ window.__downloadVendorQr = function (vendorName) {
   link.download = `QR-JajanDekat-${vendorName.replace(/\s+/g, '-')}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
-};
-
-window.__shareReferral = function (vendorId, vendorName) {
-  const code = vendorId.slice(0, 6).toUpperCase();
-  const link = `${location.origin}${location.pathname}?ref=${code}`;
-  const text = `Yuk daftar di JajanDekat! Aplikasi gratis buat pedagang keliling biar pembeli tahu kita lagi jualan di mana. Daftar lewat link ${vendorName} ini ya: ${link}`;
-  if (navigator.share) {
-    navigator.share({ title: 'JajanDekat', text, url: link }).catch(() => {});
-  } else {
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-  }
 };
 
 let pendingPhotoFile = null;
@@ -947,8 +1006,8 @@ window.__registerVendor = async function () {
 
   errEl.textContent = 'Mendaftarkan...';
   try {
-    // Deteksi kode referral dari link (?ref=KODE), cocokkan ke pedagang yang sudah dimuat
-    const refCode = new URLSearchParams(location.search).get('ref');
+    // Deteksi kode rekrut dari link/QR (?follow=KODE) — link yang sama dipakai untuk rekrut pembeli & pedagang
+    const refCode = new URLSearchParams(location.search).get('follow') || referralCodeFromLink;
     let referredByVendorId = null;
     if (refCode) {
       const referrer = vendors.find(v => v.id.toUpperCase().startsWith(refCode.toUpperCase()));
@@ -1144,17 +1203,55 @@ window.__openReviewModal = function (vendorId, vendorName) {
   overlay.innerHTML = `
     <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">
       <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">Beri Ulasan</div>
-      <div style="font-size:12px;color:var(--text-faint);margin-bottom:14px;">${vendorName}</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">${vendorName} · Ulasan Anda privat, hanya dilihat pedagang & admin untuk perbaikan kualitas — tidak ditampilkan ke publik.</div>
       <div id="star-picker" style="display:flex;gap:6px;justify-content:center;font-size:32px;margin-bottom:14px;"></div>
       <textarea id="review-comment" placeholder="Komentar (opsional)..." style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical;"></textarea>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button onclick="document.getElementById('review-modal-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
         <button onclick="window.__submitReview('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Kirim Ulasan</button>
       </div>
+      <button onclick="window.__openReportModal('${vendorId}','${vendorName.replace(/'/g, "\\'")}')" style="display:block;width:100%;text-align:center;margin-top:12px;background:none;border:none;color:#f87171;font-size:11px;text-decoration:underline;">
+        🚩 Laporkan penyalahgunaan (foto tidak pantas, akun palsu, dll)
+      </button>
     </div>
   `;
   document.body.appendChild(overlay);
   renderStarPicker();
+};
+
+window.__openReportModal = function (vendorId, vendorName) {
+  document.getElementById('review-modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'review-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  const reasons = ['Foto tidak pantas', 'Diduga akun palsu/hoax', 'Penipuan', 'Konten tidak sesuai', 'Lainnya'];
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">🚩 Laporkan Pedagang</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">${vendorName} · Laporan langsung ke admin untuk diverifikasi.</div>
+      <select id="report-reason" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;">
+        ${reasons.map(r => `<option value="${r}">${r}</option>`).join('')}
+      </select>
+      <textarea id="report-detail" placeholder="Jelaskan detail laporan Anda..." style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="document.getElementById('review-modal-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__submitReport('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:#f87171;color:#fff;font-weight:700;">Kirim Laporan</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__submitReport = async function (vendorId) {
+  const reason = document.getElementById('report-reason').value;
+  const detail = document.getElementById('report-detail').value.trim();
+  try {
+    await sb.from('reports').insert({ vendor_id: vendorId, device_id: deviceId, reason, detail: detail || null });
+    document.getElementById('review-modal-overlay').remove();
+    showToast('Laporan terkirim ke admin. Terima kasih! 🙏');
+  } catch (e) {
+    alert('Gagal mengirim laporan: ' + e.message);
+  }
 };
 
 function renderStarPicker() {
@@ -1330,7 +1427,11 @@ async function renderAdminDashboard() {
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:14px;padding:14px;margin-bottom:14px;">
       ${regionHtml || '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada data.</div>'}
     </div>
+
+    <div class="section-label" style="margin-top:4px;">🚩 Laporan Masuk</div>
+    <div id="admin-reports" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat laporan...</div></div>
   `);
+  loadAdminReports();
 
   listEl.innerHTML = data.map(v => {
     const premiumUntilStr = v.premium_until ? new Date(v.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -1370,6 +1471,45 @@ window.__exitAdmin = function () {
   render_ExitToNormal();
 };
 function render_ExitToNormal() { mode === 'pembeli' ? renderPembeli() : renderPedagang(); }
+
+async function loadAdminReports() {
+  const el = document.getElementById('admin-reports');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_reports' } });
+    if (error) throw error;
+    const reports = data.reports || [];
+    if (reports.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada laporan masuk. 👍</div>'; return; }
+    el.innerHTML = reports.map(r => `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${r.status === 'baru' ? 'border-color:#f87171;' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:700;font-size:12.5px;">${r.vendors?.name || '(pedagang dihapus)'}</span>
+          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${r.status === 'baru' ? '#FEE2E2' : r.status === 'diproses' ? '#FEF3C7' : '#DCFCE7'};color:${r.status === 'baru' ? '#DC2626' : r.status === 'diproses' ? '#92400E' : '#16A34A'};">${r.status}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--brand);font-weight:600;">${r.reason}</div>
+        ${r.detail ? `<div style="font-size:11px;color:var(--text-dim);">${r.detail}</div>` : ''}
+        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        ${r.status !== 'selesai' ? `
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            ${r.status === 'baru' ? `<button class="follow-btn" onclick="window.__updateReportStatus('${r.id}','diproses')">Tandai Diproses</button>` : ''}
+            <button class="follow-btn" onclick="window.__updateReportStatus('${r.id}','selesai')">Tandai Selesai</button>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat laporan: ${e.message}</span>`;
+  }
+}
+
+window.__updateReportStatus = async function (reportId, status) {
+  try {
+    await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'update_report_status', report_id: reportId, status } });
+    loadAdminReports();
+  } catch (e) {
+    alert('Gagal update status: ' + e.message);
+  }
+};
 
 async function callAdminAction(action, vendorId, extra = {}) {
   const { data, error } = await sb.functions.invoke('admin-action', {
@@ -1446,10 +1586,11 @@ async function init() {
     // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
     const followCode = new URLSearchParams(location.search).get('follow');
     if (followCode) {
+      referralCodeFromLink = followCode; // simpan di memori, dipakai lagi kalau nanti daftar jadi pedagang
       const target = vendors.find(v => v.id.toUpperCase().startsWith(followCode.toUpperCase()));
       if (target && !followedIds.has(target.id)) {
         followedIds.add(target.id);
-        await toggleFollowDb(target.id, false);
+        await toggleFollowDb(target.id, false, true);
         showToast(`Kamu sekarang mengikuti ${target.name}! 🎉`);
       }
       // Bersihkan URL supaya tidak follow ulang kalau di-refresh
