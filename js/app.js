@@ -732,11 +732,8 @@ function renderPedagang() {
         </div>
       </div>
       <div id="vendor-qr-box" style="display:flex;justify-content:center;background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;"></div>
-      <button class="follow-btn" style="width:100%;padding:10px;background:#25D366;color:#fff;" onclick="window.__shareFollowQr('${v.id}','${v.name.replace(/'/g, "\\'")}')">
-        💬 Bagikan Link & QR
-      </button>
-      <button class="follow-btn" style="width:100%;padding:10px;margin-top:8px;background:var(--brand-dim);color:var(--brand);" onclick="window.__shareStatusImage('${v.id}','${v.name.replace(/'/g, "\\'")}')">
-        🖼️ Buat & Bagikan Gambar Status (1 klik)
+      <button class="follow-btn" style="width:100%;padding:11px;background:#25D366;color:#fff;" onclick="window.__shareStatusImage('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+        🖼️ Bagikan
       </button>
     </div>
 
@@ -931,13 +928,47 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, subtitleText, ctaText, linkText }) {
-  const W = 1080, H = 1350;
+// Generate QR jadi <canvas> tersembunyi (dites: dipakai teks yang SAMA persis dengan QR yang sudah terbukti bisa di-scan di kotak QR utama)
+function generateQrCanvas(text, size) {
+  return new Promise((resolve) => {
+    const temp = document.createElement('div');
+    temp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+    document.body.appendChild(temp);
+    try {
+      new QRCode(temp, { text, width: size, height: size, colorDark: '#201A13', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      // qrcodejs merender sinkron, tapi kasih 1 tick biar pasti selesai
+      setTimeout(() => {
+        const canvas = temp.querySelector('canvas');
+        const img = temp.querySelector('img');
+        if (canvas) {
+          resolve(canvas);
+        } else if (img && img.src) {
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => resolve(fallbackImg);
+          fallbackImg.src = img.src;
+        } else {
+          resolve(null);
+        }
+        document.body.removeChild(temp);
+      }, 50);
+    } catch (e) {
+      console.error('Gagal generate QR untuk gambar:', e);
+      document.body.removeChild(temp);
+      resolve(null);
+    }
+  });
+}
+
+async function generateVendorShareImage(v, vendorName) {
+  const W = 1120, H = 1400;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // Latar
+  const link = followLinkFor(v.id);
+  const isActive = v.active;
+
+  // Latar + border
   ctx.fillStyle = '#FAF7F2';
   ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = '#FF6B4A';
@@ -946,6 +977,145 @@ async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, s
   ctx.stroke();
 
   // Brand
+  ctx.textAlign = 'center';
+  ctx.font = '700 58px sans-serif';
+  ctx.fillStyle = '#201A13';
+  ctx.fillText('Jajan', W / 2 - 65, 110);
+  ctx.fillStyle = '#FF6B4A';
+  ctx.fillText('Dekat', W / 2 + 80, 110);
+  ctx.font = '400 27px sans-serif';
+  ctx.fillStyle = '#8A8072';
+  ctx.fillText('Cek dulu, baru jalan.', W / 2, 152);
+
+  // Badge status
+  const badgeText = isActive ? '🟢 SEDANG JUALAN SEKARANG' : 'IKUTI SAYA DI JAJANDEKAT';
+  const badgeColor = isActive ? '#2FAE60' : '#FF6B4A';
+  ctx.font = '700 30px sans-serif';
+  const badgeW = ctx.measureText(badgeText).width + 60;
+  ctx.fillStyle = badgeColor;
+  roundRect(ctx, W / 2 - badgeW / 2, 195, badgeW, 62, 31);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(badgeText, W / 2, 236);
+
+  // ---- Baris dua kolom: kiri (foto+nama+kategori), kanan (kotak QR) ----
+  const rowTop = 300;
+  const leftX = 70, leftW = 460;
+  const rightX = 570, rightW = W - 70 - rightX + 70, boxSize = 420;
+
+  // Kiri: lingkaran foto/ikon
+  const circleR = 200, circleCx = leftX + circleR, circleCy = rowTop + circleR;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.arc(circleCx, circleCy, circleR, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#FFE7DF'; ctx.lineWidth = 8; ctx.stroke();
+
+  const iconSrc = v.photo_url || (v.mode_icon ? `mode_icons/${v.mode_icon}.png` : `icons/${(v.categories && v.categories[0] && categoryIconFile(v.categories[0])) || 'icons/lainnya.png'}`);
+  const iconImg = await loadImageSafe(iconSrc);
+  if (iconImg) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(circleCx, circleCy, circleR - 18, 0, Math.PI * 2); ctx.clip();
+    ctx.drawImage(iconImg, leftX + 18, rowTop + 18, circleR * 2 - 36, circleR * 2 - 36);
+    ctx.restore();
+  }
+
+  // Nama & kategori di bawah lingkaran (rata kiri)
+  ctx.textAlign = 'left';
+  ctx.font = '700 46px sans-serif';
+  ctx.fillStyle = '#201A13';
+  wrapTextLeft(ctx, vendorName, leftX, circleCy + circleR + 70, leftW, 54);
+  ctx.font = '400 30px sans-serif';
+  ctx.fillStyle = '#8A8072';
+  ctx.fillText((v.categories || []).join(' · ') || 'Pedagang Keliling', leftX, circleCy + circleR + 150);
+
+  // Kanan: kotak QR
+  const qrBoxY = rowTop, qrBoxX = rightX;
+  ctx.strokeStyle = '#FF6B4A'; ctx.lineWidth = 4;
+  roundRect(ctx, qrBoxX, qrBoxY, boxSize, boxSize + 90, 24);
+  ctx.stroke();
+
+  // Label pill di atas kotak
+  ctx.textAlign = 'center';
+  ctx.font = '700 24px sans-serif';
+  const pillText = 'SCAN QR PENJUAL';
+  const pillW = ctx.measureText(pillText).width + 44;
+  const pillX = qrBoxX + boxSize / 2 - pillW / 2, pillY = qrBoxY - 26;
+  ctx.fillStyle = '#FF6B4A';
+  roundRect(ctx, pillX, pillY, pillW, 52, 26);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(pillText, qrBoxX + boxSize / 2, pillY + 34);
+
+  // QR asli — pakai teks yang SAMA PERSIS dengan kotak QR utama (link) supaya konsisten & sudah teruji
+  const qrSize = boxSize - 60;
+  const qrCanvas = await generateQrCanvas(link, qrSize);
+  if (qrCanvas) {
+    ctx.drawImage(qrCanvas, qrBoxX + 30, qrBoxY + 30, qrSize, qrSize);
+  } else {
+    ctx.font = '400 20px sans-serif';
+    ctx.fillStyle = '#B5AC9C';
+    wrapText(ctx, 'QR tidak tersedia — buka link manual', qrBoxX + boxSize / 2, qrBoxY + boxSize / 2, boxSize - 60, 28);
+  }
+  ctx.font = '400 24px sans-serif';
+  ctx.fillStyle = '#8A8072';
+  wrapText(ctx, 'Scan untuk lihat lokasi & follow', qrBoxX + boxSize / 2, qrBoxY + boxSize + 55, boxSize - 40, 28);
+
+  // Tombol CTA
+  const ctaText = '📍 Cek Lokasi Sekarang';
+  const btnW = 620, btnH = 92, btnY = H - 205;
+  ctx.fillStyle = '#FF6B4A';
+  roundRect(ctx, W / 2 - btnW / 2, btnY, btnW, btnH, 24);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(ctaText, W / 2, btnY + 60);
+
+  // Footer
+  ctx.font = '400 27px sans-serif';
+  ctx.fillStyle = '#B5AC9C';
+  ctx.fillText('🌐 jajandekat.my.id', W / 2, H - 55);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '', lines = [];
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w + ' '; }
+    else line = test;
+  }
+  lines.push(line);
+  const startY = y - (lines.length - 1) * lineHeight / 2;
+  lines.forEach((l, i) => ctx.fillText(l.trim(), x, startY + i * lineHeight));
+}
+
+function wrapTextLeft(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '', lines = [];
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w + ' '; }
+    else line = test;
+  }
+  lines.push(line);
+  lines.forEach((l, i) => ctx.fillText(l.trim(), x, y + i * lineHeight));
+}
+
+async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, subtitleText, ctaText, linkText }) {
+  const W = 1080, H = 1350;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#FAF7F2';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#FF6B4A';
+  ctx.lineWidth = 10;
+  roundRect(ctx, 15, 15, W - 30, H - 30, 50);
+  ctx.stroke();
+
   ctx.textAlign = 'center';
   ctx.font = '700 56px sans-serif';
   ctx.fillStyle = '#201A13';
@@ -956,7 +1126,6 @@ async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, s
   ctx.fillStyle = '#8A8072';
   ctx.fillText('Cek dulu, baru jalan.', W / 2, 150);
 
-  // Badge status
   ctx.font = '700 30px sans-serif';
   const badgeW = ctx.measureText(badgeText).width + 60;
   const badgeX = W / 2 - badgeW / 2;
@@ -966,7 +1135,6 @@ async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, s
   ctx.fillStyle = '#fff';
   ctx.fillText(badgeText, W / 2, 230);
 
-  // Ikon vendor / ilustrasi (lingkaran besar tengah)
   const iconBoxY = 290, iconBoxSize = 420;
   ctx.fillStyle = '#FFFFFF';
   ctx.beginPath();
@@ -986,7 +1154,6 @@ async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, s
     ctx.restore();
   }
 
-  // Judul & subjudul
   ctx.font = '700 52px sans-serif';
   ctx.fillStyle = '#201A13';
   wrapText(ctx, titleText, W / 2, iconBoxY + iconBoxSize + 90, W - 160, 60);
@@ -994,7 +1161,6 @@ async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, s
   ctx.fillStyle = '#8A8072';
   ctx.fillText(subtitleText, W / 2, iconBoxY + iconBoxSize + 150);
 
-  // Tombol CTA
   const btnW = 560, btnH = 90, btnY = H - 220;
   ctx.fillStyle = '#FF6B4A';
   roundRect(ctx, W / 2 - btnW / 2, btnY, btnW, btnH, 24);
@@ -1003,25 +1169,11 @@ async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, s
   ctx.font = '700 34px sans-serif';
   ctx.fillText(ctaText, W / 2, btnY + 58);
 
-  // Footer
   ctx.font = '400 26px sans-serif';
   ctx.fillStyle = '#B5AC9C';
   ctx.fillText(linkText, W / 2, H - 60);
 
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-}
-
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(' ');
-  let line = '', lines = [];
-  for (const w of words) {
-    const test = line + w + ' ';
-    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w + ' '; }
-    else line = test;
-  }
-  lines.push(line);
-  const startY = y - (lines.length - 1) * lineHeight / 2;
-  lines.forEach((l, i) => ctx.fillText(l.trim(), x, startY + i * lineHeight));
 }
 
 async function shareGeneratedImage(blob, filename, caption) {
@@ -1036,23 +1188,14 @@ async function shareGeneratedImage(blob, filename, caption) {
   }
 }
 
-// Dipanggil dari layar Pedagang
+// Dipanggil dari layar Pedagang — SATU tombol, QR sudah tertanam di gambar
 window.__shareStatusImage = async function (vendorId, vendorName) {
   const v = vendors.find(v => v.id === vendorId);
   if (!v) return;
   showToast('Membuat gambar...');
-  const iconSrc = v.photo_url || (v.mode_icon ? `mode_icons/${v.mode_icon}.png` : `icons/${(v.categories && v.categories[0]) ? categoryIconFile(v.categories[0]) : 'lainnya.png'}`);
   const link = followLinkFor(vendorId);
-  const blob = await generateShareImage({
-    badgeText: v.active ? '🟢 SEDANG JUALAN SEKARANG' : 'IKUTI SAYA DI JAJANDEKAT',
-    badgeColor: v.active ? '#2FAE60' : '#FF6B4A',
-    iconSrc,
-    titleText: vendorName,
-    subtitleText: (v.categories || []).join(' · ') || 'Pedagang Keliling',
-    ctaText: 'Cek Lokasi Sekarang',
-    linkText: 'jajandekat.my.id',
-  });
-  const caption = `${v.active ? `${vendorName} lagi jualan sekarang!` : `Yuk follow ${vendorName} di JajanDekat!`} Cek & follow di: ${link}`;
+  const blob = await generateVendorShareImage(v, vendorName);
+  const caption = v.active ? `${vendorName} lagi jualan sekarang! Cek & follow di: ${link}` : `Yuk follow ${vendorName} di JajanDekat! ${link}`;
   shareGeneratedImage(blob, `jajandekat-${vendorName.replace(/\s+/g, '-')}.png`, caption);
 };
 
