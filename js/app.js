@@ -732,14 +732,9 @@ function renderPedagang() {
         </div>
       </div>
       <div id="vendor-qr-box" style="display:flex;justify-content:center;background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;">
-        <button class="follow-btn" style="flex:1;padding:10px;background:#25D366;color:#fff;" onclick="window.__shareFollowQr('${v.id}','${v.name.replace(/'/g, "\\'")}')">
-          💬 Bagikan
-        </button>
-        <button class="follow-btn" style="flex:1;padding:10px;" onclick="window.__downloadVendorQr('${v.name.replace(/'/g, "\\'")}')">
-          ⬇️ Unduh (Cetak)
-        </button>
-      </div>
+      <button class="follow-btn" style="width:100%;padding:10px;background:#25D366;color:#fff;" onclick="window.__shareFollowQr('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+        💬 Bagikan Link & QR
+      </button>
       <button class="follow-btn" style="width:100%;padding:10px;margin-top:8px;background:var(--brand-dim);color:var(--brand);" onclick="window.__shareStatusImage('${v.id}','${v.name.replace(/'/g, "\\'")}')">
         🖼️ Buat & Bagikan Gambar Status (1 klik)
       </button>
@@ -1085,15 +1080,6 @@ window.__shareFollowQr = function (vendorId, vendorName) {
   } else {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   }
-};
-
-window.__downloadVendorQr = function (vendorName) {
-  const canvas = document.querySelector('#vendor-qr-box canvas');
-  if (!canvas) { alert('QR belum siap, coba lagi sebentar.'); return; }
-  const link = document.createElement('a');
-  link.download = `QR-JajanDekat-${vendorName.replace(/\s+/g, '-')}.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
 };
 
 let pendingPhotoFile = null;
