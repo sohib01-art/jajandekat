@@ -336,6 +336,9 @@ function renderCariView() {
       <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;" onclick="window.__shareApp()">
         📤 Bagikan Aplikasi
       </button>
+      <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;margin-top:8px;background:var(--brand-dim);color:var(--brand);" onclick="window.__shareAppImage()">
+        🖼️ Bagikan dengan Gambar
+      </button>
     </div>
   `;
   const input = document.getElementById('search-input');
@@ -737,6 +740,9 @@ function renderPedagang() {
           ⬇️ Unduh (Cetak)
         </button>
       </div>
+      <button class="follow-btn" style="width:100%;padding:10px;margin-top:8px;background:var(--brand-dim);color:var(--brand);" onclick="window.__shareStatusImage('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+        🖼️ Buat & Bagikan Gambar Status (1 klik)
+      </button>
     </div>
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
@@ -908,6 +914,168 @@ function renderVendorQr(vendorId) {
     colorDark: '#201A13', colorLight: '#ffffff',
   });
 }
+
+// ---------- GENERATOR GAMBAR STATUS (canvas, otomatis terisi nama/status/link) ----------
+function loadImageSafe(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+async function generateShareImage({ badgeText, badgeColor, iconSrc, titleText, subtitleText, ctaText, linkText }) {
+  const W = 1080, H = 1350;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Latar
+  ctx.fillStyle = '#FAF7F2';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#FF6B4A';
+  ctx.lineWidth = 10;
+  roundRect(ctx, 15, 15, W - 30, H - 30, 50);
+  ctx.stroke();
+
+  // Brand
+  ctx.textAlign = 'center';
+  ctx.font = '700 56px sans-serif';
+  ctx.fillStyle = '#201A13';
+  ctx.fillText('Jajan', W / 2 - 60, 110);
+  ctx.fillStyle = '#FF6B4A';
+  ctx.fillText('Dekat', W / 2 + 75, 110);
+  ctx.font = '400 26px sans-serif';
+  ctx.fillStyle = '#8A8072';
+  ctx.fillText('Cek dulu, baru jalan.', W / 2, 150);
+
+  // Badge status
+  ctx.font = '700 30px sans-serif';
+  const badgeW = ctx.measureText(badgeText).width + 60;
+  const badgeX = W / 2 - badgeW / 2;
+  ctx.fillStyle = badgeColor;
+  roundRect(ctx, badgeX, 190, badgeW, 60, 30);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(badgeText, W / 2, 230);
+
+  // Ikon vendor / ilustrasi (lingkaran besar tengah)
+  const iconBoxY = 290, iconBoxSize = 420;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.arc(W / 2, iconBoxY + iconBoxSize / 2, iconBoxSize / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#FFE7DF';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  const img = await loadImageSafe(iconSrc);
+  if (img) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(W / 2, iconBoxY + iconBoxSize / 2, iconBoxSize / 2 - 20, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(img, W / 2 - iconBoxSize / 2 + 20, iconBoxY + 20, iconBoxSize - 40, iconBoxSize - 40);
+    ctx.restore();
+  }
+
+  // Judul & subjudul
+  ctx.font = '700 52px sans-serif';
+  ctx.fillStyle = '#201A13';
+  wrapText(ctx, titleText, W / 2, iconBoxY + iconBoxSize + 90, W - 160, 60);
+  ctx.font = '400 30px sans-serif';
+  ctx.fillStyle = '#8A8072';
+  ctx.fillText(subtitleText, W / 2, iconBoxY + iconBoxSize + 150);
+
+  // Tombol CTA
+  const btnW = 560, btnH = 90, btnY = H - 220;
+  ctx.fillStyle = '#FF6B4A';
+  roundRect(ctx, W / 2 - btnW / 2, btnY, btnW, btnH, 24);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 34px sans-serif';
+  ctx.fillText(ctaText, W / 2, btnY + 58);
+
+  // Footer
+  ctx.font = '400 26px sans-serif';
+  ctx.fillStyle = '#B5AC9C';
+  ctx.fillText(linkText, W / 2, H - 60);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '', lines = [];
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w + ' '; }
+    else line = test;
+  }
+  lines.push(line);
+  const startY = y - (lines.length - 1) * lineHeight / 2;
+  lines.forEach((l, i) => ctx.fillText(l.trim(), x, startY + i * lineHeight));
+}
+
+async function shareGeneratedImage(blob, filename, caption) {
+  const file = new File([blob], filename, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    await navigator.share({ files: [file], text: caption }).catch(() => {});
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    showToast('Gambar tersimpan! Buka galeri untuk kirim manual ke WhatsApp.');
+  }
+}
+
+// Dipanggil dari layar Pedagang
+window.__shareStatusImage = async function (vendorId, vendorName) {
+  const v = vendors.find(v => v.id === vendorId);
+  if (!v) return;
+  showToast('Membuat gambar...');
+  const iconSrc = v.photo_url || (v.mode_icon ? `mode_icons/${v.mode_icon}.png` : `icons/${(v.categories && v.categories[0]) ? categoryIconFile(v.categories[0]) : 'lainnya.png'}`);
+  const link = followLinkFor(vendorId);
+  const blob = await generateShareImage({
+    badgeText: v.active ? '🟢 SEDANG JUALAN SEKARANG' : 'IKUTI SAYA DI JAJANDEKAT',
+    badgeColor: v.active ? '#2FAE60' : '#FF6B4A',
+    iconSrc,
+    titleText: vendorName,
+    subtitleText: (v.categories || []).join(' · ') || 'Pedagang Keliling',
+    ctaText: 'Cek Lokasi Sekarang',
+    linkText: 'jajandekat.my.id',
+  });
+  const caption = `${v.active ? `${vendorName} lagi jualan sekarang!` : `Yuk follow ${vendorName} di JajanDekat!`} Cek & follow di: ${link}`;
+  shareGeneratedImage(blob, `jajandekat-${vendorName.replace(/\s+/g, '-')}.png`, caption);
+};
+
+// Dipanggil dari layar Pembeli (tombol "Bagikan Aplikasi")
+window.__shareAppImage = async function () {
+  showToast('Membuat gambar...');
+  const blob = await generateShareImage({
+    badgeText: '🍜 CARI JAJANAN KELILING',
+    badgeColor: '#FF6B4A',
+    iconSrc: 'icons/bakso.png',
+    titleText: 'Pedagang favoritmu lagi jualan!',
+    subtitleText: 'Cek dulu sebelum jalan, gratis tanpa akun',
+    ctaText: 'Buka Sekarang',
+    linkText: 'jajandekat.my.id',
+  });
+  const caption = `Cari pedagang keliling yang lagi jualan di sekitarmu — cek dulu, baru jalan! Coba JajanDekat: ${location.origin}${location.pathname}`;
+  shareGeneratedImage(blob, 'jajandekat-ajak-teman.png', caption);
+};
 
 window.__shareFollowQr = function (vendorId, vendorName) {
   const link = followLinkFor(vendorId);
