@@ -755,10 +755,10 @@ function renderPedagang() {
           <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Ajak 1 pedagang lain (yang benar-benar aktif jualan) + 10 pembeli baru lewat link Anda → 1 bulan Premium GRATIS</div>
         </div>
       </div>
-      <div id="campaign-progress" style="margin-bottom:10px;">Memuat progres...</div>
-      <button class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;" onclick="window.__shareFollowQr('${v.id}','${v.name.replace(/'/g, "\\'")}')">
-        📤 Bagikan Link Rekrut
-      </button>
+      <div id="campaign-progress" style="margin-bottom:4px;">Memuat progres...</div>
+      <div style="font-size:11px;color:var(--text-faint);text-align:center;padding-top:6px;border-top:1px solid var(--stroke);margin-top:6px;">
+        💡 Pakai tombol <b style="color:var(--brand);">"Bagikan"</b> di atas untuk kejar target ini
+      </div>
     </div>
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
@@ -856,11 +856,11 @@ async function loadCampaignProgress(vendorId) {
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <span style="font-size:14px;">${vendorDone ? '✅' : '⬜'}</span>
+      <span style="font-size:14px;">${vendorDone ? '🟢' : '⚪'}</span>
       <span style="font-size:11.5px;">1 pedagang aktif direkrut ${vendorDone ? `(${validVendorRecruit.name})` : '— belum ada yang memenuhi syarat'}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <span style="font-size:14px;">${buyerDone ? '✅' : '⬜'}</span>
+      <span style="font-size:14px;">${buyerDone ? '🟢' : '⚪'}</span>
       <span style="font-size:11.5px;">${buyerCount}/10 pembeli baru lewat link Anda</span>
     </div>
     <div style="background:var(--stroke);border-radius:999px;height:7px;overflow:hidden;margin-bottom:6px;">
