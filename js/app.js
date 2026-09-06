@@ -414,16 +414,6 @@ let myVendorPin = null; // hanya di memori (tidak disimpan permanen), diminta ul
 let pickedDuration = 120;
 let selectedEmoji = '🍜';
 let selectedModeIcon = null;
-let regNameValue = '';
-let regWhatsappValue = '';
-let regPinValue = '';
-let isRegistering = false;
-
-window.__updateRegField = function (field, value) {
-  if (field === 'name') regNameValue = value;
-  if (field === 'whatsapp') regWhatsappValue = value;
-  if (field === 'pin') regPinValue = value;
-};
 const VENDOR_MODE_OPTIONS = [
   { label: 'Warung/Kios Tetap', icon: 'warung' },
   { label: 'Jualan dari Rumah', icon: 'rumahan' },
@@ -556,7 +546,7 @@ function renderEditProfile(vendorId) {
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Mode jualan Anda (pilih 1)</div>
         <div class="cat-picker-grid">${modeHtml}</div>
 
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jual apa saja? (tap untuk pilih, tap lagi untuk batal)</div>
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
         ${editCategories.length ? `
           <div class="selected-cat-strip">
             ${editCategories.map(label => `
@@ -647,8 +637,8 @@ function renderPedagang() {
         <div class="vendor-hero-emoji">🛒</div>
         <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
         <div class="setup-form">
-          <input id="reg-name" type="text" value="${regNameValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('name', this.value)" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (tap untuk pilih, tap lagi untuk batal)</div>
+          <input id="reg-name" type="text" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
           ${selectedCategories.length ? `
             <div class="selected-cat-strip">
               ${selectedCategories.map(label => `
@@ -673,9 +663,9 @@ function renderPedagang() {
               </button>
             `).join('')}
           </div>
-          <input id="reg-whatsapp" type="tel" value="${regWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('whatsapp', this.value)" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
-          <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
-          <button data-reg-submit onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
+          <input id="reg-whatsapp" type="tel" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
+          <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
+          <button onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
         </div>
         <div id="reg-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
       </div>
@@ -1253,7 +1243,7 @@ window.__onPhotoSelected = function (event) {
 
 // Deteksi kabupaten/kota otomatis dari GPS, pakai layanan gratis OpenStreetMap (Nominatim)
 function detectRegion() {
-  const detection = new Promise((resolve) => {
+  return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(null); return; }
     navigator.geolocation.getCurrentPosition(async (pos) => {
       try {
@@ -1269,9 +1259,6 @@ function detectRegion() {
       }
     }, () => resolve(null), { timeout: 8000 });
   });
-  // Jaga-jaga: kalau fetch reverse-geocode menggantung tanpa batas, jangan sampai macetkan pendaftaran
-  const hardTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 10000));
-  return Promise.race([detection, hardTimeout]);
 }
 
 function normalizeWhatsapp(raw) {
@@ -1283,14 +1270,13 @@ function normalizeWhatsapp(raw) {
 }
 
 window.__registerVendor = async function () {
-  if (isRegistering) return; // cegah klik ganda saat masih diproses
-  const name = (document.getElementById('reg-name')?.value || regNameValue).trim();
+  const name = document.getElementById('reg-name').value.trim();
   const categories = selectedCategories;
   const category = categories[0] || null; // kolom lama, dijaga tetap terisi untuk kompatibilitas
   const emoji = selectedEmoji;
   const modeIcon = selectedModeIcon;
-  const whatsapp = normalizeWhatsapp((document.getElementById('reg-whatsapp')?.value || regWhatsappValue).trim());
-  const pin = (document.getElementById('reg-pin')?.value || regPinValue).trim();
+  const whatsapp = normalizeWhatsapp(document.getElementById('reg-whatsapp').value.trim());
+  const pin = document.getElementById('reg-pin').value.trim();
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
@@ -1316,9 +1302,6 @@ window.__registerVendor = async function () {
   confirmedDuplicateName = false;
 
   errEl.textContent = 'Mendaftarkan...';
-  isRegistering = true;
-  const submitBtn = document.querySelector('[data-reg-submit]');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Mendaftarkan...'; }
   try {
     // Deteksi kode rekrut dari link/QR (?follow=KODE) — link yang sama dipakai untuk rekrut pembeli & pedagang
     const refCode = new URLSearchParams(location.search).get('follow') || referralCodeFromLink;
@@ -1351,17 +1334,11 @@ window.__registerVendor = async function () {
     selectedEmoji = '🍜';
     selectedModeIcon = null;
     selectedCategories = [];
-    regNameValue = ''; regWhatsappValue = ''; regPinValue = '';
     sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId }).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
   } catch (e) {
-    console.error('Error saat daftar:', e);
-    errEl.textContent = 'Gagal mendaftar: ' + (e && e.message ? e.message : 'terjadi kesalahan tidak diketahui') + '. Coba lagi.';
-  } finally {
-    isRegistering = false;
-    const btn = document.querySelector('[data-reg-submit]');
-    if (btn) { btn.disabled = false; btn.textContent = '🟢 Daftar Sekarang'; }
+    errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
   }
 };
 
