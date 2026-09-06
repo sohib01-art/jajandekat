@@ -556,7 +556,7 @@ function renderEditProfile(vendorId) {
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Mode jualan Anda (pilih 1)</div>
         <div class="cat-picker-grid">${modeHtml}</div>
 
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jual apa saja? (tap untuk pilih, tap lagi untuk batal)</div>
         ${editCategories.length ? `
           <div class="selected-cat-strip">
             ${editCategories.map(label => `
@@ -648,7 +648,7 @@ function renderPedagang() {
         <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
         <div class="setup-form">
           <input id="reg-name" type="text" value="${regNameValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('name', this.value)" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (boleh pilih lebih dari satu)</div>
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (tap untuk pilih, tap lagi untuk batal)</div>
           ${selectedCategories.length ? `
             <div class="selected-cat-strip">
               ${selectedCategories.map(label => `
@@ -1253,7 +1253,7 @@ window.__onPhotoSelected = function (event) {
 
 // Deteksi kabupaten/kota otomatis dari GPS, pakai layanan gratis OpenStreetMap (Nominatim)
 function detectRegion() {
-  return new Promise((resolve) => {
+  const detection = new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(null); return; }
     navigator.geolocation.getCurrentPosition(async (pos) => {
       try {
@@ -1269,6 +1269,9 @@ function detectRegion() {
       }
     }, () => resolve(null), { timeout: 8000 });
   });
+  // Jaga-jaga: kalau fetch reverse-geocode menggantung tanpa batas, jangan sampai macetkan pendaftaran
+  const hardTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 10000));
+  return Promise.race([detection, hardTimeout]);
 }
 
 function normalizeWhatsapp(raw) {
@@ -1353,7 +1356,8 @@ window.__registerVendor = async function () {
     ensurePushSubscription();
     renderPedagang();
   } catch (e) {
-    errEl.textContent = 'Terjadi kesalahan jaringan. Coba lagi.';
+    console.error('Error saat daftar:', e);
+    errEl.textContent = 'Gagal mendaftar: ' + (e && e.message ? e.message : 'terjadi kesalahan tidak diketahui') + '. Coba lagi.';
   } finally {
     isRegistering = false;
     const btn = document.querySelector('[data-reg-submit]');
