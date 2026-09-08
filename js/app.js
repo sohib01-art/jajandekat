@@ -134,7 +134,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,created_at').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -274,19 +274,27 @@ function renderPembeli() {
   `;
 }
 
+function isPromoActive(v) {
+  return v.promo_until && new Date(v.promo_until) > new Date();
+}
+
 function renderVendorListHtml(list) {
   if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
-  const sorted = [...list].sort((a, b) => (b.is_premium ? 1 : 0) - (a.is_premium ? 1 : 0));
+  const sorted = [...list].sort((a, b) => {
+    const scoreA = (a.is_premium ? 2 : 0) + (isPromoActive(a) ? 1 : 0);
+    const scoreB = (b.is_premium ? 2 : 0) + (isPromoActive(b) ? 1 : 0);
+    return scoreB - scoreA;
+  });
   return sorted.map(v => {
     const following = followedIds.has(v.id);
     const untilStr = v.active_until
       ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : null;
     return `
-      <div class="vendor-card" onclick="if(!event.target.closest('button')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="cursor:pointer;">
+      <div class="vendor-card" onclick="if(!event.target.closest('button')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="cursor:pointer;${isPromoActive(v) ? 'border-color:#F5A623;box-shadow:0 0 0 1px #F5A623;' : ''}">
         <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         <div class="vendor-info">
-          <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐ Premium</span>' : ''}</div>
+          <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐ Premium</span>' : ''}${isPromoActive(v) ? ' <span class="premium-badge" style="background:linear-gradient(135deg,#FFD86B,#F5A623);">🔥 Promo</span>' : ''}</div>
           <div class="vendor-meta">
             <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
             <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
@@ -809,6 +817,31 @@ function renderPedagang() {
         </a>
       `}
     </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      ${isPromoActive(v) ? `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:20px;">🔥</span>
+          <div>
+            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promo Lokal Aktif</div>
+            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} — kartu Anda disorot & tampil lebih atas</div>
+          </div>
+        </div>
+      ` : `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="font-size:20px;">🔥</span>
+          <div>
+            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promosi Lokal Harian</div>
+            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sorot kartu Anda ke posisi atas mulai Rp10rb/hari — cocok buat hari ramai/dagangan baru</div>
+          </div>
+        </div>
+        <a href="https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau pasang Promosi Lokal di JajanDekat.')}"
+           target="_blank" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:#F5A623;color:#fff;">
+          💬 Pasang Promosi via WhatsApp
+        </a>
+      `}
+    </div>
+
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">💬</span>
@@ -1639,7 +1672,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at,region').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,created_at,region').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -1764,6 +1797,7 @@ async function renderAdminDashboard() {
           <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
           <div class="vendor-sub">${(v.categories || []).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
           ${v.is_premium ? `<div class="vendor-sub" style="color:var(--brand);">⭐ Premium sampai ${premiumUntilStr || '(tanpa batas — akun lama)'}</div>` : ''}
+          ${v.promo_until && new Date(v.promo_until) > new Date() ? `<div class="vendor-sub" style="color:#F5A623;">🔥 Promo sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -1778,6 +1812,13 @@ async function renderAdminDashboard() {
         <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',6)">6 Bln</button>
         <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',12)">1 Thn</button>
         ${v.is_premium ? `<button class="follow-btn" style="color:#f87171;" onclick="window.__adminCancelPremium('${v.id}')">✕ Cabut</button>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:10.5px;color:var(--text-faint);">🔥 Promo Lokal:</span>
+        <button class="follow-btn" onclick="window.__adminSetPromo('${v.id}',1)">1 Hari</button>
+        <button class="follow-btn" onclick="window.__adminSetPromo('${v.id}',3)">3 Hari</button>
+        <button class="follow-btn" onclick="window.__adminSetPromo('${v.id}',7)">7 Hari</button>
+        ${v.promo_until && new Date(v.promo_until) > new Date() ? `<button class="follow-btn" style="color:#f87171;" onclick="window.__adminCancelPromo('${v.id}')">✕ Cabut</button>` : ''}
       </div>
     </div>
   `;
@@ -1868,6 +1909,27 @@ window.__adminCancelPremium = async function (id) {
     renderAdminDashboard();
   } catch (e) {
     alert('Gagal mencabut Premium: ' + e.message);
+  }
+};
+
+window.__adminSetPromo = async function (id, days) {
+  try {
+    const result = await callAdminAction('set_promo_duration', id, { days });
+    const untilStr = new Date(result.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    alert(`🔥 Promo diaktifkan sampai ${untilStr}.`);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal mengaktifkan promo: ' + e.message);
+  }
+};
+
+window.__adminCancelPromo = async function (id) {
+  if (!confirm('Cabut status Promo pedagang ini?')) return;
+  try {
+    await callAdminAction('cancel_promo', id);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal mencabut promo: ' + e.message);
   }
 };
 
