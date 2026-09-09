@@ -10,5 +10,34 @@
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Buka Peta",
+      "short_name": "Peta",
+      "description": "Langsung lihat peta pedagang terdekat",
+      "url": "./?view=peta",
+      "icons": [
+        { "src": "nav_icons/peta.png", "sizes": "96x96", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Mode Pedagang",
+      "short_name": "Pedagang",
+      "description": "Buka langsung ke mode pedagang untuk update status jualan",
+      "url": "./?mode=pedagang",
+      "icons": [
+        { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "./share.html",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }
