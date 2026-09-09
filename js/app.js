@@ -1979,7 +1979,29 @@ async function init() {
       history.replaceState(null, '', location.pathname);
     }
 
-    renderPembeli();
+    // Dukungan shortcut app: ?view=peta / ?view=cari / ?mode=pedagang
+    const urlParams = new URLSearchParams(location.search);
+    const wantMode = urlParams.get('mode');
+    const wantView = urlParams.get('view');
+
+    if (wantMode === 'pedagang') {
+      mode = 'pedagang';
+      btnPedagang.classList.add('active');
+      btnPembeli.classList.remove('active');
+      renderPedagang();
+    } else if (wantView === 'peta' || wantView === 'cari') {
+      bottomView = wantView;
+      document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
+        n.classList.toggle('active', n.dataset.view === wantView);
+      });
+      renderPembeli();
+    } else {
+      renderPembeli();
+    }
+
+    if (wantMode || wantView) {
+      history.replaceState(null, '', location.pathname);
+    }
   } catch (e) {
     console.error(e);
     renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
