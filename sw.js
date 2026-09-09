@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jajandekat-v1';
+const CACHE_NAME = 'jajandekat-v2';
 const CORE_FILES = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const CORE_FILES = [
   './js/config.js',
   './js/app.js',
   './manifest.json',
+  './offline.html',
 ];
 
 self.addEventListener('install', (event) => {
@@ -24,10 +25,26 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Strategi: coba jaringan dulu (data pedagang harus selalu fresh),
-// kalau gagal (offline), baru pakai cache file inti.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// Strategi: coba jaringan dulu (data pedagang harus selalu fresh).
+// Kalau gagal (offline):
+//  - untuk navigasi halaman (buka app/refresh) -> tampilkan offline.html yang rapi
+//  - untuk file lain (css/js/gambar) -> pakai cache kalau ada
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.match('./offline.html').then((r) => r || caches.match('./index.html'))
+      )
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   );
