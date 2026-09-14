@@ -424,6 +424,7 @@ let selectedEmoji = '🍜';
 let selectedModeIcon = null;
 let regNameValue = '';
 let regWhatsappValue = '';
+let pickWhatsappValue = '';
 let regPinValue = '';
 let isRegistering = false;
 
@@ -630,16 +631,13 @@ window.__saveEditProfile = async function (vendorId) {
 
 function renderPedagang() {
   if (!myVendorId) {
-    const optionsHtml = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
-
     main.innerHTML = `
       ${vendors.length ? `
         <div class="vendor-hero" style="text-align:left;">
           <div class="section-label" style="margin-top:0;">Sudah pernah daftar? Masuk ke akun lama</div>
           <div class="setup-form">
-            <select id="pick-vendor" style="background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);">
-              ${optionsHtml}
-            </select>
+            <input id="pick-whatsapp" type="tel" value="${pickWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updatePickWhatsapp(this.value)" placeholder="Nomor WhatsApp terdaftar, misal: 81234567890" />
+            <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:-6px;">Boleh diawali 0 atau langsung 8 — otomatis diubah jadi +62. Contoh: 081234567890 atau 81234567890.</div>
             <input id="pick-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Masukkan PIN akun ini" />
             <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
             <a href="#" onclick="window.__forgotPin(); return false;" style="text-align:center;font-size:11.5px;color:var(--text-faint);text-decoration:underline;">
@@ -1398,28 +1396,40 @@ window.__registerVendor = async function () {
   }
 };
 
+window.__updatePickWhatsapp = function (value) {
+  pickWhatsappValue = value;
+};
+
 window.__forgotPin = function () {
-  const sel = document.getElementById('pick-vendor');
-  const vendorName = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
-  const msg = `Halo, saya lupa PIN akun pedagang JajanDekat saya. Nama usaha: ${vendorName}`;
+  const raw = (document.getElementById('pick-whatsapp')?.value || pickWhatsappValue).trim();
+  const whatsapp = normalizeWhatsapp(raw);
+  const msg = whatsapp
+    ? `Halo, saya lupa PIN akun pedagang JajanDekat saya. Nomor WhatsApp terdaftar: ${whatsapp}`
+    : `Halo, saya lupa PIN akun pedagang JajanDekat saya.`;
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
 window.__pickVendor = async function () {
-  const sel = document.getElementById('pick-vendor');
+  const whatsappInput = document.getElementById('pick-whatsapp');
   const pinInput = document.getElementById('pick-pin');
   const errEl = document.getElementById('pick-error');
-  if (!sel || !sel.value) return;
+
+  const whatsapp = normalizeWhatsapp((whatsappInput ? whatsappInput.value : pickWhatsappValue).trim());
+  if (!whatsapp) { errEl.textContent = 'Isi nomor WhatsApp yang terdaftar.'; return; }
+
+  const vendor = vendors.find(v => v.whatsapp === whatsapp);
+  if (!vendor) { errEl.textContent = 'Nomor ini belum terdaftar. Cek lagi atau daftar baru di bawah.'; return; }
 
   const enteredPin = pinInput ? pinInput.value.trim() : '';
   errEl.textContent = 'Memeriksa...';
 
-  const { data: ok, error } = await sb.rpc('verify_vendor_pin', { p_vendor_id: sel.value, p_pin: enteredPin });
+  const { data: ok, error } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendor.id, p_pin: enteredPin });
   if (error) { errEl.textContent = 'Gagal memeriksa PIN: ' + error.message; return; }
   if (!ok) { errEl.textContent = 'PIN salah. Coba lagi.'; return; }
 
-  myVendorId = sel.value;
+  myVendorId = vendor.id;
   myVendorPin = enteredPin;
+  pickWhatsappValue = '';
   localStorage.setItem('jd_my_vendor_id', myVendorId);
   Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: myVendorId, p_pin: enteredPin, p_device_id: deviceId })).catch(() => {});
   ensurePushSubscription();
