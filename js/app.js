@@ -134,7 +134,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,created_at').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -167,18 +167,31 @@ async function setVendorStatus(vendorId, active, untilMinutes, lat, lng, photoUr
 }
 
 // ---------- FOTO DAGANGAN (sementara, ikut terhapus saat selesai jualan) ----------
-function compressImage(file, maxWidth = 800, quality = 0.7) {
+function compressImage(file, targetSize = 800, quality = 0.75, squareCrop = true) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const reader = new FileReader();
     reader.onload = (e) => { img.src = e.target.result; };
     reader.onerror = reject;
     img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.width);
       const canvas = document.createElement('canvas');
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      if (squareCrop) {
+        // Crop tengah jadi persegi (1:1) dulu, baru resize — supaya semua foto pedagang
+        // tampil rapi & seragam di kartu, peta, dan ikon bundar, apa pun orientasi aslinya.
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        const outSize = Math.min(targetSize, side);
+        canvas.width = outSize;
+        canvas.height = outSize;
+        canvas.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, outSize, outSize);
+      } else {
+        // Cuma resize, pertahankan rasio asli (dipakai untuk gambar pengumuman/poster).
+        const scale = Math.min(1, targetSize / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      }
       canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
     };
     img.onerror = reject;
@@ -189,6 +202,18 @@ function compressImage(file, maxWidth = 800, quality = 0.7) {
 async function uploadVendorPhoto(vendorId, file) {
   const blob = await compressImage(file);
   const path = `${vendorId}/${Date.now()}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function uploadAnnouncementImage(file) {
+  // Reuse bucket 'vendor-photos' dengan folder terpisah — hindari bikin bucket baru di Supabase.
+  const blob = await compressImage(file, 1000, 0.75, false);
+  const path = `announcements/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
     contentType: 'image/jpeg', upsert: true
   });
@@ -266,6 +291,7 @@ function renderPembeli() {
   const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => (v.categories || []).includes(activeCat));
 
   main.innerHTML = `
+    ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     <div class="cat-row">${catRowHtml}</div>
     <div class="section-label">Pedagang yang kamu ikuti</div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
@@ -277,6 +303,60 @@ function renderPembeli() {
 function isPromoActive(v) {
   return v.promo_until && new Date(v.promo_until) > new Date();
 }
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---------- PENGUMUMAN ADMIN ----------
+async function fetchAnnouncements() {
+  const { data, error } = await sb.from('announcements').select('*').eq('active', true).order('created_at', { ascending: false });
+  if (error) { console.error('Gagal ambil pengumuman:', error); return []; }
+  return data || [];
+}
+
+function getRelevantAnnouncementsForVendor(v) {
+  const audienceType = v.is_premium ? 'premium' : 'biasa';
+  return announcements.filter(a => {
+    if (a.audience !== 'semua' && a.audience !== audienceType) return false;
+    if (a.zone_level && a.zone_level !== 'nasional' && a.zone_value) {
+      return (v.region || '').toLowerCase().includes(a.zone_value.toLowerCase());
+    }
+    return true;
+  });
+}
+
+function getRelevantAnnouncementsForBuyer() {
+  // Catatan: lokasi pembeli tidak disimpan di aplikasi ini, jadi filter zona
+  // untuk audiens "Pembeli" belum bisa diterapkan — semua pembeli akan melihatnya.
+  return announcements.filter(a => a.audience === 'semua' || a.audience === 'pembeli');
+}
+
+function renderAnnouncementBanner(list) {
+  const dismissed = JSON.parse(localStorage.getItem('jd_dismissed_ann') || '[]');
+  const visible = list.filter(a => !dismissed.includes(a.id));
+  if (!visible.length) return '';
+  return visible.map(a => `
+    <div class="vendor-hero" style="text-align:left;border-color:#3DDC97;position:relative;margin-bottom:10px;">
+      <button onclick="window.__dismissAnnouncement('${a.id}')" style="position:absolute;top:6px;right:6px;background:none;border:none;color:var(--text-faint);font-size:15px;cursor:pointer;padding:4px 8px;">✕</button>
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <span style="font-size:18px;">📢</span>
+        <div style="flex:1;padding-right:18px;">
+          ${a.image_url ? `<img src="${a.image_url}" style="width:100%;border-radius:10px;margin-bottom:8px;display:block;" />` : ''}
+          <div style="font-size:12.5px;line-height:1.5;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
+          ${a.link && /^https?:\/\//.test(a.link) ? `<a href="${escapeHtml(a.link)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11.5px;color:var(--brand);font-weight:700;">Selengkapnya →</a>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.__dismissAnnouncement = function (id) {
+  const dismissed = JSON.parse(localStorage.getItem('jd_dismissed_ann') || '[]');
+  dismissed.push(id);
+  localStorage.setItem('jd_dismissed_ann', JSON.stringify(dismissed));
+  if (mode === 'pedagang') renderPedagang(); else renderPembeli();
+};
 
 function renderVendorListHtml(list) {
   if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
@@ -302,6 +382,7 @@ function renderVendorListHtml(list) {
             </span>
           </div>
           <div class="vendor-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
+          ${isPromoActive(v) && v.promo_text ? `<div class="vendor-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
           <div class="vendor-sub" style="color:var(--text-faint);font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
         </div>
         <button class="follow-btn ${following ? 'following' : ''}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">
@@ -425,13 +506,16 @@ let selectedModeIcon = null;
 let regNameValue = '';
 let regWhatsappValue = '';
 let pickWhatsappValue = '';
+let announcements = [];
 let regPinValue = '';
+let regReminderValue = '';
 let isRegistering = false;
 
 window.__updateRegField = function (field, value) {
   if (field === 'name') regNameValue = value;
   if (field === 'whatsapp') regWhatsappValue = value;
   if (field === 'pin') regPinValue = value;
+  if (field === 'reminder') regReminderValue = value;
 };
 const VENDOR_MODE_OPTIONS = [
   { label: 'Warung/Kios Tetap', icon: 'warung' },
@@ -575,6 +659,9 @@ function renderEditProfile(vendorId) {
         ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih</div>`}
         <div class="cat-picker-grid">${catHtml}</div>
 
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
+        <input id="edit-reminder" type="time" value="${v.reminder_time ? v.reminder_time.slice(0, 5) : ''}" />
+
         <button onclick="window.__saveEditProfile('${vendorId}')">💾 Simpan Perubahan</button>
         <button type="button" onclick="renderPedagang()" style="background:transparent;border:1px solid var(--stroke);color:var(--text-dim);">Batal</button>
       </div>
@@ -613,15 +700,19 @@ window.__saveEditProfile = async function (vendorId) {
 
   errEl.textContent = 'Menyimpan...';
   try {
+    const reminderTime = document.getElementById('edit-reminder').value.trim();
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
       p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
     });
     if (error) throw error;
 
+    // Kolom reminder_time diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
+    await sb.from('vendors').update({ reminder_time: reminderTime || null }).eq('id', vendorId);
+
     const v = vendors.find(v => v.id === vendorId);
     v.name = name; v.categories = editCategories; v.category = editCategories[0] || null;
-    v.mode_icon = editModeIcon; v.whatsapp = whatsapp;
+    v.mode_icon = editModeIcon; v.whatsapp = whatsapp; v.reminder_time = reminderTime || null;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -681,6 +772,8 @@ function renderPedagang() {
           </div>
           <input id="reg-whatsapp" type="tel" value="${regWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('whatsapp', this.value)" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
           <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
+          <input id="reg-reminder" type="time" value="${regReminderValue}" oninput="window.__updateRegField('reminder', this.value)" />
           <button data-reg-submit onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
         </div>
         <div id="reg-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
@@ -698,6 +791,7 @@ function renderPedagang() {
   const durations = v.is_premium ? [30, 60, 120, 240, 480] : [30, 60, 120, 240];
 
   main.innerHTML = `
+    ${renderAnnouncementBanner(getRelevantAnnouncementsForVendor(v))}
     <div class="vendor-hero">
       <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
       <div class="vendor-hero-name">${v.name}</div>
@@ -809,10 +903,10 @@ function renderPedagang() {
             <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Tampil di atas daftar + badge terpercaya</div>
           </div>
         </div>
-        <a href="https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau upgrade ke Premium JajanDekat.')}"
-           target="_blank" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;">
+        <button onclick="window.__requestPremium('${v.id}')"
+           class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;border:none;">
           💬 Hubungi Admin via WhatsApp
-        </a>
+        </button>
       `}
     </div>
 
@@ -833,11 +927,19 @@ function renderPedagang() {
             <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sorot kartu Anda ke posisi atas mulai Rp10rb/hari — cocok buat hari ramai/dagangan baru</div>
           </div>
         </div>
-        <a href="https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau pasang Promosi Lokal di JajanDekat.')}"
-           target="_blank" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:#F5A623;color:#fff;">
+        <button onclick="window.__requestPromo('${v.id}')"
+           class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:#F5A623;color:#fff;border:none;">
           💬 Pasang Promosi via WhatsApp
-        </a>
+        </button>
       `}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke);">
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;">Tulisan promo (tampil di kartu Anda saat promo aktif) — contoh: "Diskon 20% khusus hari ini!"</div>
+        <div style="display:flex;gap:6px;">
+          <input id="promo-text-input" type="text" maxlength="80" value="${(v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Tulis promo Anda di sini..." style="flex:1;" />
+          <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;">💾</button>
+        </div>
+        <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
+      </div>
     </div>
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
@@ -1268,6 +1370,8 @@ window.__shareFollowQr = function (vendorId, vendorName) {
 
 let pendingPhotoFile = null;
 let pendingPhotoPreview = null;
+let pendingAnnImageFile = null;
+let pendingAnnImagePreview = null;
 let confirmedDuplicateName = false;
 
 window.__onPhotoSelected = function (event) {
@@ -1278,6 +1382,19 @@ window.__onPhotoSelected = function (event) {
   reader.onload = (e) => {
     pendingPhotoPreview = e.target.result;
     renderPedagang();
+  };
+  reader.readAsDataURL(file);
+};
+
+window.__onAnnouncementImageSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingAnnImageFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    pendingAnnImagePreview = e.target.result;
+    const zone = document.getElementById('ann-image-zone');
+    if (zone) zone.innerHTML = `<img src="${pendingAnnImagePreview}" style="width:100%;border-radius:10px;" /><div style="margin-top:4px;color:var(--brand);">Ganti gambar</div>`;
   };
   reader.readAsDataURL(file);
 };
@@ -1322,6 +1439,7 @@ window.__registerVendor = async function () {
   const modeIcon = selectedModeIcon;
   const whatsapp = normalizeWhatsapp((document.getElementById('reg-whatsapp')?.value || regWhatsappValue).trim());
   const pin = (document.getElementById('reg-pin')?.value || regPinValue).trim();
+  const reminderTime = (document.getElementById('reg-reminder')?.value || regReminderValue).trim();
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
@@ -1363,8 +1481,8 @@ window.__registerVendor = async function () {
 
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,created_at')
+      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null })
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at')
       .single();
 
     if (error) {
@@ -1382,7 +1500,7 @@ window.__registerVendor = async function () {
     selectedEmoji = '🍜';
     selectedModeIcon = null;
     selectedCategories = [];
-    regNameValue = ''; regWhatsappValue = ''; regPinValue = '';
+    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = '';
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
@@ -1647,6 +1765,7 @@ let tapCount = 0;
 let tapTimer = null;
 let isSuperAdmin = false;
 let adminPasswordCache = null;
+let adminVendorData = [];
 
 const brandTapZone = document.getElementById('brand-tap-zone');
 if (brandTapZone) {
@@ -1668,6 +1787,53 @@ if (brandTapZone) {
   });
 }
 
+window.__requestPremium = async function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  try {
+    await sb.from('vendor_requests').insert({ vendor_id: vendorId, type: 'premium' });
+  } catch (e) { /* tetap lanjut buka WA walau insert gagal */ }
+  const msg = 'Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau upgrade ke Premium JajanDekat.';
+  window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
+};
+
+window.__requestPromo = async function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  try {
+    await sb.from('vendor_requests').insert({ vendor_id: vendorId, type: 'promo' });
+  } catch (e) { /* tetap lanjut buka WA walau insert gagal */ }
+  const msg = 'Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau pasang Promosi Lokal di JajanDekat.';
+  window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
+};
+
+window.__savePromoText = async function (vendorId) {
+  const errEl = document.getElementById('promo-text-error');
+  const text = document.getElementById('promo-text-input').value.trim();
+
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return;
+    const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: enteredPin.trim() });
+    if (!ok) { errEl.textContent = 'PIN salah.'; return; }
+    myVendorPin = enteredPin.trim();
+  }
+
+  errEl.textContent = 'Menyimpan...';
+  try {
+    const { error } = await sb.rpc('update_vendor_promo_text', {
+      p_vendor_id: vendorId, p_pin: myVendorPin || '', p_promo_text: text || null,
+    });
+    if (error) throw error;
+    const v = vendors.find(v => v.id === vendorId);
+    if (v) v.promo_text = text || null;
+    errEl.textContent = '';
+    showToast('Tulisan promo disimpan! ✅');
+  } catch (e) {
+    errEl.textContent = 'Gagal menyimpan: ' + e.message;
+  }
+};
+
 async function renderAdminDashboard() {
   document.getElementById('mode-toggle-wrap').style.display = 'none';
   document.querySelector('nav.bottom').style.display = 'none';
@@ -1678,11 +1844,12 @@ async function renderAdminDashboard() {
       <div style="color:var(--text-faint);font-size:11px;grid-column:1/-1;">Memuat statistik...</div>
     </div>
     <div class="section-label" style="margin-top:6px;">Daftar Pedagang</div>
+    <input id="admin-search" type="text" placeholder="🔍 Cari nama usaha atau nomor WA (paste dari WA di sini)" oninput="window.__adminSearchVendors(this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);margin-bottom:10px;font-size:12.5px;" />
     <div id="admin-list" class="vendor-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat...</div></div>
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,created_at,region').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -1791,15 +1958,56 @@ async function renderAdminDashboard() {
       ${regionHtml || '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada data.</div>'}
     </div>
 
+    <div class="section-label" style="margin-top:4px;">🔔 Permintaan Masuk (Premium/Promo)</div>
+    <div id="admin-requests" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat permintaan...</div></div>
+
     <div class="section-label" style="margin-top:4px;">🚩 Laporan Masuk</div>
     <div id="admin-reports" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat laporan...</div></div>
+
+    <div class="section-label" style="margin-top:4px;">📢 Pengumuman</div>
+    <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
+      <textarea id="ann-message" rows="3" placeholder="Isi pengumuman..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
+      <input id="ann-link" type="url" placeholder="Link (opsional) — https://..." style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
+      <input type="file" id="ann-image-input" accept="image/*" style="display:none" onchange="window.__onAnnouncementImageSelected(event)" />
+      <div id="ann-image-zone" onclick="document.getElementById('ann-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        📷 Tambah gambar (opsional)
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <select id="ann-audience" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+          <option value="semua">Semua</option>
+          <option value="premium">Pedagang Premium</option>
+          <option value="biasa">Pedagang Biasa</option>
+          <option value="pembeli">Pembeli</option>
+        </select>
+        <select id="ann-zone-level" onchange="document.getElementById('ann-zone-value-wrap').style.display = this.value === 'nasional' ? 'none' : ''" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+          <option value="nasional">Zona: Nasional</option>
+          <option value="provinsi">Zona: Provinsi</option>
+          <option value="kabupaten">Zona: Kabupaten/Kota</option>
+          <option value="kecamatan">Zona: Kecamatan</option>
+        </select>
+      </div>
+      <div id="ann-zone-value-wrap" style="display:none;margin-top:8px;">
+        <input id="ann-zone-value" type="text" placeholder="Nama wilayah, misal: Kutai Timur" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
+        <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Dicocokkan dengan wilayah (kabupaten/kota) yang terdeteksi otomatis saat pedagang daftar. Zona untuk audiens Pembeli belum didukung penuh (lokasi pembeli tidak disimpan).</div>
+      </div>
+      <button onclick="window.__adminCreateAnnouncement()" style="margin-top:10px;">📢 Kirim Pengumuman</button>
+      <div id="ann-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div id="admin-announcements" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pengumuman...</div></div>
   `);
   loadAdminReports();
+  loadAdminRequests();
+  loadAdminAnnouncements();
 
-  listEl.innerHTML = data.map(v => {
+  adminVendorData = data;
+  listEl.innerHTML = renderAdminVendorList(adminVendorData);
+}
+
+function renderAdminVendorList(list) {
+  return list.map(v => {
     const premiumUntilStr = v.premium_until ? new Date(v.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
     return `
-    <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:10px;">
+    <div class="vendor-card" id="admin-vendor-${v.id}" style="flex-direction:column;align-items:stretch;gap:10px;">
       <div style="display:flex;gap:10px;align-items:center;">
         <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         <div class="vendor-info">
@@ -1834,6 +2042,177 @@ async function renderAdminDashboard() {
   `;
   }).join('') || '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada pedagang terdaftar.</div>';
 }
+
+window.__adminSearchVendors = function (query) {
+  const q = query.trim().toLowerCase();
+  const qDigits = query.replace(/[^\d]/g, '');
+  const listEl = document.getElementById('admin-list');
+  if (!listEl) return;
+  if (!q) { listEl.innerHTML = renderAdminVendorList(adminVendorData); return; }
+  const filtered = adminVendorData.filter(v => {
+    const nameMatch = (v.name || '').toLowerCase().includes(q);
+    const waMatch = qDigits.length >= 3 && (v.whatsapp || '').includes(qDigits.startsWith('0') ? '62' + qDigits.slice(1) : qDigits);
+    return nameMatch || waMatch;
+  });
+  listEl.innerHTML = renderAdminVendorList(filtered);
+};
+
+async function loadAdminRequests() {
+  const el = document.getElementById('admin-requests');
+  if (!el) return;
+  try {
+    const { data, error } = await sb
+      .from('vendor_requests')
+      .select('id,type,status,created_at,vendors(id,name,whatsapp,category)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!data || data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada permintaan masuk. 👍</div>'; return; }
+    el.innerHTML = data.map(r => {
+      const v = r.vendors;
+      if (!v) return '';
+      const label = r.type === 'premium' ? '⭐ Upgrade Premium' : '🔥 Pasang Promo Lokal';
+      return `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:700;font-size:12.5px;">${v.name}</span>
+          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;">${label}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);" class="mono">WA: ${v.whatsapp || '-'} · ${v.category || '-'}</div>
+        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          ${r.type === 'premium' ? `
+            <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',1)">1 Bln</button>
+            <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',3)">3 Bln</button>
+            <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',6)">6 Bln</button>
+          ` : `
+            <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','promo',1)">1 Hari</button>
+            <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','promo',3)">3 Hari</button>
+            <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','promo',7)">7 Hari</button>
+          `}
+          <button class="follow-btn" onclick="window.__jumpToVendor('${v.id}','${(v.whatsapp || '').replace(/'/g, "\\'")}')">🔍 Lihat Pedagang</button>
+          <button class="follow-btn" style="color:#f87171;" onclick="window.__dismissVendorRequest('${r.id}')">✕ Tutup</button>
+        </div>
+      </div>
+    `;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat permintaan: ${e.message}</span>`;
+  }
+}
+
+window.__adminHandleRequest = async function (requestId, vendorId, type, amount) {
+  try {
+    if (type === 'premium') await window.__adminSetPremium(vendorId, amount, true);
+    else await window.__adminSetPromo(vendorId, amount, true);
+    await sb.from('vendor_requests').update({ status: 'selesai' }).eq('id', requestId);
+    renderAdminDashboard();
+  } catch (e) {
+    alert('Gagal memproses permintaan: ' + e.message);
+  }
+};
+
+window.__dismissVendorRequest = async function (requestId) {
+  try {
+    await sb.from('vendor_requests').update({ status: 'selesai' }).eq('id', requestId);
+    loadAdminRequests();
+  } catch (e) {
+    alert('Gagal menutup permintaan: ' + e.message);
+  }
+};
+
+window.__jumpToVendor = function (vendorId, whatsapp) {
+  const searchInput = document.getElementById('admin-search');
+  if (searchInput) {
+    searchInput.value = whatsapp || '';
+    window.__adminSearchVendors(searchInput.value);
+  }
+  const card = document.getElementById(`admin-vendor-${vendorId}`);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.style.transition = 'box-shadow 0.3s';
+    card.style.boxShadow = '0 0 0 2px #F5A623';
+    setTimeout(() => { card.style.boxShadow = ''; }, 2000);
+  }
+};
+
+async function loadAdminAnnouncements() {
+  const el = document.getElementById('admin-announcements');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('announcements').select('*').eq('active', true).order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!data || data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada pengumuman aktif.</div>'; return; }
+    const audienceLabel = { semua: 'Semua', premium: 'Pedagang Premium', biasa: 'Pedagang Biasa', pembeli: 'Pembeli' };
+    const zoneLabel = { nasional: 'Nasional', provinsi: 'Provinsi', kabupaten: 'Kabupaten/Kota', kecamatan: 'Kecamatan' };
+    el.innerHTML = data.map(a => `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
+        ${a.image_url ? `<img src="${a.image_url}" style="width:100%;border-radius:10px;" />` : ''}
+        <div style="font-size:12px;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
+        <div style="font-size:10px;color:var(--text-faint);">
+          🎯 ${audienceLabel[a.audience] || a.audience} · 📍 ${zoneLabel[a.zone_level] || 'Nasional'}${a.zone_value ? ' (' + escapeHtml(a.zone_value) + ')' : ''}
+        </div>
+        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeactivateAnnouncement('${a.id}')">✕ Nonaktifkan</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat pengumuman: ${e.message}</span>`;
+  }
+}
+
+window.__adminCreateAnnouncement = async function () {
+  const errEl = document.getElementById('ann-error');
+  const message = document.getElementById('ann-message').value.trim();
+  const link = document.getElementById('ann-link').value.trim();
+  const audience = document.getElementById('ann-audience').value;
+  const zoneLevel = document.getElementById('ann-zone-level').value;
+  const zoneValue = document.getElementById('ann-zone-value').value.trim();
+
+  if (!message) { errEl.textContent = 'Isi pengumuman wajib diisi.'; return; }
+  if (zoneLevel !== 'nasional' && !zoneValue) { errEl.textContent = 'Isi nama wilayah untuk zona yang dipilih, atau ganti ke Nasional.'; return; }
+
+  errEl.textContent = 'Mengirim...';
+  try {
+    let imageUrl = null;
+    if (pendingAnnImageFile) {
+      imageUrl = await uploadAnnouncementImage(pendingAnnImageFile);
+    }
+    const { error } = await sb.from('announcements').insert({
+      message,
+      link: link || null,
+      image_url: imageUrl,
+      audience,
+      zone_level: zoneLevel,
+      zone_value: zoneLevel === 'nasional' ? null : zoneValue,
+    });
+    if (error) throw error;
+
+    pendingAnnImageFile = null; pendingAnnImagePreview = null;
+    document.getElementById('ann-message').value = '';
+    document.getElementById('ann-link').value = '';
+    document.getElementById('ann-zone-value').value = '';
+    const zone = document.getElementById('ann-image-zone');
+    if (zone) zone.innerHTML = '📷 Tambah gambar (opsional)';
+    errEl.textContent = '';
+    showToast('Pengumuman terkirim! 📢');
+    announcements = await fetchAnnouncements();
+    loadAdminAnnouncements();
+  } catch (e) {
+    errEl.textContent = 'Gagal mengirim: ' + e.message;
+  }
+};
+
+window.__adminDeactivateAnnouncement = async function (id) {
+  if (!confirm('Nonaktifkan pengumuman ini?')) return;
+  try {
+    await sb.from('announcements').update({ active: false }).eq('id', id);
+    announcements = await fetchAnnouncements();
+    loadAdminAnnouncements();
+  } catch (e) {
+    alert('Gagal menonaktifkan: ' + e.message);
+  }
+};
 
 window.__exitAdmin = function () {
   isSuperAdmin = false;
@@ -1901,14 +2280,14 @@ window.__adminResetPin = async function (id, name) {
   }
 };
 
-window.__adminSetPremium = async function (id, months) {
+window.__adminSetPremium = async function (id, months, silent) {
   try {
     const result = await callAdminAction('set_premium_duration', id, { months });
     const untilStr = new Date(result.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    alert(`Premium diaktifkan sampai ${untilStr}.`);
-    renderAdminDashboard();
+    if (!silent) { alert(`Premium diaktifkan sampai ${untilStr}.`); renderAdminDashboard(); }
   } catch (e) {
     alert('Gagal mengaktifkan Premium: ' + e.message);
+    throw e;
   }
 };
 
@@ -1922,14 +2301,14 @@ window.__adminCancelPremium = async function (id) {
   }
 };
 
-window.__adminSetPromo = async function (id, days) {
+window.__adminSetPromo = async function (id, days, silent) {
   try {
     const result = await callAdminAction('set_promo_duration', id, { days });
     const untilStr = new Date(result.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-    alert(`🔥 Promo diaktifkan sampai ${untilStr}.`);
-    renderAdminDashboard();
+    if (!silent) { alert(`🔥 Promo diaktifkan sampai ${untilStr}.`); renderAdminDashboard(); }
   } catch (e) {
     alert('Gagal mengaktifkan promo: ' + e.message);
+    throw e;
   }
 };
 
@@ -1973,6 +2352,7 @@ async function init() {
     vendors = (await fetchVendors()).map(normalizeExpiry);
     const followList = await fetchFollows();
     followedIds = new Set(followList);
+    announcements = await fetchAnnouncements();
     subscribeRealtime();
 
     // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
@@ -2048,6 +2428,27 @@ setInterval(async () => {
     } catch (e) { console.error(e); }
   }
 }, 60 * 60 * 1000); // tiap 1 jam
+
+// ---------- PENGINGAT "SAATNYA BUKA LAPAK" (cek tiap menit, sesuai jam pilihan pedagang) ----------
+setInterval(() => {
+  if (mode !== 'pedagang' || !myVendorId) return;
+  const v = vendors.find(v => v.id === myVendorId);
+  if (!v || v.active || !v.reminder_time) return;
+
+  const now = new Date();
+  const nowHHMM = now.toTimeString().slice(0, 5); // "HH:MM"
+  const reminderHHMM = v.reminder_time.slice(0, 5);
+  if (nowHHMM !== reminderHHMM) return;
+
+  const todayKey = `jd_reminder_shown_${v.id}_${now.toISOString().slice(0, 10)}`;
+  if (localStorage.getItem(todayKey)) return;
+  localStorage.setItem(todayKey, '1');
+
+  showToast(`🔔 Sudah jam ${reminderHHMM} — saatnya buka lapak, ${v.name}!`);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification('JajanDekat', { body: `Sudah jam ${reminderHHMM} — saatnya buka lapak, ${v.name}! 🔔`, icon: 'icons/lainnya.png' }); } catch (e) {}
+  }
+}, 60 * 1000); // tiap 1 menit
 
 let deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
