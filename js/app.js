@@ -342,7 +342,7 @@ function renderAnnouncementBanner(list) {
       <div style="display:flex;gap:8px;align-items:flex-start;">
         <span style="font-size:18px;">📢</span>
         <div style="flex:1;padding-right:18px;">
-          ${a.image_url ? `<img src="${a.image_url}" style="width:100%;border-radius:10px;margin-bottom:8px;display:block;" />` : ''}
+          ${a.image_url ? `<img src="${a.image_url}" style="width:100%;max-height:min(280px,42vh);object-fit:cover;border-radius:10px;margin-bottom:8px;display:block;" />` : ''}
           <div style="font-size:12.5px;line-height:1.5;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
           ${a.link && /^https?:\/\//.test(a.link) ? `<a href="${escapeHtml(a.link)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11.5px;color:var(--brand);font-weight:700;">Selengkapnya →</a>` : ''}
         </div>
