@@ -526,9 +526,18 @@ window.__sendChatMessage = async function () {
   const sender = currentChatIsVendor ? 'vendor' : 'buyer';
   const threadId = currentChatThreadId;
   try {
-    await sb.from('chat_messages').insert({ thread_id: threadId, sender, message: text });
+    // Ambil kembali baris yang baru diinsert (pakai .select().single()) supaya bisa langsung
+    // dirender di layar sendiri saat itu juga — tidak usah nunggu giliran poll/realtime, yang
+    // ternyata tidak selalu memantulkan balik pesan milik si pengirim sendiri dengan mulus.
+    const { data, error } = await sb.from('chat_messages')
+      .insert({ thread_id: threadId, sender, message: text })
+      .select('*')
+      .single();
+    if (error) throw error;
+    if (currentChatThreadId === threadId && data) appendChatMessage(data, currentChatIsVendor);
     await sb.from('chat_threads').update({ last_message_at: new Date().toISOString(), last_message_preview: text.slice(0, 80) }).eq('id', threadId);
   } catch (e) {
+    input.value = text; // kembalikan teksnya, jangan sampai hilang kalau gagal terkirim
     alert('Gagal mengirim pesan: ' + e.message);
   }
 };
