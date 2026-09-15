@@ -370,6 +370,28 @@ const QUICK_REPLIES_VENDOR = ['Iya masih, silakan 🙏', 'Otw ke lokasi', 'Seben
 let currentChatThreadId = null;
 let currentChatChannel = null;
 let currentChatIsVendor = false;
+let chatPollTimer = null;
+let chatSeenMessageIds = new Set();
+
+// Bunyi notifikasi chat — dibuat langsung dari kode (bukan file audio), jadi tetap
+// single-file dan tidak perlu hosting aset tambahan.
+let chatAudioCtx = null;
+function playChatDing() {
+  try {
+    chatAudioCtx = chatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = chatAudioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.09);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.35);
+  } catch (e) { /* browser tidak dukung Web Audio, diamkan */ }
+}
 
 async function getOrCreateChatThread(vendorId, buyerDeviceId) {
   const { data: existing } = await sb.from('chat_threads').select('id').eq('vendor_id', vendorId).eq('buyer_device_id', buyerDeviceId).maybeSingle();
@@ -394,15 +416,19 @@ window.__openVendorChatThread = function (threadId, buyerLabel) {
 
 window.__closeChatModal = function () {
   if (currentChatChannel) { sb.removeChannel(currentChatChannel); currentChatChannel = null; }
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
   currentChatThreadId = null;
+  chatSeenMessageIds = new Set();
   document.getElementById('chat-modal-overlay')?.remove();
 };
 
 async function openChatUI(threadId, opts) {
   document.getElementById('chat-modal-overlay')?.remove();
   if (currentChatChannel) { sb.removeChannel(currentChatChannel); currentChatChannel = null; }
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
   currentChatThreadId = threadId;
   currentChatIsVendor = opts.asVendor;
+  chatSeenMessageIds = new Set();
 
   const overlay = document.createElement('div');
   overlay.id = 'chat-modal-overlay';
@@ -437,11 +463,30 @@ async function openChatUI(threadId, opts) {
   currentChatChannel = sb.channel('chat_thread_' + threadId)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `thread_id=eq.${threadId}` }, (payload) => {
       if (currentChatThreadId !== threadId) return;
-      appendChatMessage(payload.new, opts.asVendor);
-      const fromOther = (opts.asVendor && payload.new.sender === 'buyer') || (!opts.asVendor && payload.new.sender === 'vendor');
-      if (fromOther) markThreadRead(threadId, opts.asVendor);
+      handleIncomingChatMessage(payload.new, threadId, opts.asVendor);
     })
     .subscribe();
+
+  // Cadangan kalau Realtime tidak sampai (mis. RLS memblokir jalur postgres_changes untuk
+  // anon tanpa sesi auth asli): cek pesan baru tiap 3 detik selagi modal chat terbuka.
+  chatPollTimer = setInterval(async () => {
+    if (currentChatThreadId !== threadId) return;
+    try {
+      const { data, error } = await sb.from('chat_messages').select('*').eq('thread_id', threadId).order('created_at', { ascending: true });
+      if (error || !data) return;
+      data.forEach(m => handleIncomingChatMessage(m, threadId, opts.asVendor));
+    } catch (e) { /* koneksi sempat gagal, coba lagi di siklus berikutnya */ }
+  }, 3000);
+}
+
+function handleIncomingChatMessage(m, threadId, asVendor) {
+  if (chatSeenMessageIds.has(m.id)) return; // sudah pernah dirender (dari realtime atau polling), jangan dobel
+  appendChatMessage(m, asVendor);
+  const fromOther = (asVendor && m.sender === 'buyer') || (!asVendor && m.sender === 'vendor');
+  if (fromOther) {
+    markThreadRead(threadId, asVendor);
+    playChatDing();
+  }
 }
 
 async function loadAndRenderChatMessages(threadId, asVendor) {
@@ -455,6 +500,7 @@ async function loadAndRenderChatMessages(threadId, asVendor) {
 }
 
 function appendChatMessage(m, asVendor) {
+  chatSeenMessageIds.add(m.id);
   const list = document.getElementById('chat-msg-list');
   if (!list) return;
   if (list.children.length === 1 && (list.children[0].textContent || '').includes('Belum ada pesan')) list.innerHTML = '';
