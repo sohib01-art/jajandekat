@@ -1849,7 +1849,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -2015,6 +2015,8 @@ function renderAdminVendorList(list) {
           <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
           <div class="vendor-sub">${(v.categories || []).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
           ${v.is_premium ? `<div class="vendor-sub" style="color:var(--brand);">⭐ Premium sampai ${premiumUntilStr || '(tanpa batas — akun lama)'}</div>` : ''}
+          ${v.active && v.location_error_message && (!v.location_updated_at || new Date(v.location_error_at) > new Date(v.location_updated_at)) ? `<div class="vendor-sub" style="color:#f87171;">📍⚠️ Lokasi gagal update (${new Date(v.location_error_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}): ${escapeHtml(v.location_error_message)}</div>` : ''}
+          ${v.active && v.location_updated_at ? `<div class="vendor-sub" style="color:var(--text-faint);">📍 Lokasi terakhir update: ${new Date(v.location_updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
           ${v.promo_until && new Date(v.promo_until) > new Date() ? `<div class="vendor-sub" style="color:#F5A623;">🔥 Promo sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
         </div>
       </div>
@@ -2399,17 +2401,36 @@ async function init() {
 }
 // ---------- TOMBOL INSTAL APLIKASI (PWA) ----------
 // ---------- UPDATE LOKASI BERKALA (biar posisi di peta ikut bergerak, bukan statis) ----------
+// Catatan: kegagalan di sini dulu diam-diam (cuma console.error), sekarang dicatat
+// ke kolom location_error_message/location_error_at di tabel vendors, supaya admin
+// bisa lihat dari panel admin siapa yang lokasinya berhenti update dan kenapa.
+async function reportLocationError(vendorId, message) {
+  console.error('Gagal update lokasi berkala:', message);
+  try {
+    await sb.from('vendors').update({
+      location_error_message: message,
+      location_error_at: new Date().toISOString(),
+    }).eq('id', vendorId);
+  } catch (e) { console.error('Gagal simpan error lokasi ke server:', e); }
+}
+
 setInterval(() => {
-  if (mode !== 'pedagang' || !myVendorId || myVendorPin === null) return;
+  if (mode !== 'pedagang' || !myVendorId) return;
   const v = vendors.find(v => v.id === myVendorId);
-  if (!v || !v.active || !navigator.geolocation) return;
+  if (!v || !v.active) return;
+  if (myVendorPin === null) { reportLocationError(v.id, 'PIN belum terisi di sesi ini (belum ada aksi yang minta PIN sejak app dibuka)'); return; }
+  if (!navigator.geolocation) { reportLocationError(v.id, 'Browser tidak mendukung geolocation'); return; }
   navigator.geolocation.getCurrentPosition(async (pos) => {
     const { latitude, longitude } = pos.coords;
     try {
       await sb.rpc('update_vendor_location', { p_vendor_id: v.id, p_pin: myVendorPin, p_lat: latitude, p_lng: longitude });
       v.lat = latitude; v.lng = longitude;
-    } catch (e) { console.error('Gagal update lokasi berkala:', e); }
-  }, () => {}, { timeout: 8000 });
+    } catch (e) {
+      reportLocationError(v.id, 'RPC update_vendor_location gagal: ' + (e && e.message ? e.message : 'tidak diketahui'));
+    }
+  }, (err) => {
+    reportLocationError(v.id, 'Izin/GPS gagal (kode ' + (err && err.code) + '): ' + (err && err.message ? err.message : 'tidak diketahui'));
+  }, { timeout: 8000 });
 }, 5 * 60 * 1000); // tiap 5 menit
 
 // ---------- PENGINGAT "MASIH JUALAN?" (tiap 1 jam, selama app tetap terbuka) ----------
