@@ -3,19 +3,10 @@
 // Biaya nol: Leaflet+OpenStreetMap (peta) + Supabase free tier (data & realtime)
 // ============================================
 
-const isConfigured = !SUPABASE_URL.includes("ISI-PROJECT-ID");
-let sb = null;
-let initError = null;
-try {
-  if (isConfigured) {
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-} catch (e) {
-  initError = e;
-  console.error('Gagal membuat koneksi Supabase:', e);
-}
-
-// Identitas pembeli sederhana tanpa login (device id disimpan di localStorage)
+// Identitas pembeli/pedagang sederhana tanpa login (device id disimpan di localStorage).
+// Dihitung SEBELUM membuat client Supabase supaya bisa dikirim sebagai header di setiap
+// request — header ini dipakai oleh RLS di server untuk membatasi akses chat cuma ke
+// pemiliknya (lihat migration step2_scope_chat_rls_to_device_owner).
 function getDeviceId() {
   let id = localStorage.getItem('jd_device_id');
   if (!id) {
@@ -25,6 +16,20 @@ function getDeviceId() {
   return id;
 }
 const deviceId = getDeviceId();
+
+const isConfigured = !SUPABASE_URL.includes("ISI-PROJECT-ID");
+let sb = null;
+let initError = null;
+try {
+  if (isConfigured) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { 'x-device-id': deviceId } },
+    });
+  }
+} catch (e) {
+  initError = e;
+  console.error('Gagal membuat koneksi Supabase:', e);
+}
 let referralCodeFromLink = null;
 
 // ---------- WEB PUSH: minta izin & simpan langganan ----------
