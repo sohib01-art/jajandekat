@@ -134,7 +134,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -358,6 +358,137 @@ window.__dismissAnnouncement = function (id) {
   if (mode === 'pedagang') renderPedagang(); else renderPembeli();
 };
 
+// ---------- CHAT DALAM APP (pedagang <-> pembeli, gratis lewat Supabase Realtime) ----------
+const QUICK_REPLIES_BUYER = ['Masih jualan? 🙋', 'Ready berapa banyak?', 'Ongkir ke sini berapa?', 'Boleh COD?', 'Lokasi tepatnya di mana?'];
+const QUICK_REPLIES_VENDOR = ['Iya masih, silakan 🙏', 'Otw ke lokasi', 'Sebentar ya, masih disiapin', 'Stok habis, besok lagi ya', 'Boleh, langsung datang aja'];
+
+let currentChatThreadId = null;
+let currentChatChannel = null;
+let currentChatIsVendor = false;
+
+async function getOrCreateChatThread(vendorId, buyerDeviceId) {
+  const { data: existing } = await sb.from('chat_threads').select('id').eq('vendor_id', vendorId).eq('buyer_device_id', buyerDeviceId).maybeSingle();
+  if (existing) return existing.id;
+  const { data, error } = await sb.from('chat_threads').insert({ vendor_id: vendorId, buyer_device_id: buyerDeviceId }).select('id').single();
+  if (error) throw error;
+  return data.id;
+}
+
+window.__openChatModal = async function (vendorId, vendorName) {
+  try {
+    const threadId = await getOrCreateChatThread(vendorId, deviceId);
+    openChatUI(threadId, { asVendor: false, title: vendorName, quickReplies: QUICK_REPLIES_BUYER });
+  } catch (e) {
+    alert('Gagal membuka chat: ' + e.message);
+  }
+};
+
+window.__openVendorChatThread = function (threadId, buyerLabel) {
+  openChatUI(threadId, { asVendor: true, title: buyerLabel, quickReplies: QUICK_REPLIES_VENDOR });
+};
+
+window.__closeChatModal = function () {
+  if (currentChatChannel) { sb.removeChannel(currentChatChannel); currentChatChannel = null; }
+  currentChatThreadId = null;
+  document.getElementById('chat-modal-overlay')?.remove();
+};
+
+async function openChatUI(threadId, opts) {
+  document.getElementById('chat-modal-overlay')?.remove();
+  if (currentChatChannel) { sb.removeChannel(currentChatChannel); currentChatChannel = null; }
+  currentChatThreadId = threadId;
+  currentChatIsVendor = opts.asVendor;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'chat-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:220;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;height:78vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--stroke);flex-shrink:0;">
+        <div style="font-family:'Poppins';font-weight:700;font-size:14px;">💬 ${escapeHtml(opts.title || 'Chat')}</div>
+        <button onclick="window.__closeChatModal()" style="background:none;border:none;color:var(--text-faint);font-size:18px;cursor:pointer;padding:4px 8px;">✕</button>
+      </div>
+      <div id="chat-msg-list" style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;"></div>
+      <div id="chat-quick-replies" style="display:flex;gap:6px;padding:8px 10px 0;overflow-x:auto;flex-shrink:0;"></div>
+      <div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--stroke);flex-shrink:0;">
+        <input id="chat-input" type="text" placeholder="Tulis pesan..." style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--stroke);border-radius:20px;padding:10px 14px;color:var(--text);font-family:inherit;font-size:13px;" />
+        <button onclick="window.__sendChatMessage()" style="background:var(--brand);color:#fff;border:none;border-radius:20px;padding:0 16px;font-weight:700;flex-shrink:0;">Kirim</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') window.__sendChatMessage();
+  });
+
+  document.getElementById('chat-quick-replies').innerHTML = (opts.quickReplies || []).map(t => `
+    <button onclick="window.__useQuickReply('${t.replace(/'/g, "\\'")}')" style="flex-shrink:0;background:var(--bg);border:1px solid var(--stroke);border-radius:14px;padding:6px 10px;font-size:11px;color:var(--text-dim);white-space:nowrap;">${t}</button>
+  `).join('');
+
+  await loadAndRenderChatMessages(threadId, opts.asVendor);
+  markThreadRead(threadId, opts.asVendor);
+
+  currentChatChannel = sb.channel('chat_thread_' + threadId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `thread_id=eq.${threadId}` }, (payload) => {
+      if (currentChatThreadId !== threadId) return;
+      appendChatMessage(payload.new, opts.asVendor);
+      const fromOther = (opts.asVendor && payload.new.sender === 'buyer') || (!opts.asVendor && payload.new.sender === 'vendor');
+      if (fromOther) markThreadRead(threadId, opts.asVendor);
+    })
+    .subscribe();
+}
+
+async function loadAndRenderChatMessages(threadId, asVendor) {
+  const { data, error } = await sb.from('chat_messages').select('*').eq('thread_id', threadId).order('created_at', { ascending: true });
+  const list = document.getElementById('chat-msg-list');
+  if (!list) return;
+  if (error) { list.innerHTML = `<div style="color:#f87171;font-size:11.5px;text-align:center;">Gagal memuat pesan.</div>`; return; }
+  if (!data || !data.length) { list.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:11.5px;">Belum ada pesan. Mulai percakapan di bawah 👇</div>`; return; }
+  list.innerHTML = '';
+  data.forEach(m => appendChatMessage(m, asVendor));
+}
+
+function appendChatMessage(m, asVendor) {
+  const list = document.getElementById('chat-msg-list');
+  if (!list) return;
+  if (list.children.length === 1 && (list.children[0].textContent || '').includes('Belum ada pesan')) list.innerHTML = '';
+  const isMine = asVendor ? m.sender === 'vendor' : m.sender === 'buyer';
+  const bubble = document.createElement('div');
+  bubble.style.cssText = `align-self:${isMine ? 'flex-end' : 'flex-start'};max-width:78%;background:${isMine ? 'var(--brand)' : 'var(--bg)'};color:${isMine ? '#fff' : 'var(--text)'};border:1px solid ${isMine ? 'transparent' : 'var(--stroke)'};border-radius:14px;padding:8px 12px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;`;
+  bubble.textContent = m.message;
+  list.appendChild(bubble);
+  list.scrollTop = list.scrollHeight;
+}
+
+window.__useQuickReply = function (text) {
+  const input = document.getElementById('chat-input');
+  if (input) { input.value = text; input.focus(); }
+};
+
+window.__sendChatMessage = async function () {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !currentChatThreadId) return;
+  input.value = '';
+  const sender = currentChatIsVendor ? 'vendor' : 'buyer';
+  const threadId = currentChatThreadId;
+  try {
+    await sb.from('chat_messages').insert({ thread_id: threadId, sender, message: text });
+    await sb.from('chat_threads').update({ last_message_at: new Date().toISOString(), last_message_preview: text.slice(0, 80) }).eq('id', threadId);
+  } catch (e) {
+    alert('Gagal mengirim pesan: ' + e.message);
+  }
+};
+
+async function markThreadRead(threadId, asVendor) {
+  const otherSender = asVendor ? 'buyer' : 'vendor';
+  try {
+    await sb.from('chat_messages').update({ read_at: new Date().toISOString() }).eq('thread_id', threadId).eq('sender', otherSender).is('read_at', null);
+  } catch (e) { /* tidak kritis, diamkan */ }
+}
+
 function renderVendorListHtml(list) {
   if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
   const sorted = [...list].sort((a, b) => {
@@ -384,6 +515,13 @@ function renderVendorListHtml(list) {
           <div class="vendor-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
           ${isPromoActive(v) && v.promo_text ? `<div class="vendor-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
           <div class="vendor-sub" style="color:var(--text-faint);font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
+          <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation();">
+            <button class="follow-btn" style="flex:1;background:var(--brand);color:#fff;text-align:center;" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')">💬 Chat</button>
+            ${v.show_whatsapp !== false && v.whatsapp ? `
+              <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
+                 class="follow-btn" style="flex:1;background:#25D366;color:#fff;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;">📱 WA</a>
+            ` : ''}
+          </div>
         </div>
         <button class="follow-btn ${following ? 'following' : ''}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">
           ${following ? '✓ Ikuti' : '+ Ikuti'}
@@ -484,14 +622,19 @@ function renderMap() {
       <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;">
         ${v.name}${v.is_premium ? ' ⭐' : ''}
       </div>
-      ${v.is_premium && v.whatsapp ? `
+      <button onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"
+         style="display:inline-block;margin-top:6px;background:var(--brand);color:#fff;border:none;text-decoration:none;
+         font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;">
+        💬 Chat di App
+      </button>
+      ${v.is_premium && v.whatsapp && v.show_whatsapp !== false ? `
         <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
-           style="display:inline-block;margin-top:6px;background:#25D366;color:#fff;text-decoration:none;
+           style="display:inline-block;margin-top:6px;margin-left:4px;background:#25D366;color:#fff;text-decoration:none;
            font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
-          💬 Chat via WhatsApp
+          📱 WhatsApp
         </a>
-        <div style="font-size:9px;color:#999;margin-top:5px;">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
       ` : ''}
+      <div style="font-size:9px;color:#999;margin-top:5px;">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
     `;
     markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(popupHtml);
   });
@@ -662,6 +805,22 @@ function renderEditProfile(vendorId) {
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
         <input id="edit-reminder" type="time" value="${v.reminder_time ? v.reminder_time.slice(0, 5) : ''}" />
 
+        <div style="text-align:left;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;">
+            <input id="edit-show-whatsapp" type="checkbox" ${v.show_whatsapp !== false ? 'checked' : ''} style="width:17px;height:17px;" />
+            📱 Tampilkan nomor WhatsApp saya ke pembeli
+          </label>
+          <div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:8px;">
+            Berapa pun pilihannya, pembeli tetap bisa hubungi Anda lewat <b>💬 Chat dalam app</b> — ini cuma soal apakah nomor WA Anda kelihatan juga atau tidak. Bisa diubah kapan saja.
+          </div>
+          <div style="font-size:10.5px;line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px dashed var(--stroke);">
+            <b style="color:#25D366;">✅ Kalau nomor WA ditampilkan:</b> pembeli bisa langsung chat/telpon Anda di WA yang biasa dipakai, lebih cepat & familiar. <b style="color:#f87171;">Risikonya:</b> nomor Anda bisa disimpan/dihubungi orang di luar urusan jual-beli (promosi, spam, dll), dan riwayat chatnya bercampur dengan kontak pribadi Anda.
+          </div>
+          <div style="font-size:10.5px;line-height:1.6;margin-top:6px;">
+            <b style="color:#25D366;">✅ Kalau disembunyikan (chat app saja):</b> nomor pribadi Anda tetap privat, semua pesan jualan rapi di satu tempat (tab "💬 Pesan Pembeli"). <b style="color:#f87171;">Risikonya:</b> Anda perlu buka app ini untuk balas, tidak senotifikasi WA yang biasa Anda cek.
+          </div>
+        </div>
+
         <button onclick="window.__saveEditProfile('${vendorId}')">💾 Simpan Perubahan</button>
         <button type="button" onclick="renderPedagang()" style="background:transparent;border:1px solid var(--stroke);color:var(--text-dim);">Batal</button>
       </div>
@@ -701,18 +860,20 @@ window.__saveEditProfile = async function (vendorId) {
   errEl.textContent = 'Menyimpan...';
   try {
     const reminderTime = document.getElementById('edit-reminder').value.trim();
+    const showWhatsapp = document.getElementById('edit-show-whatsapp').checked;
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
       p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
     });
     if (error) throw error;
 
-    // Kolom reminder_time diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
-    await sb.from('vendors').update({ reminder_time: reminderTime || null }).eq('id', vendorId);
+    // Kolom reminder_time & show_whatsapp diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
+    await sb.from('vendors').update({ reminder_time: reminderTime || null, show_whatsapp: showWhatsapp }).eq('id', vendorId);
 
     const v = vendors.find(v => v.id === vendorId);
     v.name = name; v.categories = editCategories; v.category = editCategories[0] || null;
     v.mode_icon = editModeIcon; v.whatsapp = whatsapp; v.reminder_time = reminderTime || null;
+    v.show_whatsapp = showWhatsapp;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -849,6 +1010,17 @@ function renderPedagang() {
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">💬</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Pesan Pembeli</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Chat langsung dari pembeli lewat app, gratis, tanpa perlu nomor WA Anda.</div>
+        </div>
+      </div>
+      <div id="vendor-chat-inbox"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pesan...</div></div>
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">🎯</span>
         <div>
           <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kampanye: Rekrut & Dapat Premium Gratis</div>
@@ -970,6 +1142,37 @@ function renderPedagang() {
   }
 
   loadCampaignProgress(v.id);
+  loadVendorChatInbox(v.id);
+}
+
+async function loadVendorChatInbox(vendorId) {
+  const el = document.getElementById('vendor-chat-inbox');
+  if (!el) return;
+  const { data: threads, error } = await sb.from('chat_threads').select('id,buyer_device_id,last_message_at,last_message_preview').eq('vendor_id', vendorId).order('last_message_at', { ascending: false }).limit(30);
+  if (!el) return;
+  if (error) { el.innerHTML = `<div style="color:#f87171;font-size:11.5px;">Gagal memuat pesan.</div>`; return; }
+  if (!threads || !threads.length) { el.innerHTML = `<div style="color:var(--text-faint);font-size:11.5px;">Belum ada pesan dari pembeli.</div>`; return; }
+
+  const threadIds = threads.map(t => t.id);
+  const { data: unreadRows } = await sb.from('chat_messages').select('thread_id').eq('sender', 'buyer').is('read_at', null).in('thread_id', threadIds);
+  const unreadCount = {};
+  (unreadRows || []).forEach(r => { unreadCount[r.thread_id] = (unreadCount[r.thread_id] || 0) + 1; });
+
+  el.innerHTML = threads.map(t => {
+    const label = 'Pembeli #' + t.buyer_device_id.slice(-5).toUpperCase();
+    const unread = unreadCount[t.id] || 0;
+    const timeStr = new Date(t.last_message_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return `
+      <div onclick="window.__openVendorChatThread('${t.id}','${label}')" style="display:flex;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--stroke);cursor:pointer;">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🙋</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:700;">${label} ${unread ? `<span style="background:#f87171;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;">${unread} baru</span>` : ''}</div>
+          <div style="font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(t.last_message_preview || '')}</div>
+        </div>
+        <div style="font-size:9.5px;color:var(--text-faint);flex-shrink:0;">${timeStr}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 async function loadCampaignProgress(vendorId) {
@@ -1482,7 +1685,7 @@ window.__registerVendor = async function () {
     const { data, error } = await sb
       .from('vendors')
       .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at')
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at')
       .single();
 
     if (error) {
@@ -1849,7 +2052,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
