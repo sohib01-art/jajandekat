@@ -227,6 +227,28 @@ async function uploadAnnouncementImage(file) {
   return data.publicUrl;
 }
 
+async function uploadArticleCoverImage(file) {
+  // Reuse bucket 'vendor-photos' dengan folder terpisah — hindari bikin bucket baru di Supabase.
+  const blob = await compressImage(file, 1000, 0.75, false);
+  const path = `artikel-admin/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function slugifyArticle(title) {
+  return String(title || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80);
+}
+
 async function deleteVendorPhotoByUrl(photoUrl) {
   if (!photoUrl) return;
   try {
@@ -273,9 +295,12 @@ function subscribeRealtime() {
 }
 
 // ---------- BUYER VIEW ----------
+let artikelDetailSlug = null;
+
 function renderPembeli() {
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
+  if (bottomView === 'artikel') return artikelDetailSlug ? renderArtikelDetailView(artikelDetailSlug) : renderArtikelListView();
 
   const followed = vendors.filter(v => followedIds.has(v.id));
 
@@ -312,6 +337,58 @@ function isPromoActive(v) {
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// ---------- ARTIKEL (PUBLIK) ----------
+async function renderArtikelListView() {
+  main.innerHTML = `<div class="section-label">📰 Artikel</div><div class="vendor-list" id="artikel-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div></div>`;
+  const el = document.getElementById('artikel-list');
+  try {
+    const { data, error } = await sb.from('artikel_admin').select('id,title,slug,excerpt,cover_image_url,created_at').eq('published', true).order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!data || data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12.5px;padding:12px 0;">Belum ada artikel.</div>'; return; }
+    el.innerHTML = data.map(a => `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;cursor:pointer;" onclick="window.__openArtikel('${a.slug}')">
+        ${a.cover_image_url ? `<img src="${a.cover_image_url}" style="width:100%;border-radius:10px;" />` : ''}
+        <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">${escapeHtml(a.title)}</div>
+        ${a.excerpt ? `<div style="font-size:12px;color:var(--text-dim);">${escapeHtml(a.excerpt)}</div>` : ''}
+        <div style="font-size:10px;color:var(--text-faint);">${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat artikel: ${e.message}</div>`;
+  }
+}
+
+window.__openArtikel = function (slug) {
+  artikelDetailSlug = slug;
+  renderPembeli();
+  window.scrollTo(0, 0);
+};
+
+async function renderArtikelDetailView(slug) {
+  main.innerHTML = `<div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div>`;
+  try {
+    const { data, error } = await sb.from('artikel_admin').select('*').eq('slug', slug).eq('published', true).single();
+    if (error || !data) throw error || new Error('Artikel tidak ditemukan.');
+    main.innerHTML = `
+      <button class="follow-btn" style="margin-bottom:12px;" onclick="window.__backFromArtikel()">← Kembali ke Artikel</button>
+      ${data.cover_image_url ? `<img src="${data.cover_image_url}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ''}
+      <div style="font-family:'Poppins';font-weight:800;font-size:18px;margin-bottom:6px;">${escapeHtml(data.title)}</div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:14px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      <div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(data.content)}</div>
+    `;
+  } catch (e) {
+    main.innerHTML = `
+      <button class="follow-btn" style="margin-bottom:12px;" onclick="window.__backFromArtikel()">← Kembali ke Artikel</button>
+      <div style="color:#f87171;font-size:12.5px;">Artikel tidak ditemukan.</div>
+    `;
+  }
+}
+
+window.__backFromArtikel = function () {
+  artikelDetailSlug = null;
+  renderPembeli();
+};
 
 // ---------- PENGUMUMAN ADMIN ----------
 async function fetchAnnouncements() {
@@ -2257,10 +2334,17 @@ async function renderAdminDashboard() {
       <div id="ann-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
     </div>
     <div id="admin-announcements" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pengumuman...</div></div>
+
+    <div class="section-label" style="margin-top:4px;">📝 Artikel</div>
+    <div class="section-label" style="margin-top:4px;font-size:11px;color:var(--brand);">🕓 Menunggu Review (ditulis AI)</div>
+    <div id="admin-articles-pending" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
+    <button class="follow-btn" style="width:100%;padding:10px;margin-bottom:10px;" onclick="window.__adminOpenArticleForm()">✍️ Tulis Artikel Baru</button>
+    <div id="admin-articles" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat artikel...</div></div>
   `);
   loadAdminReports();
   loadAdminRequests();
   loadAdminAnnouncements();
+  loadAdminArticles();
 
   adminVendorData = data;
   listEl.innerHTML = renderAdminVendorList(adminVendorData);
@@ -2476,6 +2560,205 @@ window.__adminDeactivateAnnouncement = async function (id) {
     loadAdminAnnouncements();
   } catch (e) {
     alert('Gagal menonaktifkan: ' + e.message);
+  }
+};
+
+// ---------- ARTIKEL (ADMIN) ----------
+let adminArticlesData = [];
+let pendingArticleCoverFile = null;
+let pendingArticleCoverPreview = null;
+let editingArticleId = null;
+
+async function loadAdminArticles() {
+  const el = document.getElementById('admin-articles');
+  const pendingEl = document.getElementById('admin-articles-pending');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('artikel_admin').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    adminArticlesData = data || [];
+
+    const pending = adminArticlesData.filter(a => a.status === 'menunggu_review');
+    const rest = adminArticlesData.filter(a => a.status !== 'menunggu_review');
+
+    if (pendingEl) {
+      pendingEl.innerHTML = pending.length === 0
+        ? '<div style="color:var(--text-faint);font-size:11.5px;">Tidak ada artikel yang menunggu review.</div>'
+        : pending.map(a => `
+          <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;border-color:var(--brand);">
+            ${a.cover_image_url ? `<img src="${a.cover_image_url}" style="width:100%;border-radius:10px;" />` : ''}
+            <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
+            ${a.excerpt ? `<div style="font-size:11.5px;color:var(--text-dim);">${escapeHtml(a.excerpt)}</div>` : ''}
+            <div style="font-size:9.5px;color:var(--text-faint);">✨ Ditulis AI · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="follow-btn" onclick="window.__adminOpenArticleForm('${a.id}')">👀 Baca & Edit</button>
+              <button class="follow-btn" style="color:var(--brand);font-weight:700;" onclick="window.__adminApproveArticle('${a.id}')">✅ Setujui & Terbitkan</button>
+              <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️ Tolak</button>
+            </div>
+          </div>
+        `).join('');
+    }
+
+    if (rest.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada artikel.</div>'; return; }
+    const statusBadge = { draft: { label: 'DRAF', style: 'background:var(--surface-2);color:var(--text-faint);' }, terbit: { label: 'TERBIT', style: 'background:var(--brand-dim);color:var(--brand);' } };
+    el.innerHTML = rest.map(a => {
+      const badge = statusBadge[a.status] || statusBadge.draft;
+      return `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;">
+        ${a.cover_image_url ? `<img src="${a.cover_image_url}" style="width:100%;border-radius:10px;" />` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
+          <span style="flex-shrink:0;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;${badge.style}">${badge.label}</span>
+        </div>
+        <div style="font-size:9.5px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="follow-btn" onclick="window.__adminOpenArticleForm('${a.id}')">✏️ Edit</button>
+          <button class="follow-btn" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'terbit'})">${a.status === 'terbit' ? '🙈 Jadikan Draf' : '🚀 Publish'}</button>
+          <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️ Hapus</button>
+        </div>
+      </div>
+    `;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat artikel: ${e.message}</span>`;
+  }
+}
+
+window.__adminApproveArticle = async function (id) {
+  try {
+    await sb.from('artikel_admin').update({ status: 'terbit', published: true, updated_at: new Date().toISOString() }).eq('id', id);
+    showToast('Artikel disetujui & diterbitkan! 🚀');
+    loadAdminArticles();
+  } catch (e) {
+    alert('Gagal menyetujui: ' + e.message);
+  }
+};
+
+window.__adminOpenArticleForm = function (articleId) {
+  const existing = articleId ? adminArticlesData.find(a => a.id === articleId) : null;
+  editingArticleId = existing ? existing.id : null;
+  pendingArticleCoverFile = null;
+  pendingArticleCoverPreview = existing?.cover_image_url || null;
+
+  document.getElementById('article-form-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'article-form-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;text-align:left;max-height:88vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:12px;">${existing ? '✏️ Edit Artikel' : '✍️ Tulis Artikel Baru'}</div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Judul</label>
+      <input id="art-title" type="text" value="${existing ? escapeHtml(existing.title) : ''}" placeholder="Judul artikel..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Slug (bagian dari link, otomatis dari judul — boleh diubah)</label>
+      <input id="art-slug" type="text" value="${existing ? escapeHtml(existing.slug) : ''}" placeholder="slug-artikel" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 10px;font-family:monospace;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Ringkasan singkat (opsional, tampil di daftar artikel)</label>
+      <textarea id="art-excerpt" rows="2" placeholder="Ringkasan singkat..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;margin:4px 0 10px;">${existing ? escapeHtml(existing.excerpt || '') : ''}</textarea>
+
+      <label style="font-size:11px;color:var(--text-faint);">Isi artikel</label>
+      <textarea id="art-content" rows="8" placeholder="Tulis isi artikel di sini..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;margin:4px 0 10px;">${existing ? escapeHtml(existing.content) : ''}</textarea>
+
+      <label style="font-size:11px;color:var(--text-faint);">Gambar sampul (opsional)</label>
+      <input type="file" id="art-cover-input" accept="image/*" style="display:none" onchange="window.__onArticleCoverSelected(event)" />
+      <div id="art-cover-zone" onclick="document.getElementById('art-cover-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        ${pendingArticleCoverPreview ? `<img src="${pendingArticleCoverPreview}" style="width:100%;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti gambar</span>` : '📷 Tambah gambar sampul'}
+      </div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Status</label>
+      <select id="art-status" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 14px;">
+        <option value="draft" ${(!existing || existing.status === 'draft') ? 'selected' : ''}>📝 Draf (belum tampil ke publik)</option>
+        <option value="terbit" ${existing?.status === 'terbit' ? 'selected' : ''}>🚀 Terbitkan sekarang</option>
+      </select>
+
+      <div id="art-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('article-form-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__adminSaveArticle()" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">${existing ? 'Simpan Perubahan' : 'Simpan Artikel'}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const titleInput = document.getElementById('art-title');
+  const slugInput = document.getElementById('art-slug');
+  if (!existing) {
+    titleInput.addEventListener('input', () => { slugInput.value = slugifyArticle(titleInput.value); });
+  }
+};
+
+window.__onArticleCoverSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingArticleCoverFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingArticleCoverPreview = e.target.result;
+    const zone = document.getElementById('art-cover-zone');
+    if (zone) zone.innerHTML = `<img src="${pendingArticleCoverPreview}" style="width:100%;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti gambar</span>`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.__adminSaveArticle = async function () {
+  const errEl = document.getElementById('art-error');
+  const title = document.getElementById('art-title').value.trim();
+  const slug = slugifyArticle(document.getElementById('art-slug').value.trim() || title);
+  const excerpt = document.getElementById('art-excerpt').value.trim();
+  const content = document.getElementById('art-content').value.trim();
+  const status = document.getElementById('art-status').value;
+  const published = status === 'terbit';
+
+  if (!title) { errEl.textContent = 'Judul wajib diisi.'; return; }
+  if (!slug) { errEl.textContent = 'Slug wajib diisi.'; return; }
+  if (!content) { errEl.textContent = 'Isi artikel wajib diisi.'; return; }
+
+  errEl.textContent = 'Menyimpan...';
+  try {
+    let coverUrl = pendingArticleCoverPreview && pendingArticleCoverFile ? null : (editingArticleId ? adminArticlesData.find(a => a.id === editingArticleId)?.cover_image_url : null);
+    if (pendingArticleCoverFile) {
+      coverUrl = await uploadArticleCoverImage(pendingArticleCoverFile);
+    }
+    const payload = { title, slug, excerpt: excerpt || null, content, cover_image_url: coverUrl || null, published, status, updated_at: new Date().toISOString() };
+    if (!editingArticleId) payload.source = 'admin'; // artikel baru lewat form ini selalu ditulis admin sendiri
+
+    let error;
+    if (editingArticleId) {
+      ({ error } = await sb.from('artikel_admin').update(payload).eq('id', editingArticleId));
+    } else {
+      ({ error } = await sb.from('artikel_admin').insert(payload));
+    }
+    if (error) throw error;
+
+    document.getElementById('article-form-overlay').remove();
+    pendingArticleCoverFile = null; pendingArticleCoverPreview = null; editingArticleId = null;
+    showToast(published ? 'Artikel diterbitkan! 📝' : 'Artikel disimpan sebagai draf.');
+    loadAdminArticles();
+  } catch (e) {
+    errEl.textContent = 'Gagal menyimpan: ' + (e.message.includes('duplicate') ? 'Slug ini sudah dipakai artikel lain, coba slug lain.' : e.message);
+  }
+};
+
+window.__adminTogglePublishArticle = async function (id, newState) {
+  try {
+    await sb.from('artikel_admin').update({ published: newState, status: newState ? 'terbit' : 'draft', updated_at: new Date().toISOString() }).eq('id', id);
+    showToast(newState ? 'Artikel diterbitkan! 🚀' : 'Artikel dijadikan draf.');
+    loadAdminArticles();
+  } catch (e) {
+    alert('Gagal mengubah status: ' + e.message);
+  }
+};
+
+window.__adminDeleteArticle = async function (id, title) {
+  if (!confirm(`Hapus artikel "${title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+  try {
+    await sb.from('artikel_admin').delete().eq('id', id);
+    showToast('Artikel dihapus.');
+    loadAdminArticles();
+  } catch (e) {
+    alert('Gagal menghapus: ' + e.message);
   }
 };
 
