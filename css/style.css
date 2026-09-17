@@ -192,6 +192,40 @@ main{ flex:1; padding:0 18px; }
 .admin-panel{ animation:admin-panel-in .15s ease; }
 @keyframes admin-panel-in{ from{ opacity:0; } to{ opacity:1; } }
 
+/* --- Kartu pedagang gaya "foto besar + ikon mengambang" (terinspirasi Grab/GoFood) --- */
+.vp-list{ display:flex; flex-direction:column; gap:16px; }
+.vp-card{
+  background:var(--surface); border:1px solid var(--stroke); border-radius:18px;
+  overflow:hidden; box-shadow:var(--shadow); cursor:pointer;
+}
+.vp-photo-wrap{ position:relative; width:100%; aspect-ratio:16/10; background:var(--surface-2); }
+.vp-photo{
+  width:100%; height:100%; background-size:cover; background-position:center;
+  display:flex; align-items:center; justify-content:center; font-size:46px;
+  transition:filter .2s ease;
+}
+.vp-photo.inactive{ filter:grayscale(1) brightness(.72); }
+.vp-inactive-badge{
+  position:absolute; left:10px; bottom:10px; background:rgba(32,26,19,.72); color:#fff;
+  font-size:10.5px; font-weight:700; padding:5px 10px; border-radius:999px;
+}
+.vp-badges-top{ position:absolute; top:10px; left:10px; display:flex; gap:5px; flex-wrap:wrap; max-width:70%; }
+.vp-float-icons{
+  position:absolute; right:10px; bottom:10px; display:flex; flex-direction:column; gap:8px; z-index:2;
+}
+.vp-float-btn{
+  width:36px; height:36px; border-radius:50%; border:none; background:#fff; color:var(--text);
+  display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer;
+  box-shadow:0 4px 10px -2px rgba(0,0,0,.3); text-decoration:none; flex-shrink:0; padding:0;
+}
+.vp-float-btn.brand{ background:var(--brand); color:#fff; }
+.vp-float-btn.wa{ background:#25D366; color:#fff; }
+.vp-float-btn.following{ background:var(--brand); color:#fff; }
+.vp-body{ padding:12px 14px 14px; }
+.vp-name{ font-family:'Poppins'; font-weight:700; font-size:14px; color:var(--text); }
+.vp-meta{ display:flex; align-items:center; gap:6px; margin-top:4px; font-size:11.5px; color:var(--text-dim); }
+.vp-sub{ font-size:11px; color:var(--text-faint); margin-top:3px; }
+
 .toast{
   position:fixed; left:50%; top:14px; transform:translateX(-50%) translateY(-140%);
   max-width:440px; width:calc(100% - 36px); background:var(--aktif); color:#fff;
