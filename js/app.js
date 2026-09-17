@@ -650,17 +650,17 @@ function renderVendorListHtml(list) {
           <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${photoStyle}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
           ${!v.active ? '<div class="vp-inactive-badge">😴 Belum jualan</div>' : ''}
           <div class="vp-badges-top">
-            ${v.is_premium ? '<span class="premium-badge">⭐ Premium</span>' : ''}
-            ${isPromoActive(v) ? '<span class="premium-badge" style="background:linear-gradient(135deg,#FFD86B,#F5A623);">🔥 Promo</span>' : ''}
+            ${v.is_premium ? '<img class="vp-badge-icon" src="icons/badge_premium.png" alt="Premium" title="Premium">' : ''}
+            ${isPromoActive(v) ? '<img class="vp-badge-icon" src="icons/badge_promo.png" alt="Promo" title="Promo">' : ''}
           </div>
           <div class="vp-float-icons" onclick="event.stopPropagation();">
-            ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})">🗺️</button>` : ''}
+            ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})"><img class="vp-btn-icon" src="icons/icon_map.png" alt="Peta"></button>` : ''}
             <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')">💬</button>
             ${v.show_whatsapp !== false && v.whatsapp ? `
               <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
                  class="vp-float-btn wa" title="Chat WhatsApp">📱</a>
             ` : ''}
-            <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '✓' : '➕'}</button>
+            <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '<img class="vp-btn-icon" src="icons/icon_check.png" alt="Mengikuti">' : '➕'}</button>
           </div>
         </div>
         <div class="vp-body">
@@ -672,6 +672,7 @@ function renderVendorListHtml(list) {
             </span>
           </div>
           <div class="vp-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
+          ${v.region ? `<div class="vp-sub vp-region">📍 ${escapeHtml(v.region)}</div>` : ''}
           ${isPromoActive(v) && v.promo_text ? `<div class="vp-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
           <div class="vp-sub" style="font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
         </div>
