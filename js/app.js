@@ -2367,25 +2367,32 @@ function renderAdminVendorList(list) {
           ${v.promo_until && new Date(v.promo_until) > new Date() ? `<div class="vendor-sub" style="color:#F5A623;">🔥 Promo sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="follow-btn" onclick="window.__adminResetPin('${v.id}','${v.name.replace(/'/g, "\\'")}')">🔑 Reset PIN</button>
-        ${v.photo_url ? `<button class="follow-btn" onclick="window.__adminRemovePhoto('${v.id}')">🖼️ Hapus Foto</button>` : ''}
-        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️ Hapus Akun</button>
+      <div class="admin-row">
+        <button class="icon-btn" title="Reset PIN" onclick="window.__adminResetPin('${v.id}','${v.name.replace(/'/g, "\\'")}')">🔑</button>
+        ${v.photo_url ? `<button class="icon-btn" title="Hapus Foto" onclick="window.__adminRemovePhoto('${v.id}')">🖼️</button>` : ''}
+        <button class="icon-btn danger" title="Hapus Akun" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️</button>
+        <span style="flex:1;"></span>
+        ${v.is_premium ? `<button class="admin-cancel-link" onclick="window.__adminCancelPremium('${v.id}')">Cabut Premium</button>` : ''}
+        ${v.promo_until && new Date(v.promo_until) > new Date() ? `<button class="admin-cancel-link" onclick="window.__adminCancelPromo('${v.id}')">Cabut Promo</button>` : ''}
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-        <span style="font-size:10.5px;color:var(--text-faint);">Aktifkan Premium:</span>
-        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',1)">1 Bln</button>
-        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',3)">3 Bln</button>
-        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',6)">6 Bln</button>
-        <button class="follow-btn" onclick="window.__adminSetPremium('${v.id}',12)">1 Thn</button>
-        ${v.is_premium ? `<button class="follow-btn" style="color:#f87171;" onclick="window.__adminCancelPremium('${v.id}')">✕ Cabut</button>` : ''}
+      <div class="admin-row">
+        <span class="label">⭐ Premium</span>
+        <select class="admin-select" id="premium-dur-${v.id}">
+          <option value="1">1 Bulan</option>
+          <option value="3">3 Bulan</option>
+          <option value="6">6 Bulan</option>
+          <option value="12">1 Tahun</option>
+        </select>
+        <button class="admin-go-btn" onclick="window.__adminSetPremium('${v.id}', parseInt(document.getElementById('premium-dur-${v.id}').value))">Aktifkan</button>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-        <span style="font-size:10.5px;color:var(--text-faint);">🔥 Promo Lokal:</span>
-        <button class="follow-btn" onclick="window.__adminSetPromo('${v.id}',1)">1 Hari</button>
-        <button class="follow-btn" onclick="window.__adminSetPromo('${v.id}',3)">3 Hari</button>
-        <button class="follow-btn" onclick="window.__adminSetPromo('${v.id}',7)">7 Hari</button>
-        ${v.promo_until && new Date(v.promo_until) > new Date() ? `<button class="follow-btn" style="color:#f87171;" onclick="window.__adminCancelPromo('${v.id}')">✕ Cabut</button>` : ''}
+      <div class="admin-row">
+        <span class="label">🔥 Promo</span>
+        <select class="admin-select" id="promo-dur-${v.id}">
+          <option value="1">1 Hari</option>
+          <option value="3">3 Hari</option>
+          <option value="7">7 Hari</option>
+        </select>
+        <button class="admin-go-btn" onclick="window.__adminSetPromo('${v.id}', parseInt(document.getElementById('promo-dur-${v.id}').value))">Aktifkan</button>
       </div>
     </div>
   `;
@@ -2611,10 +2618,10 @@ async function loadAdminArticles() {
           <span style="flex-shrink:0;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;${badge.style}">${badge.label}</span>
         </div>
         <div style="font-size:9.5px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="follow-btn" onclick="window.__adminOpenArticleForm('${a.id}')">✏️ Edit</button>
-          <button class="follow-btn" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'published'})">${a.status === 'published' ? '🙈 Jadikan Draf' : '🚀 Publish'}</button>
-          <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️ Hapus</button>
+        <div class="admin-row" style="margin-top:2px;">
+          <button class="follow-btn" style="flex-shrink:0;" onclick="window.__adminOpenArticleForm('${a.id}')">✏️ Edit</button>
+          <button class="icon-btn" title="${a.status === 'published' ? 'Jadikan draf' : 'Terbitkan'}" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'published'})">${a.status === 'published' ? '🙈' : '🚀'}</button>
+          <button class="icon-btn danger" title="Hapus" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️</button>
         </div>
       </div>
     `;
