@@ -629,44 +629,72 @@ async function markThreadRead(threadId, asVendor) {
 function renderVendorListHtml(list) {
   if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
   const sorted = [...list].sort((a, b) => {
+    // Aktif jualan selalu di atas; di antara yang aktif, premium/promo diprioritaskan.
+    if (!!b.active !== !!a.active) return (b.active ? 1 : 0) - (a.active ? 1 : 0);
     const scoreA = (a.is_premium ? 2 : 0) + (isPromoActive(a) ? 1 : 0);
     const scoreB = (b.is_premium ? 2 : 0) + (isPromoActive(b) ? 1 : 0);
     return scoreB - scoreA;
   });
-  return sorted.map(v => {
+  return `<div class="vp-list">${sorted.map(v => {
     const following = followedIds.has(v.id);
     const untilStr = v.active_until
       ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : null;
+    const hasPhoto = !!v.photo_url;
+    const photoStyle = hasPhoto
+      ? `background-image:url('${v.photo_url}');`
+      : (v.mode_icon ? `background-image:url('mode_icons/${v.mode_icon}.png');` : '');
     return `
-      <div class="vendor-card" onclick="if(!event.target.closest('button')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="cursor:pointer;${isPromoActive(v) ? 'border-color:#F5A623;box-shadow:0 0 0 1px #F5A623;' : ''}">
-        <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
-        <div class="vendor-info">
-          <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐ Premium</span>' : ''}${isPromoActive(v) ? ' <span class="premium-badge" style="background:linear-gradient(135deg,#FFD86B,#F5A623);">🔥 Promo</span>' : ''}</div>
-          <div class="vendor-meta">
+      <div class="vp-card" onclick="if(!event.target.closest('button,a')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="${isPromoActive(v) ? 'box-shadow:0 0 0 2px #F5A623;' : ''}">
+        <div class="vp-photo-wrap">
+          <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${photoStyle}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
+          ${!v.active ? '<div class="vp-inactive-badge">😴 Belum jualan</div>' : ''}
+          <div class="vp-badges-top">
+            ${v.is_premium ? '<span class="premium-badge">⭐ Premium</span>' : ''}
+            ${isPromoActive(v) ? '<span class="premium-badge" style="background:linear-gradient(135deg,#FFD86B,#F5A623);">🔥 Promo</span>' : ''}
+          </div>
+          <div class="vp-float-icons" onclick="event.stopPropagation();">
+            ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})">🗺️</button>` : ''}
+            <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')">💬</button>
+            ${v.show_whatsapp !== false && v.whatsapp ? `
+              <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
+                 class="vp-float-btn wa" title="Chat WhatsApp">📱</a>
+            ` : ''}
+            <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '✓' : '➕'}</button>
+          </div>
+        </div>
+        <div class="vp-body">
+          <div class="vp-name">${v.name}</div>
+          <div class="vp-meta">
             <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
             <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
               ${v.active ? 'SEDANG JUALAN · sampai ' + untilStr : 'Belum jualan'}
             </span>
           </div>
-          <div class="vendor-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
-          ${isPromoActive(v) && v.promo_text ? `<div class="vendor-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
-          <div class="vendor-sub" style="color:var(--text-faint);font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
-          <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation();">
-            <button class="follow-btn" style="flex:1;background:var(--brand);color:#fff;text-align:center;" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')">💬 Chat</button>
-            ${v.show_whatsapp !== false && v.whatsapp ? `
-              <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
-                 class="follow-btn" style="flex:1;background:#25D366;color:#fff;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;">📱 WA</a>
-            ` : ''}
-          </div>
+          <div class="vp-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
+          ${isPromoActive(v) && v.promo_text ? `<div class="vp-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
+          <div class="vp-sub" style="font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
         </div>
-        <button class="follow-btn ${following ? 'following' : ''}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">
-          ${following ? '✓ Ikuti' : '+ Ikuti'}
-        </button>
       </div>
     `;
-  }).join('');
+  }).join('')}</div>`;
 }
+
+window.__goToVendorOnMap = function (id, lat, lng) {
+  bottomView = 'peta';
+  document.querySelectorAll('nav.bottom .nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === 'peta'));
+  if (mode !== 'pembeli') {
+    mode = 'pembeli';
+    btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
+  }
+  renderPembeli();
+  setTimeout(() => {
+    if (map && lat && lng) {
+      map.setView([lat, lng], 16);
+      if (markers[id]) markers[id].openPopup();
+    }
+  }, 200);
+};
 
 // ---------- PETA VIEW (tab "Peta") ----------
 function renderPetaView() {
