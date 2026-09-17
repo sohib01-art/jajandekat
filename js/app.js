@@ -2574,38 +2574,38 @@ async function loadAdminArticles() {
   const pendingEl = document.getElementById('admin-articles-pending');
   if (!el) return;
   try {
-    const { data, error } = await sb.from('artikel_admin').select('*').order('created_at', { ascending: false });
+    const { data, error } = await sb.from('articles').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     adminArticlesData = data || [];
 
-    const pending = adminArticlesData.filter(a => a.status === 'menunggu_review');
-    const rest = adminArticlesData.filter(a => a.status !== 'menunggu_review');
+    const pending = adminArticlesData.filter(a => a.status === 'in_review');
+    const rest = adminArticlesData.filter(a => a.status !== 'in_review');
 
     if (pendingEl) {
       pendingEl.innerHTML = pending.length === 0
         ? '<div style="color:var(--text-faint);font-size:11.5px;">Tidak ada artikel yang menunggu review.</div>'
         : pending.map(a => `
           <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;border-color:var(--brand);">
-            ${a.cover_image_url ? `<img src="${a.cover_image_url}" style="width:100%;border-radius:10px;" />` : ''}
+            ${a.cover_image ? `<img src="${a.cover_image}" style="width:100%;border-radius:10px;" />` : ''}
             <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
             ${a.excerpt ? `<div style="font-size:11.5px;color:var(--text-dim);">${escapeHtml(a.excerpt)}</div>` : ''}
-            <div style="font-size:9.5px;color:var(--text-faint);">✨ Ditulis AI · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <div style="font-size:9.5px;color:var(--text-faint);">✨ ${a.source === 'ai' ? 'Ditulis AI' : 'Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="follow-btn" onclick="window.__adminOpenArticleForm('${a.id}')">👀 Baca & Edit</button>
               <button class="follow-btn" style="color:var(--brand);font-weight:700;" onclick="window.__adminApproveArticle('${a.id}')">✅ Setujui & Terbitkan</button>
-              <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️ Tolak</button>
+              <button class="follow-btn" style="color:#f87171;" onclick="window.__adminRejectArticle('${a.id}')">🗑️ Tolak</button>
             </div>
           </div>
         `).join('');
     }
 
     if (rest.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada artikel.</div>'; return; }
-    const statusBadge = { draft: { label: 'DRAF', style: 'background:var(--surface-2);color:var(--text-faint);' }, terbit: { label: 'TERBIT', style: 'background:var(--brand-dim);color:var(--brand);' } };
+    const statusBadge = { draft: { label: 'DRAF', style: 'background:var(--surface-2);color:var(--text-faint);' }, published: { label: 'TERBIT', style: 'background:var(--brand-dim);color:var(--brand);' }, rejected: { label: 'DITOLAK', style: 'background:#f8717133;color:#f87171;' } };
     el.innerHTML = rest.map(a => {
       const badge = statusBadge[a.status] || statusBadge.draft;
       return `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;">
-        ${a.cover_image_url ? `<img src="${a.cover_image_url}" style="width:100%;border-radius:10px;" />` : ''}
+        ${a.cover_image ? `<img src="${a.cover_image}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
           <span style="flex-shrink:0;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;${badge.style}">${badge.label}</span>
@@ -2613,7 +2613,7 @@ async function loadAdminArticles() {
         <div style="font-size:9.5px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="follow-btn" onclick="window.__adminOpenArticleForm('${a.id}')">✏️ Edit</button>
-          <button class="follow-btn" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'terbit'})">${a.status === 'terbit' ? '🙈 Jadikan Draf' : '🚀 Publish'}</button>
+          <button class="follow-btn" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'published'})">${a.status === 'published' ? '🙈 Jadikan Draf' : '🚀 Publish'}</button>
           <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️ Hapus</button>
         </div>
       </div>
@@ -2626,7 +2626,7 @@ async function loadAdminArticles() {
 
 window.__adminApproveArticle = async function (id) {
   try {
-    await sb.from('artikel_admin').update({ status: 'terbit', published: true, updated_at: new Date().toISOString() }).eq('id', id);
+    await sb.from('articles').update({ status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
     showToast('Artikel disetujui & diterbitkan! 🚀');
     loadAdminArticles();
   } catch (e) {
@@ -2634,11 +2634,21 @@ window.__adminApproveArticle = async function (id) {
   }
 };
 
+window.__adminRejectArticle = async function (id) {
+  try {
+    await sb.from('articles').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', id);
+    showToast('Artikel ditolak.');
+    loadAdminArticles();
+  } catch (e) {
+    alert('Gagal menolak: ' + e.message);
+  }
+};
+
 window.__adminOpenArticleForm = function (articleId) {
   const existing = articleId ? adminArticlesData.find(a => a.id === articleId) : null;
   editingArticleId = existing ? existing.id : null;
   pendingArticleCoverFile = null;
-  pendingArticleCoverPreview = existing?.cover_image_url || null;
+  pendingArticleCoverPreview = existing?.cover_image || null;
 
   document.getElementById('article-form-overlay')?.remove();
   const overlay = document.createElement('div');
@@ -2669,7 +2679,8 @@ window.__adminOpenArticleForm = function (articleId) {
       <label style="font-size:11px;color:var(--text-faint);">Status</label>
       <select id="art-status" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 14px;">
         <option value="draft" ${(!existing || existing.status === 'draft') ? 'selected' : ''}>📝 Draf (belum tampil ke publik)</option>
-        <option value="terbit" ${existing?.status === 'terbit' ? 'selected' : ''}>🚀 Terbitkan sekarang</option>
+        <option value="in_review" ${existing?.status === 'in_review' ? 'selected' : ''}>🕐 Menunggu review</option>
+        <option value="published" ${existing?.status === 'published' ? 'selected' : ''}>🚀 Terbitkan sekarang</option>
       </select>
 
       <div id="art-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
@@ -2709,7 +2720,7 @@ window.__adminSaveArticle = async function () {
   const excerpt = document.getElementById('art-excerpt').value.trim();
   const content = document.getElementById('art-content').value.trim();
   const status = document.getElementById('art-status').value;
-  const published = status === 'terbit';
+  const published = status === 'published';
 
   if (!title) { errEl.textContent = 'Judul wajib diisi.'; return; }
   if (!slug) { errEl.textContent = 'Slug wajib diisi.'; return; }
@@ -2717,18 +2728,19 @@ window.__adminSaveArticle = async function () {
 
   errEl.textContent = 'Menyimpan...';
   try {
-    let coverUrl = pendingArticleCoverPreview && pendingArticleCoverFile ? null : (editingArticleId ? adminArticlesData.find(a => a.id === editingArticleId)?.cover_image_url : null);
+    let coverUrl = pendingArticleCoverPreview && pendingArticleCoverFile ? null : (editingArticleId ? adminArticlesData.find(a => a.id === editingArticleId)?.cover_image : null);
     if (pendingArticleCoverFile) {
       coverUrl = await uploadArticleCoverImage(pendingArticleCoverFile);
     }
-    const payload = { title, slug, excerpt: excerpt || null, content, cover_image_url: coverUrl || null, published, status, updated_at: new Date().toISOString() };
+    const payload = { title, slug, excerpt: excerpt || null, content, cover_image: coverUrl || null, status, updated_at: new Date().toISOString() };
+    if (published) payload.published_at = new Date().toISOString();
     if (!editingArticleId) payload.source = 'admin'; // artikel baru lewat form ini selalu ditulis admin sendiri
 
     let error;
     if (editingArticleId) {
-      ({ error } = await sb.from('artikel_admin').update(payload).eq('id', editingArticleId));
+      ({ error } = await sb.from('articles').update(payload).eq('id', editingArticleId));
     } else {
-      ({ error } = await sb.from('artikel_admin').insert(payload));
+      ({ error } = await sb.from('articles').insert(payload));
     }
     if (error) throw error;
 
@@ -2743,7 +2755,7 @@ window.__adminSaveArticle = async function () {
 
 window.__adminTogglePublishArticle = async function (id, newState) {
   try {
-    await sb.from('artikel_admin').update({ published: newState, status: newState ? 'terbit' : 'draft', updated_at: new Date().toISOString() }).eq('id', id);
+    await sb.from('articles').update({ status: newState ? 'published' : 'draft', published_at: newState ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('id', id);
     showToast(newState ? 'Artikel diterbitkan! 🚀' : 'Artikel dijadikan draf.');
     loadAdminArticles();
   } catch (e) {
@@ -2754,7 +2766,7 @@ window.__adminTogglePublishArticle = async function (id, newState) {
 window.__adminDeleteArticle = async function (id, title) {
   if (!confirm(`Hapus artikel "${title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
   try {
-    await sb.from('artikel_admin').delete().eq('id', id);
+    await sb.from('articles').delete().eq('id', id);
     showToast('Artikel dihapus.');
     loadAdminArticles();
   } catch (e) {
