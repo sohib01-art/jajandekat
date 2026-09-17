@@ -151,6 +151,31 @@ main{ flex:1; padding:0 18px; }
 }
 .follow-btn.following{ background:var(--brand); color:#fff; }
 
+/* --- Kontrol admin ringkas: tombol ikon bulat + dropdown durasi --- */
+.icon-btn{
+  border:none; background:var(--surface-2); color:var(--text-dim);
+  width:32px; height:32px; border-radius:10px; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:14px; flex-shrink:0; transition:all .15s ease; padding:0;
+}
+.icon-btn:active{ transform:scale(.92); }
+.icon-btn.danger{ color:#f87171; }
+.admin-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.admin-row .label{ font-size:10.5px; color:var(--text-faint); flex-shrink:0; }
+.admin-select{
+  flex:1; min-width:88px; background:var(--surface-2); border:1px solid var(--stroke);
+  color:var(--text); font-family:'Inter'; font-size:11.5px; font-weight:600;
+  border-radius:10px; padding:7px 8px; cursor:pointer;
+}
+.admin-go-btn{
+  border:none; background:var(--brand); color:#fff; font-weight:700; font-size:11px;
+  padding:7px 12px; border-radius:10px; cursor:pointer; flex-shrink:0; white-space:nowrap;
+}
+.admin-cancel-link{
+  border:none; background:none; color:#f87171; font-size:10.5px; font-weight:600;
+  cursor:pointer; padding:4px 2px; flex-shrink:0; text-decoration:underline;
+}
+
 .toast{
   position:fixed; left:50%; top:14px; transform:translateX(-50%) translateY(-140%);
   max-width:440px; width:calc(100% - 36px); background:var(--aktif); color:#fff;
