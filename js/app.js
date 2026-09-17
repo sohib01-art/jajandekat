@@ -325,8 +325,10 @@ function renderPembeli() {
     <div class="cat-row">${catRowHtml}</div>
     <div class="section-label">Pedagang yang kamu ikuti</div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
+    <div class="section-label">Pedagang unggulan</div>
+    ${renderVendorCarouselHtml(filteredVendors)}
     <div class="section-label">Semua pedagang</div>
-    <div class="vendor-list">${renderVendorListHtml(filteredVendors)}</div>
+    ${renderVendorGridHtml(filteredVendors)}
   `;
 }
 
@@ -626,60 +628,112 @@ async function markThreadRead(threadId, asVendor) {
   } catch (e) { /* tidak kritis, diamkan */ }
 }
 
-function renderVendorListHtml(list) {
-  if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
-  const sorted = [...list].sort((a, b) => {
+function sortVendorsForDisplay(list) {
+  return [...list].sort((a, b) => {
     // Aktif jualan selalu di atas; di antara yang aktif, premium/promo diprioritaskan.
     if (!!b.active !== !!a.active) return (b.active ? 1 : 0) - (a.active ? 1 : 0);
     const scoreA = (a.is_premium ? 2 : 0) + (isPromoActive(a) ? 1 : 0);
     const scoreB = (b.is_premium ? 2 : 0) + (isPromoActive(b) ? 1 : 0);
     return scoreB - scoreA;
   });
-  return `<div class="vp-list">${sorted.map(v => {
-    const following = followedIds.has(v.id);
-    const untilStr = v.active_until
-      ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-      : null;
-    const hasPhoto = !!v.photo_url;
-    const photoStyle = hasPhoto
-      ? `background-image:url('${v.photo_url}');`
-      : (v.mode_icon ? `background-image:url('mode_icons/${v.mode_icon}.png');` : '');
-    return `
-      <div class="vp-card" onclick="if(!event.target.closest('button,a')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="${isPromoActive(v) ? 'box-shadow:0 0 0 2px #F5A623;' : ''}">
-        <div class="vp-photo-wrap">
-          <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${photoStyle}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
-          ${!v.active ? '<div class="vp-inactive-badge">😴 Belum jualan</div>' : ''}
-          <div class="vp-badges-top">
-            ${v.is_premium ? '<img class="vp-badge-icon" src="icons/badge_premium.png" alt="Premium" title="Premium">' : ''}
-            ${isPromoActive(v) ? '<img class="vp-badge-icon" src="icons/badge_promo.png" alt="Promo" title="Promo">' : ''}
-          </div>
-          <div class="vp-float-icons" onclick="event.stopPropagation();">
-            ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})"><img class="vp-btn-icon" src="icons/icon_map.png" alt="Peta"></button>` : ''}
-            <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')">💬</button>
-            ${v.show_whatsapp !== false && v.whatsapp ? `
-              <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
-                 class="vp-float-btn wa" title="Chat WhatsApp">📱</a>
-            ` : ''}
-            <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '<img class="vp-btn-icon" src="icons/icon_check.png" alt="Mengikuti">' : '➕'}</button>
-          </div>
+}
+
+// ---------- JARAK PEMBELI <-> PEDAGANG ----------
+let buyerLoc = null; // { lat, lng } — diisi kalau pembeli izinkan lokasi
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function formatDistance(meters) {
+  if (meters < 950) return Math.round(meters / 10) * 10 + ' m';
+  return (meters / 1000).toFixed(1) + ' km';
+}
+function tryLocateBuyer() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      buyerLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (mode === 'pembeli') renderPembeli();
+    },
+    () => { /* pembeli menolak/gagal lokasi — diamkan, jarak cukup disembunyikan */ },
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+  );
+}
+
+function renderVendorCardHtml(v, opts = {}) {
+  const compact = !!opts.compact;
+  const following = followedIds.has(v.id);
+  const untilStr = v.active_until
+    ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const hasPhoto = !!v.photo_url;
+  const photoStyle = hasPhoto
+    ? `background-image:url('${v.photo_url}');`
+    : (v.mode_icon ? `background-image:url('mode_icons/${v.mode_icon}.png');` : '');
+  const distanceLabel = (buyerLoc && v.lat && v.lng)
+    ? formatDistance(haversineMeters(buyerLoc.lat, buyerLoc.lng, v.lat, v.lng))
+    : null;
+  return `
+    <div class="vp-card ${compact ? 'vp-card-compact' : ''}" onclick="if(!event.target.closest('button,a')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="${isPromoActive(v) ? 'box-shadow:0 0 0 2px #F5A623;' : ''}">
+      <div class="vp-photo-wrap">
+        <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${photoStyle}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
+        ${!v.active ? '<div class="vp-inactive-badge">😴 Belum jualan</div>' : ''}
+        <div class="vp-badges-top">
+          ${v.is_premium ? '<img class="vp-badge-icon" src="icons/badge_premium.png" alt="Premium" title="Premium">' : ''}
+          ${isPromoActive(v) ? '<img class="vp-badge-icon" src="icons/badge_promo.png" alt="Promo" title="Promo">' : ''}
         </div>
-        <div class="vp-body">
-          <div class="vp-name">${v.name}</div>
-          <div class="vp-meta">
-            <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
-            <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
-              ${v.active ? 'SEDANG JUALAN · sampai ' + untilStr : 'Belum jualan'}
-            </span>
-          </div>
-          <div class="vp-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
-          ${v.region ? `<div class="vp-sub vp-region">📍 ${escapeHtml(v.region)}</div>` : ''}
-          ${isPromoActive(v) && v.promo_text ? `<div class="vp-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
-          <div class="vp-sub" style="font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>
+        ${distanceLabel ? `<div class="vp-distance-badge">📍 ${distanceLabel}</div>` : ''}
+        <div class="vp-float-icons" onclick="event.stopPropagation();">
+          ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})"><img class="vp-btn-icon" src="icons/icon_map.png" alt="Peta"></button>` : ''}
+          <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')">💬</button>
+          ${v.show_whatsapp !== false && v.whatsapp ? `
+            <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
+               class="vp-float-btn wa" title="Chat WhatsApp">📱</a>
+          ` : ''}
+          <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '<img class="vp-btn-icon" src="icons/icon_check.png" alt="Mengikuti">' : '➕'}</button>
         </div>
       </div>
-    `;
-  }).join('')}</div>`;
+      <div class="vp-body">
+        <div class="vp-name">${v.name}</div>
+        <div class="vp-meta">
+          <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
+          <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
+            ${v.active ? 'SEDANG JUALAN · sampai ' + untilStr : 'Belum jualan'}
+          </span>
+        </div>
+        <div class="vp-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
+        ${v.region ? `<div class="vp-sub vp-region">📍 ${escapeHtml(v.region)}</div>` : ''}
+        ${isPromoActive(v) && v.promo_text ? `<div class="vp-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
+        ${!compact ? `<div class="vp-sub" style="font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>` : ''}
+      </div>
+    </div>
+  `;
 }
+
+function renderVendorListHtml(list) {
+  if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
+  const sorted = sortVendorsForDisplay(list);
+  return `<div class="vp-list">${sorted.map(v => renderVendorCardHtml(v)).join('')}</div>`;
+}
+
+// Baris atas beranda: carousel horizontal, maksimal 7 pedagang unggulan (aktif + premium/promo diprioritaskan)
+function renderVendorCarouselHtml(list) {
+  const top7 = sortVendorsForDisplay(list).slice(0, 7);
+  if (!top7.length) return '';
+  return `<div class="vp-carousel">${top7.map(v => `<div class="vp-carousel-item">${renderVendorCardHtml(v, { compact: true })}</div>`).join('')}</div>`;
+}
+
+// Bagian bawah beranda: grid 2 kolom untuk semua pedagang, scroll ke bawah bebas
+function renderVendorGridHtml(list) {
+  if (!list.length) return '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>';
+  const sorted = sortVendorsForDisplay(list);
+  return `<div class="vp-grid">${sorted.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>`;
+}
+
 
 window.__goToVendorOnMap = function (id, lat, lng) {
   bottomView = 'peta';
@@ -2974,6 +3028,7 @@ async function init() {
     followedIds = new Set(followList);
     announcements = await fetchAnnouncements();
     subscribeRealtime();
+    tryLocateBuyer();
 
     // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
     const followCode = new URLSearchParams(location.search).get('follow');
