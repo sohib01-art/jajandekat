@@ -2180,12 +2180,74 @@ async function renderAdminDashboard() {
 
   main.innerHTML = `
     <div class="section-label">🔒 Dashboard Admin</div>
-    <div id="admin-stats" class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;">
-      <div style="color:var(--text-faint);font-size:11px;grid-column:1/-1;">Memuat statistik...</div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="stats" onclick="window.__adminSwitchTab('stats')">📊 Statistik</button>
+      <button class="admin-tab" data-tab="vendors" onclick="window.__adminSwitchTab('vendors')">🏪 Pedagang</button>
+      <button class="admin-tab" data-tab="articles" onclick="window.__adminSwitchTab('articles')">📝 Artikel</button>
+      <button class="admin-tab" data-tab="requests" onclick="window.__adminSwitchTab('requests')">🔔 Permintaan</button>
+      <button class="admin-tab" data-tab="reports" onclick="window.__adminSwitchTab('reports')">🚩 Laporan</button>
+      <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
     </div>
-    <div class="section-label" style="margin-top:6px;">Daftar Pedagang</div>
-    <input id="admin-search" type="text" placeholder="🔍 Cari nama usaha atau nomor WA (paste dari WA di sini)" oninput="window.__adminSearchVendors(this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);margin-bottom:10px;font-size:12.5px;" />
-    <div id="admin-list" class="vendor-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat...</div></div>
+
+    <div class="admin-panel" data-panel="stats">
+      <div id="admin-stats" class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;">
+        <div style="color:var(--text-faint);font-size:11px;grid-column:1/-1;">Memuat statistik...</div>
+      </div>
+      <div id="admin-stats-extra"></div>
+    </div>
+
+    <div class="admin-panel" data-panel="vendors" style="display:none;">
+      <input id="admin-search" type="text" placeholder="🔍 Cari nama usaha atau nomor WA (paste dari WA di sini)" oninput="window.__adminSearchVendors(this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);margin-bottom:10px;font-size:12.5px;" />
+      <div id="admin-list" class="vendor-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="articles" style="display:none;">
+      <div class="section-label" style="margin-top:0;font-size:11px;color:var(--brand);">🕓 Menunggu Review (ditulis AI)</div>
+      <div id="admin-articles-pending" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
+      <button class="follow-btn" style="width:100%;padding:10px;margin-bottom:10px;" onclick="window.__adminOpenArticleForm()">✍️ Tulis Artikel Baru</button>
+      <div id="admin-articles" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat artikel...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="requests" style="display:none;">
+      <div id="admin-requests" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat permintaan...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="reports" style="display:none;">
+      <div id="admin-reports" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat laporan...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="announcements" style="display:none;">
+      <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
+        <textarea id="ann-message" rows="3" placeholder="Isi pengumuman..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
+        <input id="ann-link" type="url" placeholder="Link (opsional) — https://..." style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
+        <input type="file" id="ann-image-input" accept="image/*" style="display:none" onchange="window.__onAnnouncementImageSelected(event)" />
+        <div id="ann-image-zone" onclick="document.getElementById('ann-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+          📷 Tambah gambar (opsional)
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <select id="ann-audience" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+            <option value="semua">Semua</option>
+            <option value="premium">Pedagang Premium</option>
+            <option value="biasa">Pedagang Biasa</option>
+            <option value="pembeli">Pembeli</option>
+          </select>
+          <select id="ann-zone-level" onchange="document.getElementById('ann-zone-value-wrap').style.display = this.value === 'nasional' ? 'none' : ''" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+            <option value="nasional">Zona: Nasional</option>
+            <option value="provinsi">Zona: Provinsi</option>
+            <option value="kabupaten">Zona: Kabupaten/Kota</option>
+            <option value="kecamatan">Zona: Kecamatan</option>
+          </select>
+        </div>
+        <div id="ann-zone-value-wrap" style="display:none;margin-top:8px;">
+          <input id="ann-zone-value" type="text" placeholder="Nama wilayah, misal: Kutai Timur" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
+          <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Dicocokkan dengan wilayah (kabupaten/kota) yang terdeteksi otomatis saat pedagang daftar. Zona untuk audiens Pembeli belum didukung penuh (lokasi pembeli tidak disimpan).</div>
+        </div>
+        <button onclick="window.__adminCreateAnnouncement()" style="margin-top:10px;">📢 Kirim Pengumuman</button>
+        <div id="ann-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
+      </div>
+      <div id="admin-announcements" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pengumuman...</div></div>
+    </div>
+
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
@@ -2280,7 +2342,7 @@ async function renderAdminDashboard() {
     </div>
   `).join('');
 
-  document.getElementById('admin-stats').insertAdjacentHTML('afterend', `
+  document.getElementById('admin-stats-extra').innerHTML = `
     <div style="font-size:11px;color:var(--text-faint);margin:2px 0 4px;">📤 ${totalReferred ?? 0} pedagang bergabung lewat link referral pedagang lain — cek satu-satu di daftar bawah untuk lihat siapa yang berhak dapat bonus.</div>
 
     <div class="section-label" style="margin-top:4px;">📈 Pertumbuhan Pedagang (6 Minggu Terakhir)</div>
@@ -2297,50 +2359,7 @@ async function renderAdminDashboard() {
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:14px;padding:14px;margin-bottom:14px;">
       ${regionHtml || '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada data.</div>'}
     </div>
-
-    <div class="section-label" style="margin-top:4px;">🔔 Permintaan Masuk (Premium/Promo)</div>
-    <div id="admin-requests" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat permintaan...</div></div>
-
-    <div class="section-label" style="margin-top:4px;">🚩 Laporan Masuk</div>
-    <div id="admin-reports" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat laporan...</div></div>
-
-    <div class="section-label" style="margin-top:4px;">📢 Pengumuman</div>
-    <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
-      <textarea id="ann-message" rows="3" placeholder="Isi pengumuman..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
-      <input id="ann-link" type="url" placeholder="Link (opsional) — https://..." style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
-      <input type="file" id="ann-image-input" accept="image/*" style="display:none" onchange="window.__onAnnouncementImageSelected(event)" />
-      <div id="ann-image-zone" onclick="document.getElementById('ann-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
-        📷 Tambah gambar (opsional)
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <select id="ann-audience" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
-          <option value="semua">Semua</option>
-          <option value="premium">Pedagang Premium</option>
-          <option value="biasa">Pedagang Biasa</option>
-          <option value="pembeli">Pembeli</option>
-        </select>
-        <select id="ann-zone-level" onchange="document.getElementById('ann-zone-value-wrap').style.display = this.value === 'nasional' ? 'none' : ''" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
-          <option value="nasional">Zona: Nasional</option>
-          <option value="provinsi">Zona: Provinsi</option>
-          <option value="kabupaten">Zona: Kabupaten/Kota</option>
-          <option value="kecamatan">Zona: Kecamatan</option>
-        </select>
-      </div>
-      <div id="ann-zone-value-wrap" style="display:none;margin-top:8px;">
-        <input id="ann-zone-value" type="text" placeholder="Nama wilayah, misal: Kutai Timur" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
-        <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Dicocokkan dengan wilayah (kabupaten/kota) yang terdeteksi otomatis saat pedagang daftar. Zona untuk audiens Pembeli belum didukung penuh (lokasi pembeli tidak disimpan).</div>
-      </div>
-      <button onclick="window.__adminCreateAnnouncement()" style="margin-top:10px;">📢 Kirim Pengumuman</button>
-      <div id="ann-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
-    </div>
-    <div id="admin-announcements" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pengumuman...</div></div>
-
-    <div class="section-label" style="margin-top:4px;">📝 Artikel</div>
-    <div class="section-label" style="margin-top:4px;font-size:11px;color:var(--brand);">🕓 Menunggu Review (ditulis AI)</div>
-    <div id="admin-articles-pending" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
-    <button class="follow-btn" style="width:100%;padding:10px;margin-bottom:10px;" onclick="window.__adminOpenArticleForm()">✍️ Tulis Artikel Baru</button>
-    <div id="admin-articles" class="vendor-list" style="margin-bottom:14px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat artikel...</div></div>
-  `);
+  `;
   loadAdminReports();
   loadAdminRequests();
   loadAdminAnnouncements();
@@ -2349,6 +2368,11 @@ async function renderAdminDashboard() {
   adminVendorData = data;
   listEl.innerHTML = renderAdminVendorList(adminVendorData);
 }
+
+window.__adminSwitchTab = function (tab) {
+  document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+  document.querySelectorAll('.admin-panel').forEach(panel => { panel.style.display = panel.dataset.panel === tab ? '' : 'none'; });
+};
 
 function renderAdminVendorList(list) {
   return list.map(v => {
