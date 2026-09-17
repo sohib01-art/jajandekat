@@ -383,11 +383,16 @@ create policy "faq_public_read" on public.faq for select using (active = true);
 
 -- app_secrets: tidak ada policy publik → hanya bisa diakses via service role key
 
--- articles: publik hanya boleh baca yang sudah published;
--- insert/update/delete (termasuk alur review draft -> in_review -> published)
--- hanya lewat service role key dari admin dashboard.
+-- articles: publik hanya boleh baca yang sudah published.
+-- Insert/update/delete dibuka untuk anon (pola sama dengan vendors/announcements/
+-- vendor_requests di atas) karena dashboard admin app ini adalah situs statis tanpa
+-- server — pembatasan akses dilakukan lewat SUPER_ADMIN_PASSWORD di sisi klien
+-- (js/config.js), bukan lewat RLS/auth sungguhan.
 create policy "Artikel published dapat dibaca publik" on public.articles
   for select using (status = 'published');
+create policy "articles_admin_insert" on public.articles for insert with check (true);
+create policy "articles_admin_update" on public.articles for update using (true);
+create policy "articles_admin_delete" on public.articles for delete using (true);
 
 -- ============================================
 -- REALTIME
