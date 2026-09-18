@@ -340,6 +340,36 @@ function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Konversi markdown sederhana (##, **, *, list, paragraf) ke HTML aman (escape dulu, baru format)
+function renderMarkdownSafe(raw) {
+  const escaped = escapeHtml(raw || '');
+  const lines = escaped.split(/\r?\n/);
+  const htmlParts = [];
+  let listBuffer = [];
+  const flushList = () => {
+    if (listBuffer.length) { htmlParts.push(`<ul style="margin:6px 0 12px;padding-left:20px;">${listBuffer.join('')}</ul>`); listBuffer = []; }
+  };
+  const inlineFormat = (text) => text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) { flushList(); continue; }
+    const h3 = trimmed.match(/^###\s+(.*)/);
+    const h2 = trimmed.match(/^##\s+(.*)/);
+    const h1 = trimmed.match(/^#\s+(.*)/);
+    const li = trimmed.match(/^[-*]\s+(.*)/);
+    if (h3) { flushList(); htmlParts.push(`<h4 style="font-family:'Poppins';font-weight:700;font-size:14.5px;margin:14px 0 6px;">${inlineFormat(h3[1])}</h4>`); }
+    else if (h2) { flushList(); htmlParts.push(`<h3 style="font-family:'Poppins';font-weight:700;font-size:15.5px;margin:16px 0 6px;">${inlineFormat(h2[1])}</h3>`); }
+    else if (h1) { flushList(); htmlParts.push(`<h2 style="font-family:'Poppins';font-weight:800;font-size:17px;margin:16px 0 8px;">${inlineFormat(h1[1])}</h2>`); }
+    else if (li) { listBuffer.push(`<li style="margin-bottom:4px;">${inlineFormat(li[1])}</li>`); }
+    else { flushList(); htmlParts.push(`<p style="margin:0 0 12px;">${inlineFormat(trimmed)}</p>`); }
+  }
+  flushList();
+  return htmlParts.join('');
+}
+
 // ---------- ARTIKEL (PUBLIK) ----------
 async function renderArtikelListView() {
   main.innerHTML = `<div class="section-label">📰 Artikel</div><div class="vendor-list" id="artikel-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div></div>`;
@@ -377,7 +407,7 @@ async function renderArtikelDetailView(slug) {
       ${data.cover_image ? `<img src="${data.cover_image}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ''}
       <div style="font-family:'Poppins';font-weight:800;font-size:18px;margin-bottom:6px;">${escapeHtml(data.title)}</div>
       <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:14px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-      <div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(data.content)}</div>
+      <div style="font-size:13.5px;line-height:1.7;">${renderMarkdownSafe(data.content)}</div>
     `;
   } catch (e) {
     main.innerHTML = `
