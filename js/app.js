@@ -1415,6 +1415,7 @@ let regPinValue = '';
 let regReminderValue = '';
 let regTagsValue = '';
 let catPickerQuery = '';
+let regStep = 0;
 let knownTagSuggestions = [];
 
 window.__updateCatPickerQuery = function (value) {
@@ -1424,6 +1425,35 @@ window.__updateCatPickerQuery = function (value) {
   requestAnimationFrame(() => {
     const el = document.getElementById('reg-cat-search');
     if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
+};
+
+// Navigasi wizard pendaftaran (geser sisi ke sisi). delta: 1 = lanjut, -1 = kembali.
+// Tidak lewat renderPedagang() supaya transisi geser terlihat mulus (bukan render ulang).
+window.__regWizardGo = function (delta) {
+  const stepErr = document.getElementById('reg-step-error');
+  if (stepErr) stepErr.textContent = '';
+  if (delta > 0) {
+    if (regStep === 0) {
+      const name = (document.getElementById('reg-name')?.value || '').trim();
+      if (!name) { if (stepErr) stepErr.textContent = 'Nama usaha wajib diisi.'; return; }
+    } else if (regStep === 1) {
+      if (selectedCategories.length === 0) { if (stepErr) stepErr.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
+    } else if (regStep === 2) {
+      if (!selectedModeIcon) { if (stepErr) stepErr.textContent = 'Pilih mode jualan Anda.'; return; }
+    } else if (regStep === 3) {
+      const wa = (document.getElementById('reg-whatsapp')?.value || '').trim();
+      const pin = (document.getElementById('reg-pin')?.value || '').trim();
+      if (!wa) { if (stepErr) stepErr.textContent = 'Nomor WhatsApp wajib diisi.'; return; }
+      if (!/^\d{4}$/.test(pin)) { if (stepErr) stepErr.textContent = 'PIN wajib 4 angka.'; return; }
+    }
+  }
+  regStep = Math.max(0, Math.min(4, regStep + delta));
+  const track = document.getElementById('reg-wizard-track');
+  if (track) track.style.transform = `translateX(-${regStep * 100}%)`;
+  document.querySelectorAll('.reg-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === regStep);
+    d.classList.toggle('done', i < regStep);
   });
 };
 let isRegistering = false;
@@ -1760,35 +1790,69 @@ function renderPedagang() {
       <div class="vendor-hero">
         <div class="vendor-hero-emoji">🛒</div>
         <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
-        <div class="setup-form">
-          <input id="reg-name" type="text" value="${regNameValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('name', this.value)" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Jual apa saja? (tap untuk pilih, tap lagi untuk batal)</div>
-          ${selectedCategories.length ? `
-            <div class="selected-cat-strip">
-              ${selectedCategories.map(label => `
-                <span class="selected-cat-pill">${label} <button type="button" onclick="window.__toggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
-              `).join('')}
+        <div class="reg-dots">
+          ${[0, 1, 2, 3, 4].map(i => `<div class="reg-dot ${i === regStep ? 'active' : ''} ${i < regStep ? 'done' : ''}"></div>`).join('')}
+        </div>
+        <div id="reg-step-error" style="color:#f87171;font-size:12px;min-height:14px;text-align:center;margin-top:2px;"></div>
+        <div class="reg-wizard">
+          <div class="reg-wizard-track" id="reg-wizard-track" style="transform:translateX(-${regStep * 100}%);">
+
+            <div class="reg-step">
+              <div class="reg-step-title">1. Nama Usaha</div>
+              <div class="reg-step-sub">Nama yang bakal dilihat pembeli di aplikasi</div>
+              <input id="reg-name" type="text" value="${regNameValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('name', this.value)" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
+              <div class="reg-nav-row"><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
             </div>
-          ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih — cari atau tap ikon di bawah</div>`}
-          <input id="reg-cat-search" type="text" value="${catPickerQuery.replace(/"/g, '&quot;')}" oninput="window.__updateCatPickerQuery(this.value)" placeholder="🔍 Cari kategori, misal: rujak" style="margin-top:8px;" />
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jualan lain yang belum ada di daftar? Tulis di sini (pisahkan koma)</div>
-          <input id="reg-tags" type="text" list="tag-suggestions-list" value="${regTagsValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('tags', this.value)" placeholder="misal: rujak serut, es duren" />
-          <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
-          ${renderCategoryPickerGrouped(selectedCategories, 'window.__toggleCategory', catPickerQuery)}
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Mode jualan Anda (pilih 1)</div>
-          <div class="cat-picker-grid">
-            ${VENDOR_MODE_OPTIONS.map(m => `
-              <button type="button" class="cat-picker-item ${selectedModeIcon === m.icon ? 'picked' : ''}" onclick="window.__pickModeIcon('${m.icon}')">
-                <div class="cat-picker-icon-wrap"><img src="mode_icons/${m.icon}.png" alt="${m.label}" /></div>
-                <span>${m.label}</span>
-              </button>
-            `).join('')}
+
+            <div class="reg-step">
+              <div class="reg-step-title">2. Jual Apa Saja?</div>
+              <div class="reg-step-sub">Tap untuk pilih, tap lagi untuk batal — boleh lebih dari satu</div>
+              ${selectedCategories.length ? `
+                <div class="selected-cat-strip">
+                  ${selectedCategories.map(label => `
+                    <span class="selected-cat-pill">${label} <button type="button" onclick="window.__toggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
+                  `).join('')}
+                </div>
+              ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih — cari atau tap ikon di bawah</div>`}
+              <input id="reg-cat-search" type="text" value="${catPickerQuery.replace(/"/g, '&quot;')}" oninput="window.__updateCatPickerQuery(this.value)" placeholder="🔍 Cari kategori, misal: rujak" style="margin-top:8px;" />
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jualan lain yang belum ada di daftar? Tulis di sini (pisahkan koma)</div>
+              <input id="reg-tags" type="text" list="tag-suggestions-list" value="${regTagsValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('tags', this.value)" placeholder="misal: rujak serut, es duren" />
+              <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
+              ${renderCategoryPickerGrouped(selectedCategories, 'window.__toggleCategory', catPickerQuery)}
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+            </div>
+
+            <div class="reg-step">
+              <div class="reg-step-title">3. Cara Jualan</div>
+              <div class="reg-step-sub">Pilih 1 yang paling sesuai</div>
+              <div class="cat-picker-grid">
+                ${VENDOR_MODE_OPTIONS.map(m => `
+                  <button type="button" class="cat-picker-item ${selectedModeIcon === m.icon ? 'picked' : ''}" onclick="window.__pickModeIcon('${m.icon}')">
+                    <div class="cat-picker-icon-wrap"><img src="mode_icons/${m.icon}.png" alt="${m.label}" /></div>
+                    <span>${m.label}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+            </div>
+
+            <div class="reg-step">
+              <div class="reg-step-title">4. Nomor & Keamanan Akun</div>
+              <div class="reg-step-sub">Nomor WA jadi penanda akun, PIN buat masuk lagi nanti</div>
+              <input id="reg-whatsapp" type="tel" value="${regWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('whatsapp', this.value)" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
+              <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+            </div>
+
+            <div class="reg-step">
+              <div class="reg-step-title">5. Terakhir!</div>
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
+              <input id="reg-reminder" type="time" value="${regReminderValue}" oninput="window.__updateRegField('reminder', this.value)" />
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button></div>
+              <button data-reg-submit onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
+            </div>
+
           </div>
-          <input id="reg-whatsapp" type="tel" value="${regWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('whatsapp', this.value)" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
-          <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
-          <input id="reg-reminder" type="time" value="${regReminderValue}" oninput="window.__updateRegField('reminder', this.value)" />
-          <button data-reg-submit onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
         </div>
         <div id="reg-error" style="color:#f87171;font-size:12px;margin-top:8px;"></div>
       </div>
@@ -2597,7 +2661,7 @@ window.__registerVendor = async function () {
     selectedEmoji = '🍜';
     selectedModeIcon = null;
     selectedCategories = [];
-    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = '';
+    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
