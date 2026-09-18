@@ -13,6 +13,8 @@
   --nonaktif: #C9C0B2;
   --brand: #FF6B4A;
   --brand-dim: #FFE7DF;
+  --navy: #1B2A4A;
+  --navy-dim: #E6EAF2;
   --shadow: 0 8px 24px -10px rgba(32,26,19,.12);
 }
 
@@ -298,6 +300,18 @@ main{ flex:1; padding:0 18px; }
 .vendor-hero-name{ font-family:'Poppins'; font-weight:700; font-size:16.5px; margin-top:8px; color:var(--text); }
 .vendor-hero-status{ font-size:12.5px; margin-top:4px; color:var(--text-faint); }
 .vendor-hero-status.live{ color:var(--aktif); font-weight:600; }
+
+/* Banner status jualan (pengganti teks status polos) */
+.status-banner{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  border-radius:16px; padding:16px 18px; margin-top:14px; text-align:left;
+  color:#fff; box-shadow:0 8px 20px -8px rgba(0,0,0,.3);
+}
+.status-banner.active{ background:linear-gradient(135deg, #16C79A 0%, #0B8F72 100%); }
+.status-banner.inactive{ background:linear-gradient(135deg, #FF9A6C 0%, var(--brand) 100%); }
+.status-banner-title{ font-family:'Poppins'; font-weight:700; font-size:15px; line-height:1.3; }
+.status-banner-sub{ font-size:11.5px; opacity:.92; margin-top:4px; line-height:1.4; }
+.status-banner-icon{ flex-shrink:0; opacity:.95; }
 
 .photo-zone{
   border:1.5px dashed var(--stroke); border-radius:14px; padding:16px;
