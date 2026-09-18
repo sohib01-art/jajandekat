@@ -871,7 +871,16 @@ function renderMarkdownSafe(raw) {
 
 // ---------- ARTIKEL (PUBLIK) ----------
 async function renderArtikelListView() {
-  main.innerHTML = `<div class="section-label">📰 Artikel</div><div class="vendor-list" id="artikel-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div></div>`;
+  main.innerHTML = `<div class="section-label">📰 Artikel</div>
+    <a href="https://whatsapp.com/channel/0029Vb8okwd4inorfK4UCQ3Z" target="_blank" style="display:flex;align-items:center;gap:10px;background:#25D366;color:#fff;border-radius:14px;padding:12px 14px;margin-bottom:14px;text-decoration:none;box-shadow:var(--shadow);">
+      <span style="font-size:22px;flex-shrink:0;">📢</span>
+      <div style="flex:1;">
+        <div style="font-family:'Poppins';font-weight:700;font-size:12.5px;">Ikuti Channel WhatsApp JajanDekat</div>
+        <div style="font-size:11px;opacity:.9;">Info promo, tips, & update terbaru langsung di WhatsApp-mu</div>
+      </div>
+      <span style="font-size:16px;flex-shrink:0;">›</span>
+    </a>
+    <div class="vendor-list" id="artikel-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div></div>`;
   const el = document.getElementById('artikel-list');
   try {
     const { data, error } = await sb.from('articles').select('id,title,slug,excerpt,cover_image,created_at').eq('status', 'published').order('created_at', { ascending: false });
