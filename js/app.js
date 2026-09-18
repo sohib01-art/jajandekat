@@ -1451,7 +1451,11 @@ window.__revealMyReviews = async function (vendorId) {
   if (!data || data.length === 0) { el.innerHTML = 'Belum ada ulasan masuk.'; return; }
   el.innerHTML = data.map(r => `
     <div style="padding:8px 0;border-bottom:1px solid var(--stroke);">
-      <div style="color:#F5A623;font-size:13px;">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="color:#F5A623;font-size:13px;">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+        ${r.status === 'pending_review' ? '<span style="font-size:9.5px;font-weight:700;color:#fff;background:#f87171;padding:2px 7px;border-radius:999px;">⚠️ Menunggu Anda balas</span>' : ''}
+        ${r.status === 'resolved' ? '<span style="font-size:9.5px;font-weight:700;color:var(--aktif);background:var(--aktif-dim);padding:2px 7px;border-radius:999px;">✓ Sudah ditindaklanjuti</span>' : ''}
+      </div>
       ${r.comment ? `<div style="font-size:12px;color:var(--text);margin-top:3px;">${r.comment}</div>` : ''}
       <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
     </div>
@@ -2180,10 +2184,28 @@ window.__setReviewRating = function (n) {
 
 window.__submitReview = async function (vendorId) {
   const comment = document.getElementById('review-comment').value.trim();
+  const rating = reviewModalRating;
   try {
-    await sb.rpc('submit_review', { p_vendor_id: vendorId, p_device_id: deviceId, p_rating: reviewModalRating, p_comment: comment || null });
+    const { data: reviewId, error } = await sb.rpc('submit_review', { p_vendor_id: vendorId, p_device_id: deviceId, p_rating: rating, p_comment: comment || null });
+    if (error) throw error;
+
+    if (rating < 3) {
+      // Rating rendah: teruskan otomatis sebagai pesan nasihat ke chat pedagang, dan kaitkan ulasan ke thread-nya
+      try {
+        const threadId = await getOrCreateChatThread(vendorId, deviceId);
+        const noticeText = `⚠️ Pembeli memberi rating ${rating}★${comment ? ': ' + comment : ' tanpa komentar.'}\nBalas pesan ini kalau sudah ditindaklanjuti, ya.`;
+        const { data: msgData } = await sb.from('chat_messages')
+          .insert({ thread_id: threadId, sender: 'buyer', message: noticeText })
+          .select('*').single();
+        await sb.from('chat_threads').update({ last_message_at: new Date().toISOString(), last_message_preview: noticeText.slice(0, 80) }).eq('id', threadId);
+        if (reviewId) await sb.from('reviews').update({ thread_id: threadId }).eq('id', reviewId);
+      } catch (e2) {
+        console.error('Gagal meneruskan rating rendah ke chat:', e2); // ulasan tetap tersimpan meski ini gagal
+      }
+    }
+
     document.getElementById('review-modal-overlay').remove();
-    showToast('Terima kasih atas ulasannya! ⭐');
+    showToast(rating < 3 ? 'Masukan Anda dikirim ke pedagang. Terima kasih! 🙏' : 'Terima kasih atas ulasannya! ⭐');
     vendors = (await fetchVendors()).map(normalizeExpiry);
     if (mode === 'pembeli') renderPembeli();
   } catch (e) {
