@@ -213,13 +213,17 @@ main{ flex:1; padding:0 18px; }
 }
 .vp-photo.inactive{ filter:grayscale(1) brightness(.72); }
 .vp-inactive-badge{
-  position:absolute; left:10px; bottom:10px; background:rgba(32,26,19,.72); color:#fff;
-  font-size:10.5px; font-weight:700; padding:5px 10px; border-radius:999px;
+  background:rgba(32,26,19,.72); color:#fff;
+  font-size:10.5px; font-weight:700; padding:5px 10px; border-radius:999px; white-space:nowrap;
 }
 .vp-badges-top{ position:absolute; top:10px; left:10px; display:flex; gap:6px; flex-wrap:wrap; max-width:70%; }
 .vp-badge-icon{
   width:26px; height:26px; object-fit:contain;
   filter:drop-shadow(0 3px 6px rgba(32,26,19,.35));
+}
+.vp-bottom-badges{
+  position:absolute; left:10px; bottom:10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  max-width:calc(100% - 70px); /* sisakan ruang buat tumpukan ikon di kanan */
 }
 .vp-float-icons{
   position:absolute; right:10px; bottom:10px; display:flex; flex-direction:column; gap:8px; z-index:2;
@@ -265,14 +269,15 @@ main{ flex:1; padding:0 18px; }
 .vp-card-compact .vp-float-btn{ width:32px; height:32px; }
 .vp-card-compact .vp-btn-icon{ width:17px; height:17px; }
 .vp-card-compact .vp-btn-emoji{ font-size:17px; }
-.vp-card-compact .vp-inactive-badge{ font-size:9px; padding:4px 8px; left:7px; bottom:7px; }
+.vp-card-compact .vp-inactive-badge{ font-size:9px; padding:4px 8px; }
+.vp-card-compact .vp-bottom-badges{ left:7px; bottom:7px; gap:4px; }
 
-/* --- Badge jarak (floating, pojok kanan atas foto) --- */
+/* --- Badge jarak (sekarang di kiri-bawah, sebelah badge status) --- */
 .vp-distance-badge{
-  position:absolute; top:10px; right:10px; background:rgba(32,26,19,.72); color:#fff;
-  font-size:10px; font-weight:700; padding:4px 9px; border-radius:999px; z-index:2;
+  background:rgba(32,26,19,.72); color:#fff;
+  font-size:10px; font-weight:700; padding:4px 9px; border-radius:999px; white-space:nowrap;
 }
-.vp-card-compact .vp-distance-badge{ top:7px; right:7px; font-size:9px; padding:3px 7px; }
+.vp-card-compact .vp-distance-badge{ font-size:9px; padding:3px 7px; }
 
 .toast{
   position:fixed; left:50%; top:14px; transform:translateX(-50%) translateY(-140%);
