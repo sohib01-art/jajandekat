@@ -116,42 +116,72 @@ function showToast(text) {
 }
 
 // ---------- PANDUAN PENGGUNAAN (popup, muncul otomatis di kunjungan pertama) ----------
+let guideActiveTab = mode;
+
+// Aksi navigasi nyata dari langkah panduan — tiap step yang punya "action" bisa ditekan
+// dan langsung membawa pengguna ke menu terkait, bukan cuma teks.
+function goToBottomView(view) {
+  bottomView = view;
+  document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === view);
+  });
+  if (mode !== 'pembeli') {
+    mode = 'pembeli';
+    btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
+  }
+  renderPembeli();
+}
+
+function goToPedagangDashboard() {
+  mode = 'pedagang';
+  btnPedagang.classList.add('active'); btnPembeli.classList.remove('active');
+  renderPedagang();
+}
+
 const GUIDE_STEPS = {
   pembeli: {
     title: '👤 Panduan untuk Pembeli',
     steps: [
-      { icon: '🗺️', text: 'Buka tab <b>Peta</b> untuk melihat pedagang keliling yang sedang jualan di sekitarmu, lengkap dengan jaraknya.' },
-      { icon: '🔍', text: 'Pakai tab <b>Cari</b> untuk menemukan pedagang tertentu berdasarkan nama atau kategori jualan.' },
-      { icon: '⭐', text: 'Tekan tombol follow pada kartu pedagang untuk mengikuti — kamu akan tahu kapan mereka mulai jualan lagi.' },
-      { icon: '💬', text: 'Tekan ikon chat di halaman pedagang untuk tanya-tanya langsung, atau hubungi lewat WhatsApp.' },
-      { icon: '⭐', text: 'Setelah membeli, beri ulasan bintang untuk membantu pembeli lain.' },
-      { icon: '📰', text: 'Cek tab <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.' },
+      { icon: '🗺️', text: 'Buka <b>Peta</b> untuk melihat pedagang keliling yang sedang jualan di sekitarmu, lengkap dengan jaraknya.', action: () => goToBottomView('peta') },
+      { icon: '🔍', text: 'Pakai <b>Cari</b> untuk menemukan pedagang tertentu berdasarkan nama atau kategori jualan.', action: () => goToBottomView('cari') },
+      { icon: '⭐', text: 'Di halaman <b>Status</b>, tekan tombol follow pada kartu pedagang untuk mengikuti — kamu akan tahu kapan mereka mulai jualan lagi.', action: () => goToBottomView('status') },
+      { icon: '💬', text: 'Buka profil pedagang dari halaman <b>Status</b> untuk chat langsung dalam app atau hubungi lewat WhatsApp.', action: () => goToBottomView('status') },
+      { icon: '🍽️', text: 'Tekan ikon 🍽️ di kartu pedagang untuk lihat menu/produk yang mereka jual, sebelum datang.', action: () => goToBottomView('status') },
+      { icon: '📰', text: 'Cek <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.', action: () => goToBottomView('artikel') },
     ],
   },
   pedagang: {
     title: '🛒 Panduan untuk Pedagang',
     steps: [
-      { icon: '📝', text: 'Daftar sebagai pedagang lewat tombol Pedagang, isi nama toko dan kategori jualan.' },
-      { icon: '📍', text: 'Tekan "Saya Jualan" dan aktifkan GPS supaya lokasimu otomatis muncul di peta pembeli.' },
-      { icon: '📦', text: 'Kelola daftar produk/menu kamu lewat menu Kelola Produk.' },
-      { icon: '✅', text: 'Ajukan verifikasi toko (unggah foto KTP) supaya tokomu tampil lebih terpercaya — biasanya diproses 1-2 hari kerja.' },
-      { icon: '🚀', text: 'Aktifkan Premium untuk tampil lebih menonjol, atau pasang Promosi Lokal untuk menarik lebih banyak pembeli.' },
-      { icon: '⏰', text: 'Atur pengingat jam buka lapak supaya kamu tidak lupa update status "Saya Jualan".' },
-      { icon: '🔗', text: 'Bagikan link referral ke pembeli/teman pedagang lain untuk dapat reward.' },
+      { icon: '📝', text: 'Daftar sebagai pedagang atau masuk ke akun lama lewat menu <b>Pedagang</b>.', action: () => goToPedagangDashboard() },
+      { icon: '🟢', text: 'Tekan <b>"Saya Jualan"</b> dan aktifkan GPS supaya lokasimu otomatis muncul di peta pembeli.', action: () => goToPedagangDashboard() },
+      { icon: '✏️', text: 'Ubah nama toko, mode jualan, kategori, atau nomor WhatsApp lewat <b>Edit Profil Toko</b>.', action: () => { if (myVendorId) { goToPedagangDashboard(); window.__openEditProfile(myVendorId); } else { goToPedagangDashboard(); } } },
+      { icon: '📦', text: 'Tambahkan menu/dagangan lewat <b>Kelola Produk</b> supaya pembeli bisa lihat sebelum datang.', action: () => { if (myVendorId) { goToPedagangDashboard(); window.__openProductManager(myVendorId); } else { goToPedagangDashboard(); } } },
+      { icon: '✅', text: 'Ajukan <b>Verifikasi Toko</b> (unggah foto KTP) supaya tokomu tampil dengan badge terpercaya.', action: () => goToPedagangDashboard() },
+      { icon: '⭐', text: 'Aktifkan <b>Premium</b> dari dashboard pedagang untuk tampil lebih menonjol.', action: () => goToPedagangDashboard() },
+      { icon: '🔥', text: 'Pasang <b>Promosi Lokal</b> harian untuk menyorot kartu tokomu ke posisi atas.', action: () => goToPedagangDashboard() },
+      { icon: '🔗', text: 'Bagikan <b>QR/link referral</b> di bagian atas dashboard untuk mengajak pembeli & pedagang baru.', action: () => goToPedagangDashboard() },
+      { icon: '❓', text: 'Ada pertanyaan lain? Cek <b>Bantuan & FAQ</b>.', action: () => window.__openFaqModal() },
     ],
   },
 };
 
-let guideActiveTab = mode;
-
 function guideStepsHtml(tabKey) {
-  return GUIDE_STEPS[tabKey].steps.map(s => `
-    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">
+  return GUIDE_STEPS[tabKey].steps.map((s, i) => `
+    <div onclick="window.__runGuideStepAction('${tabKey}',${i})" style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;${s.action ? 'cursor:pointer;' : ''}">
       <div style="font-size:18px;flex-shrink:0;">${s.icon}</div>
-      <div style="font-size:12.5px;line-height:1.55;color:var(--text-dim);">${s.text}</div>
+      <div style="flex:1;font-size:12.5px;line-height:1.55;color:var(--text-dim);">${s.text}</div>
+      ${s.action ? '<div style="flex-shrink:0;color:var(--brand);font-size:13px;margin-top:1px;">→</div>' : ''}
     </div>
   `).join('');
 }
+
+window.__runGuideStepAction = function (tabKey, stepIndex) {
+  const step = GUIDE_STEPS[tabKey]?.steps?.[stepIndex];
+  if (!step || !step.action) return;
+  document.getElementById('guide-modal-overlay')?.remove();
+  step.action();
+};
 
 window.__switchGuideTab = function (tabKey) {
   guideActiveTab = tabKey;
@@ -263,6 +293,304 @@ window.__toggleFaqItem = function (id) {
   faqOpenId = isOpen ? null : id;
 };
 
+// ---------- KATALOG PRODUK (PUBLIK, dilihat pembeli) ----------
+window.__openProductCatalog = async function (vendorId, vendorName) {
+  document.getElementById('product-catalog-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'product-catalog-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:230;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:80vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:14px;">🍽️ Menu ${escapeHtml(vendorName)}</div>
+      <div id="product-catalog-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat menu...</div></div>
+      <button onclick="document.getElementById('product-catalog-overlay').remove()" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:13px;">Tutup</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const el = document.getElementById('product-catalog-list');
+  try {
+    const { data, error } = await sb.from('products').select('id,name,price,description,photo_url').eq('vendor_id', vendorId).eq('active', true).order('sort_order', { ascending: true });
+    if (error) throw error;
+    if (!el) return;
+    if (!data || data.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-faint);font-size:12.5px;">Pedagang ini belum menambahkan menu.</div>';
+      return;
+    }
+    el.innerHTML = data.map(p => `
+      <div style="display:flex;gap:10px;border:1px solid var(--stroke);border-radius:12px;padding:10px;margin-bottom:8px;align-items:center;">
+        ${p.photo_url ? `<img src="${p.photo_url}" style="width:54px;height:54px;border-radius:10px;object-fit:cover;flex-shrink:0;" />` : `<div style="width:54px;height:54px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🍽️</div>`}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:12.5px;">${escapeHtml(p.name)}</div>
+          ${p.price != null ? `<div style="font-size:12px;color:var(--brand);font-weight:700;margin-top:2px;">Rp${Number(p.price).toLocaleString('id-ID')}</div>` : ''}
+          ${p.description ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">${escapeHtml(p.description)}</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    if (el) el.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat menu: ${e.message}</div>`;
+  }
+};
+
+// ---------- KELOLA PRODUK (PEDAGANG) ----------
+let myProductsData = [];
+let pendingProductPhotoFile = null;
+let pendingProductPhotoPreview = null;
+let editingProductId = null;
+
+window.__openProductManager = async function (vendorId) {
+  document.getElementById('product-manager-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'product-manager-overlay';
+  overlay.dataset.vendorId = vendorId;
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:230;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:82vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-family:'Poppins';font-weight:700;font-size:15px;">📦 Kelola Produk</div>
+        <button onclick="window.__openProductForm(null)" style="padding:8px 12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:12px;">+ Tambah</button>
+      </div>
+      <div id="product-manager-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat produk...</div></div>
+      <button onclick="document.getElementById('product-manager-overlay').remove()" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;font-size:13px;">Tutup</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  await loadMyProducts(vendorId);
+};
+
+async function loadMyProducts(vendorId) {
+  const el = document.getElementById('product-manager-list');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('products').select('*').eq('vendor_id', vendorId).order('sort_order', { ascending: true });
+    if (error) throw error;
+    myProductsData = data || [];
+    if (!el) return;
+    if (myProductsData.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada produk. Tekan "+ Tambah" untuk mulai.</div>';
+      return;
+    }
+    el.innerHTML = myProductsData.map(p => `
+      <div style="display:flex;gap:10px;border:1px solid var(--stroke);border-radius:12px;padding:10px;margin-bottom:8px;align-items:center;${!p.active ? 'opacity:.5;' : ''}">
+        ${p.photo_url ? `<img src="${p.photo_url}" style="width:50px;height:50px;border-radius:10px;object-fit:cover;flex-shrink:0;" />` : `<div style="width:50px;height:50px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🍽️</div>`}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:12.5px;">${escapeHtml(p.name)}${!p.active ? ' <span style="color:var(--text-faint);font-weight:400;">(nonaktif)</span>' : ''}</div>
+          ${p.price != null ? `<div style="font-size:11.5px;color:var(--brand);font-weight:700;">Rp${Number(p.price).toLocaleString('id-ID')}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="icon-btn" title="Edit" onclick="window.__openProductForm('${p.id}')">✏️</button>
+          <button class="icon-btn" title="${p.active ? 'Sembunyikan' : 'Tampilkan'}" onclick="window.__toggleProductActive('${p.id}',${!p.active})">${p.active ? '🙈' : '👁️'}</button>
+          <button class="icon-btn danger" title="Hapus" onclick="window.__deleteProduct('${p.id}','${p.name.replace(/'/g, "\\'")}')">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    if (el) el.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat produk: ${e.message}</div>`;
+  }
+}
+
+window.__openProductForm = function (productId) {
+  const vendorId = document.getElementById('product-manager-overlay')?.dataset.vendorId;
+  const existing = productId ? myProductsData.find(p => p.id === productId) : null;
+  editingProductId = existing ? existing.id : null;
+  pendingProductPhotoFile = null;
+  pendingProductPhotoPreview = existing?.photo_url || null;
+
+  document.getElementById('product-form-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'product-form-overlay';
+  overlay.dataset.vendorId = vendorId;
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:240;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:88vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:12px;">${existing ? '✏️ Edit Produk' : '➕ Tambah Produk'}</div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Nama produk</label>
+      <input id="prod-name" type="text" value="${existing ? escapeHtml(existing.name) : ''}" placeholder="Misal: Bakso Urat Jumbo" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Harga (Rp, opsional)</label>
+      <input id="prod-price" type="number" inputmode="numeric" value="${existing && existing.price != null ? existing.price : ''}" placeholder="Misal: 15000" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Deskripsi (opsional)</label>
+      <textarea id="prod-desc" rows="2" placeholder="Deskripsi singkat..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;margin:4px 0 10px;">${existing ? escapeHtml(existing.description || '') : ''}</textarea>
+
+      <label style="font-size:11px;color:var(--text-faint);">Foto produk (opsional)</label>
+      <input type="file" id="prod-photo-input" accept="image/*" style="display:none" onchange="window.__onProductPhotoSelected(event)" />
+      <div id="prod-photo-zone" onclick="document.getElementById('prod-photo-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        ${pendingProductPhotoPreview ? `<img src="${pendingProductPhotoPreview}" style="width:100%;max-width:160px;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>` : '📷 Tambah foto produk'}
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;margin-bottom:14px;cursor:pointer;">
+        <input id="prod-active" type="checkbox" ${!existing || existing.active ? 'checked' : ''} style="width:17px;height:17px;" />
+        Tampilkan ke pembeli
+      </label>
+
+      <div id="prod-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('product-form-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__saveProduct()" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">${existing ? 'Simpan Perubahan' : 'Simpan Produk'}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__onProductPhotoSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingProductPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingProductPhotoPreview = e.target.result;
+    const zone = document.getElementById('prod-photo-zone');
+    if (zone) zone.innerHTML = `<img src="${pendingProductPhotoPreview}" style="width:100%;max-width:160px;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.__saveProduct = async function () {
+  const errEl = document.getElementById('prod-error');
+  const vendorId = document.getElementById('product-form-overlay')?.dataset.vendorId;
+  const name = document.getElementById('prod-name').value.trim();
+  const priceRaw = document.getElementById('prod-price').value.trim();
+  const description = document.getElementById('prod-desc').value.trim();
+  const active = document.getElementById('prod-active').checked;
+
+  if (!name) { errEl.textContent = 'Nama produk wajib diisi.'; return; }
+  if (!vendorId) { errEl.textContent = 'Sesi toko tidak ditemukan, coba buka ulang.'; return; }
+
+  errEl.textContent = 'Menyimpan...';
+  try {
+    let photoUrl = pendingProductPhotoPreview && pendingProductPhotoFile ? null : (editingProductId ? myProductsData.find(p => p.id === editingProductId)?.photo_url : null);
+    if (pendingProductPhotoFile) {
+      photoUrl = await uploadProductImage(vendorId, pendingProductPhotoFile);
+    }
+    const payload = {
+      vendor_id: vendorId, name, price: priceRaw ? Number(priceRaw) : null,
+      description: description || null, photo_url: photoUrl || null, active,
+      updated_at: new Date().toISOString(),
+    };
+
+    let error;
+    if (editingProductId) {
+      ({ error } = await sb.from('products').update(payload).eq('id', editingProductId));
+    } else {
+      ({ error } = await sb.from('products').insert(payload));
+    }
+    if (error) throw error;
+
+    document.getElementById('product-form-overlay').remove();
+    pendingProductPhotoFile = null; pendingProductPhotoPreview = null; editingProductId = null;
+    showToast('Produk berhasil disimpan! 📦');
+    await loadMyProducts(vendorId);
+  } catch (e) {
+    errEl.textContent = 'Gagal menyimpan: ' + e.message;
+  }
+};
+
+window.__toggleProductActive = async function (id, newState) {
+  const vendorId = document.getElementById('product-manager-overlay')?.dataset.vendorId;
+  try {
+    await sb.from('products').update({ active: newState, updated_at: new Date().toISOString() }).eq('id', id);
+    if (vendorId) await loadMyProducts(vendorId);
+  } catch (e) {
+    alert('Gagal mengubah status: ' + e.message);
+  }
+};
+
+window.__deleteProduct = async function (id, name) {
+  if (!confirm(`Hapus produk "${name}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+  const vendorId = document.getElementById('product-manager-overlay')?.dataset.vendorId;
+  try {
+    await sb.from('products').delete().eq('id', id);
+    showToast('Produk dihapus.');
+    if (vendorId) await loadMyProducts(vendorId);
+  } catch (e) {
+    alert('Gagal menghapus: ' + e.message);
+  }
+};
+
+// ---------- VERIFIKASI TOKO (upload KTP, ditinjau admin) ----------
+window.__openVerificationForm = async function (vendorId) {
+  document.getElementById('verify-form-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'verify-form-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:230;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:85vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">✅ Ajukan Verifikasi Toko</div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:14px;">Verifikasi ditinjau manual oleh admin, biasanya selesai 1-2 hari kerja setelah diajukan.</div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Nama usaha resmi (opsional, kalau beda dari nama toko)</label>
+      <input id="verify-business-name" type="text" placeholder="Nama usaha resmi..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Nomor NIB (opsional)</label>
+      <input id="verify-nib" type="text" placeholder="Nomor Induk Berusaha..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Foto KTP (wajib)</label>
+      <input type="file" id="verify-ktp-input" accept="image/*" capture="environment" style="display:none" onchange="window.__onKtpPhotoSelected(event)" />
+      <div id="verify-ktp-zone" onclick="document.getElementById('verify-ktp-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        📷 Ambil/unggah foto KTP
+      </div>
+      <div style="font-size:10px;color:var(--text-faint);margin:-6px 0 10px;">Foto KTP hanya dilihat admin untuk verifikasi, tidak ditampilkan ke publik.</div>
+
+      <div id="verify-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('verify-form-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__submitVerification('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Ajukan Verifikasi</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+let pendingKtpFile = null;
+
+window.__onKtpPhotoSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingKtpFile = file;
+  const zone = document.getElementById('verify-ktp-zone');
+  if (zone) zone.innerHTML = `<span style="color:var(--brand);">✅ Foto KTP terpilih — tap untuk ganti</span>`;
+};
+
+window.__submitVerification = async function (vendorId) {
+  const errEl = document.getElementById('verify-error');
+  const businessName = document.getElementById('verify-business-name').value.trim();
+  const nib = document.getElementById('verify-nib').value.trim();
+
+  if (!pendingKtpFile) { errEl.textContent = 'Foto KTP wajib diunggah.'; return; }
+
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return;
+    const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: enteredPin.trim() });
+    if (!ok) { errEl.textContent = 'PIN salah.'; return; }
+    myVendorPin = enteredPin.trim();
+  }
+
+  errEl.textContent = 'Mengunggah & mengirim pengajuan...';
+  try {
+    const ktpUrl = await uploadKtpImage(vendorId, pendingKtpFile);
+    const { error } = await sb.rpc('submit_vendor_verification', {
+      p_vendor_id: vendorId, p_pin: myVendorPin || '',
+      p_business_name: businessName, p_business_nib: nib, p_ktp_photo_url: ktpUrl,
+    });
+    if (error) throw error;
+
+    const v = vendors.find(v => v.id === vendorId);
+    if (v) v.verification_status = 'pending';
+    document.getElementById('verify-form-overlay').remove();
+    pendingKtpFile = null;
+    showToast('Pengajuan verifikasi terkirim! ✅');
+    renderPedagang();
+  } catch (e) {
+    errEl.textContent = 'Gagal mengirim: ' + e.message;
+  }
+};
+
 // ---------- SETUP SCREEN (kalau config.js belum diisi) ----------
 function renderSetupNeeded() {
   main.innerHTML = `
@@ -287,7 +615,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,rating_avg,rating_count').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,rating_avg,rating_count,verification_status').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -379,6 +707,29 @@ async function uploadArticleCoverImage(file) {
   // Reuse bucket 'vendor-photos' dengan folder terpisah — hindari bikin bucket baru di Supabase.
   const blob = await compressImage(file, 1000, 0.75, false);
   const path = `artikel-admin/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function uploadProductImage(vendorId, file) {
+  const blob = await compressImage(file, 800, 0.75, true);
+  const path = `products/${vendorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function uploadKtpImage(vendorId, file) {
+  // KTP tidak perlu dicrop persegi & kualitas cukup ringan — cukup jelas terbaca admin.
+  const blob = await compressImage(file, 1200, 0.75, false);
+  const path = `verifikasi/${vendorId}/${Date.now()}-ktp.jpg`;
   const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
     contentType: 'image/jpeg', upsert: true
   });
@@ -863,10 +1214,12 @@ function renderVendorCardHtml(v, opts = {}) {
         <div class="vp-badges-top">
           ${v.is_premium ? '<img class="vp-badge-icon" src="icons/badge_premium.png" alt="Premium" title="Premium">' : ''}
           ${isPromoActive(v) ? '<img class="vp-badge-icon" src="icons/badge_promo.png" alt="Promo" title="Promo">' : ''}
+          ${v.verification_status === 'verified' ? '<span title="Toko Terverifikasi" style="background:#22c55e;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✅</span>' : ''}
         </div>
         ${distanceLabel ? `<div class="vp-distance-badge">📍 ${distanceLabel}</div>` : ''}
         <div class="vp-float-icons" onclick="event.stopPropagation();">
           ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})"><img class="vp-btn-icon" src="icons/icon_map.png" alt="Peta"></button>` : ''}
+          <button class="vp-float-btn" title="Lihat menu" onclick="window.__openProductCatalog('${v.id}','${v.name.replace(/'/g, "\\'")}')">🍽️</button>
           <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"><img class="vp-btn-icon" src="icons/icon_chat_app.png" alt="Chat di app"></button>
           ${v.show_whatsapp !== false && v.whatsapp ? `
             <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
@@ -1477,6 +1830,39 @@ function renderPedagang() {
         <button onclick="window.__requestPremium('${v.id}')"
            class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;border:none;">
           💬 Hubungi Admin via WhatsApp
+        </button>
+      `}
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📦</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kelola Produk</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Tambahkan menu/dagangan Anda supaya pembeli bisa lihat sebelum datang</div>
+        </div>
+      </div>
+      <button onclick="window.__openProductManager('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;border:none;">
+        📦 Kelola Produk Saya
+      </button>
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">✅</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Verifikasi Toko</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge ✅ dan lebih dipercaya pembeli</div>
+        </div>
+      </div>
+      ${v.verification_status === 'verified' ? `
+        <div style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:12px;padding:10px 12px;font-size:12px;color:#166534;font-weight:700;">✅ Toko Anda sudah terverifikasi</div>
+      ` : v.verification_status === 'pending' ? `
+        <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;font-size:12px;color:#8A6D00;">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
+      ` : `
+        ${v.verification_status === 'rejected' ? `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:12px;padding:10px 12px;font-size:11.5px;color:#991B1B;margin-bottom:10px;">Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.</div>` : ''}
+        <button onclick="window.__openVerificationForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
+          ✅ Ajukan Verifikasi Toko
         </button>
       `}
     </div>
