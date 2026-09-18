@@ -615,7 +615,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,rating_avg,rating_count,verification_status').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,rating_avg,rating_count,verification_status').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -813,7 +813,7 @@ function renderPembeli() {
   const catList = ['semua', ...Array.from(new Set(vendors.flatMap(v => v.categories || []))).sort()];
   const catRowHtml = catList.map(c => `
     <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c.replace(/'/g, "\\'")}')">
-      <div class="cat-circle">${c === 'semua' ? '🍽️' : `<img src="${categoryIconFile(c) || ''}" alt="${c}" />`}</div>
+      <div class="cat-circle">${c === 'semua' ? '🍽️' : categoryIconImgTag(c, CATEGORY_OPTIONS.find(x => x.label === c)?.icon || c, '')}</div>
       <div class="cat-label">${c === 'semua' ? 'Semua' : c}</div>
     </button>
   `).join('');
@@ -1335,7 +1335,7 @@ function renderCariView() {
   function runSearch() {
     const q = input.value.trim().toLowerCase();
     const filtered = !q ? vendors : vendors.filter(v =>
-      v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q))
+      v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))
     );
     results.innerHTML = renderVendorListHtml(filtered);
   }
@@ -1413,6 +1413,8 @@ let pickWhatsappValue = '';
 let announcements = [];
 let regPinValue = '';
 let regReminderValue = '';
+let regTagsValue = '';
+let knownTagSuggestions = [];
 let isRegistering = false;
 
 window.__updateRegField = function (field, value) {
@@ -1420,7 +1422,35 @@ window.__updateRegField = function (field, value) {
   if (field === 'whatsapp') regWhatsappValue = value;
   if (field === 'pin') regPinValue = value;
   if (field === 'reminder') regReminderValue = value;
+  if (field === 'tags') regTagsValue = value;
 };
+
+async function loadKnownTagSuggestions() {
+  try {
+    const { data, error } = await sb.from('tag_suggestions').select('tag_display').order('count', { ascending: false }).limit(60);
+    if (error) throw error;
+    knownTagSuggestions = (data || []).map(r => r.tag_display);
+  } catch (e) { /* diamkan, autocomplete opsional */ }
+}
+
+// Simpan tag baru ke tabel tag_suggestions (dedupe by lowercase, tambah count kalau sudah ada)
+async function logTagSuggestions(rawTagsString) {
+  const tags = (rawTagsString || '').split(',').map(t => t.trim()).filter(Boolean);
+  for (const tag of tags) {
+    const key = tag.toLowerCase();
+    try {
+      const { data: existing } = await sb.from('tag_suggestions').select('id,count').eq('tag_key', key).maybeSingle();
+      if (existing) {
+        await sb.from('tag_suggestions').update({ count: existing.count + 1, last_seen: new Date().toISOString() }).eq('id', existing.id);
+      } else {
+        await sb.from('tag_suggestions').insert({ tag_key: key, tag_display: tag, count: 1 });
+      }
+    } catch (e) { /* jangan blokir alur pendaftaran/edit kalau ini gagal */ }
+  }
+}
+function parseTagsInput(rawTagsString) {
+  return (rawTagsString || '').split(',').map(t => t.trim()).filter(Boolean);
+}
 const VENDOR_MODE_OPTIONS = [
   { label: 'Warung/Kios Tetap', icon: 'warung' },
   { label: 'Jualan dari Rumah', icon: 'rumahan' },
@@ -1438,6 +1468,7 @@ const CATEGORY_OPTIONS = [
   { label: 'Siomay', icon: 'siomay' },
   { label: 'Sate', icon: 'sate' },
   { label: 'Gorengan', icon: 'gorengan' },
+  { label: 'Kebab', icon: 'kebab' },
   { label: 'Nasi', icon: 'nasi' },
   { label: 'Jajanan', icon: 'jajanan' },
   { label: 'Minuman', icon: 'minuman' },
@@ -1495,6 +1526,14 @@ function categoryIconFile(label) {
   const found = CATEGORY_OPTIONS.find(c => c.label === label);
   return found ? `icons/${found.icon}.png` : null;
 }
+const CATEGORY_EMOJI_FALLBACK = { kebab: '🌯' };
+function categoryIconImgTag(label, iconKey, cls) {
+  const fallback = CATEGORY_EMOJI_FALLBACK[iconKey];
+  const onerr = fallback
+    ? `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${fallback}',style:'font-size:22px;'}))`
+    : '';
+  return `<img class="${cls}" src="icons/${iconKey}.png" alt="${label}" onerror="${onerr}" />`;
+}
 let selectedCategories = [];
 
 window.__toggleCategory = function (c) {
@@ -1531,7 +1570,7 @@ function renderEditProfile(vendorId) {
 
   const catHtml = CATEGORY_OPTIONS.map(c => `
     <button type="button" class="cat-picker-item ${editCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__editToggleCategory('${c.label.replace(/'/g, "\\'")}')">
-      <div class="cat-picker-icon-wrap"><img src="icons/${c.icon}.png" alt="${c.label}" /></div>
+      <div class="cat-picker-icon-wrap">${categoryIconImgTag(c.label, c.icon, '')}</div>
       <span>${c.label}</span>
     </button>
   `).join('');
@@ -1562,6 +1601,10 @@ function renderEditProfile(vendorId) {
           </div>
         ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih</div>`}
         <div class="cat-picker-grid">${catHtml}</div>
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:8px;">Jualan lain yang belum ada di daftar atas? Tulis di sini (pisahkan koma)</div>
+        <input id="edit-tags" type="text" list="tag-suggestions-list" value="${(v.custom_tags || []).join(', ').replace(/"/g, '&quot;')}" placeholder="misal: rujak serut, es duren" />
+        <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
 
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
         <input id="edit-reminder" type="time" value="${v.reminder_time ? v.reminder_time.slice(0, 5) : ''}" />
@@ -1622,19 +1665,21 @@ window.__saveEditProfile = async function (vendorId) {
   try {
     const reminderTime = document.getElementById('edit-reminder').value.trim();
     const showWhatsapp = document.getElementById('edit-show-whatsapp').checked;
+    const customTags = parseTagsInput(document.getElementById('edit-tags')?.value);
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
       p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
     });
     if (error) throw error;
 
-    // Kolom reminder_time & show_whatsapp diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
-    await sb.from('vendors').update({ reminder_time: reminderTime || null, show_whatsapp: showWhatsapp }).eq('id', vendorId);
+    // Kolom reminder_time, show_whatsapp & custom_tags diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
+    await sb.from('vendors').update({ reminder_time: reminderTime || null, show_whatsapp: showWhatsapp, custom_tags: customTags }).eq('id', vendorId);
+    if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur simpan
 
     const v = vendors.find(v => v.id === vendorId);
     v.name = name; v.categories = editCategories; v.category = editCategories[0] || null;
     v.mode_icon = editModeIcon; v.whatsapp = whatsapp; v.reminder_time = reminderTime || null;
-    v.show_whatsapp = showWhatsapp;
+    v.show_whatsapp = showWhatsapp; v.custom_tags = customTags;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -1678,11 +1723,14 @@ function renderPedagang() {
           <div class="cat-picker-grid">
             ${CATEGORY_OPTIONS.map(c => `
               <button type="button" class="cat-picker-item ${selectedCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__toggleCategory('${c.label.replace(/'/g, "\\'")}')">
-                <div class="cat-picker-icon-wrap"><img src="icons/${c.icon}.png" alt="${c.label}" /></div>
+                <div class="cat-picker-icon-wrap">${categoryIconImgTag(c.label, c.icon, '')}</div>
                 <span>${c.label}</span>
               </button>
             `).join('')}
           </div>
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:8px;">Jualan lain yang belum ada di daftar atas? Tulis di sini (pisahkan koma)</div>
+          <input id="reg-tags" type="text" list="tag-suggestions-list" value="${regTagsValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('tags', this.value)" placeholder="misal: rujak serut, es duren" />
+          <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Mode jualan Anda (pilih 1)</div>
           <div class="cat-picker-grid">
             ${VENDOR_MODE_OPTIONS.map(m => `
@@ -2442,6 +2490,7 @@ window.__registerVendor = async function () {
   const whatsapp = normalizeWhatsapp((document.getElementById('reg-whatsapp')?.value || regWhatsappValue).trim());
   const pin = (document.getElementById('reg-pin')?.value || regPinValue).trim();
   const reminderTime = (document.getElementById('reg-reminder')?.value || regReminderValue).trim();
+  const customTags = parseTagsInput(document.getElementById('reg-tags')?.value ?? regTagsValue);
   const errEl = document.getElementById('reg-error');
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
@@ -2483,9 +2532,11 @@ window.__registerVendor = async function () {
 
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at')
+      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags })
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags')
       .single();
+
+    if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur pendaftaran
 
     if (error) {
       const friendly = error.message.includes('vendors_whatsapp_unique')
@@ -2502,7 +2553,7 @@ window.__registerVendor = async function () {
     selectedEmoji = '🍜';
     selectedModeIcon = null;
     selectedCategories = [];
-    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = '';
+    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = '';
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
@@ -2872,6 +2923,7 @@ async function renderAdminDashboard() {
       <button class="admin-tab" data-tab="articles" onclick="window.__adminSwitchTab('articles')">📝 Artikel</button>
       <button class="admin-tab" data-tab="requests" onclick="window.__adminSwitchTab('requests')">🔔 Permintaan</button>
       <button class="admin-tab" data-tab="reports" onclick="window.__adminSwitchTab('reports')">🚩 Laporan</button>
+      <button class="admin-tab" data-tab="tags" onclick="window.__adminSwitchTab('tags')">🏷️ Ikon</button>
       <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
     </div>
 
@@ -2900,6 +2952,11 @@ async function renderAdminDashboard() {
 
     <div class="admin-panel" data-panel="reports" style="display:none;">
       <div id="admin-reports" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat laporan...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="tags" style="display:none;">
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Kata kunci jualan yang diketik pedagang sendiri (belum ada kategorinya). Makin sering dipakai, makin layak dibuatkan ikon resmi.</div>
+      <div id="admin-tags" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
     </div>
 
     <div class="admin-panel" data-panel="announcements" style="display:none;">
@@ -3050,6 +3107,7 @@ async function renderAdminDashboard() {
   loadAdminRequests();
   loadAdminAnnouncements();
   loadAdminArticles();
+  loadAdminTagSuggestions();
 
   adminVendorData = data;
   listEl.innerHTML = renderAdminVendorList(adminVendorData);
@@ -3529,6 +3587,38 @@ async function loadAdminReports() {
   }
 }
 
+async function loadAdminTagSuggestions() {
+  const el = document.getElementById('admin-tags');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.from('tag_suggestions').select('*').order('count', { ascending: false }).order('last_seen', { ascending: false });
+    if (error) throw error;
+    const rows = data || [];
+    if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada tag baru yang diketik pedagang. 👍</div>'; return; }
+    el.innerHTML = rows.map(t => `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${t.reviewed ? 'opacity:.55;' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:700;font-size:13px;">${escapeHtml(t.tag_display)}</span>
+          <span style="font-size:10px;padding:3px 9px;border-radius:999px;background:var(--brand-dim);color:var(--brand);font-weight:700;">${t.count}× dipakai</span>
+        </div>
+        <div style="font-size:9.5px;color:var(--text-faint);">Pertama: ${new Date(t.first_seen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} · Terakhir: ${new Date(t.last_seen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+        <button class="follow-btn" onclick="window.__toggleTagReviewed('${t.id}', ${!t.reviewed})">${t.reviewed ? '↩️ Tandai Belum Dibuat' : '✅ Tandai Ikon Sudah Dibuat'}</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat tag: ${e.message}</span>`;
+  }
+}
+
+window.__toggleTagReviewed = async function (id, reviewed) {
+  try {
+    await sb.from('tag_suggestions').update({ reviewed }).eq('id', id);
+    loadAdminTagSuggestions();
+  } catch (e) {
+    alert('Gagal update status: ' + e.message);
+  }
+};
+
 window.__updateReportStatus = async function (reportId, status) {
   try {
     await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'update_report_status', report_id: reportId, status } });
@@ -3630,6 +3720,7 @@ async function init() {
     const followList = await fetchFollows();
     followedIds = new Set(followList);
     announcements = await fetchAnnouncements();
+    loadKnownTagSuggestions(); // tidak perlu ditunggu, isi belakangan pas render form pendaftaran
     subscribeRealtime();
     tryLocateBuyer();
 
