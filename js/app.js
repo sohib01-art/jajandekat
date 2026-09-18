@@ -1223,7 +1223,7 @@ function renderVendorCardHtml(v, opts = {}) {
         <div class="vp-badges-top">
           ${v.is_premium ? '<img class="vp-badge-icon" src="icons/badge_premium.png" alt="Premium" title="Premium">' : ''}
           ${isPromoActive(v) ? '<img class="vp-badge-icon" src="icons/badge_promo.png" alt="Promo" title="Promo">' : ''}
-          ${v.verification_status === 'verified' ? '<span title="Toko Terverifikasi" style="background:#22c55e;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✅</span>' : ''}
+          ${v.verification_status === 'verified' ? '<span title="Toko Terverifikasi" style="background:var(--navy);color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✓</span>' : ''}
         </div>
         ${distanceLabel ? `<div class="vp-distance-badge">📍 ${distanceLabel}</div>` : ''}
         <div class="vp-float-icons" onclick="event.stopPropagation();">
@@ -1873,8 +1873,29 @@ function renderPedagang() {
     <div class="vendor-hero">
       <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
       <div class="vendor-hero-name">${v.name}</div>
-      <div class="vendor-hero-status ${v.active ? 'live' : ''} mono">
-        ${v.active ? '🟢 SEDANG JUALAN · sampai ' + untilStr : '🔴 Belum jualan hari ini'}
+      <div class="status-banner ${v.active ? 'active' : 'inactive'}">
+        <div>
+          <div class="status-banner-title">${v.active ? 'Sedang Jualan' : 'Belum Jualan Hari Ini'}</div>
+          <div class="status-banner-sub">${v.active ? 'Lokasi & status kamu kelihatan sama pembeli · tutup otomatis jam ' + untilStr : 'Tekan tombol di bawah buat mulai jualan sekarang'}</div>
+        </div>
+        <div class="status-banner-icon">
+          ${v.active ? `
+            <svg width="52" height="52" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="10" y="24" width="34" height="20" rx="3" stroke="white" stroke-width="2.5"/>
+              <path d="M10 30h34" stroke="white" stroke-width="2"/>
+              <circle cx="18" cy="48" r="4" stroke="white" stroke-width="2.5"/>
+              <circle cx="38" cy="48" r="4" stroke="white" stroke-width="2.5"/>
+              <path d="M44 28h6l4 8v8h-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 18h6l3 6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          ` : `
+            <svg width="52" height="52" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M40 12c-11 0-20 9-20 20s9 20 20 20c6 0 11.4-2.7 15-7-3 1.3-6.3 2-9.8 2-11 0-20-9-20-20 0-8.2 5-15.3 12-18.3-2.3-.5-4.7-.7-7.2-.7z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+              <circle cx="46" cy="20" r="1.6" fill="white"/>
+              <circle cx="50" cy="28" r="1.2" fill="white"/>
+            </svg>
+          `}
+        </div>
       </div>
 
       ${!v.active ? `
@@ -2014,14 +2035,14 @@ function renderPedagang() {
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">✅</span>
+        <span style="font-size:20px;color:var(--navy);">✓</span>
         <div>
           <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Verifikasi Toko</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge ✅ dan lebih dipercaya pembeli</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge navy dan lebih dipercaya pembeli</div>
         </div>
       </div>
       ${v.verification_status === 'verified' ? `
-        <div style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:12px;padding:10px 12px;font-size:12px;color:#166534;font-weight:700;">✅ Toko Anda sudah terverifikasi</div>
+        <div style="background:var(--navy-dim);border:1px solid #B9C4DA;border-radius:12px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:700;">✓ Toko Anda sudah terverifikasi</div>
       ` : v.verification_status === 'pending' ? `
         <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;font-size:12px;color:#8A6D00;">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
       ` : `
