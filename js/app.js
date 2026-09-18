@@ -139,7 +139,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,rating_avg,rating_count').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -699,6 +699,7 @@ function renderVendorCardHtml(v, opts = {}) {
       </div>
       <div class="vp-body">
         <div class="vp-name">${v.name}</div>
+        ${v.rating_count > 0 ? `<div class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count})</span></div>` : ''}
         <div class="vp-meta">
           <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
           <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
@@ -2107,7 +2108,7 @@ window.__openReviewModal = function (vendorId, vendorName) {
   overlay.innerHTML = `
     <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">
       <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">Beri Ulasan</div>
-      <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">${vendorName} · Ulasan Anda privat, hanya dilihat pedagang & admin untuk perbaikan kualitas — tidak ditampilkan ke publik.</div>
+      <div id="review-visibility-note" style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">${vendorName} · Rating 3★ ke atas akan tampil publik di kartu pedagang. Rating di bawah 3★ tidak langsung publik — dikirim dulu sebagai masukan ke pedagang.</div>
       <div id="star-picker" style="display:flex;gap:6px;justify-content:center;font-size:32px;margin-bottom:14px;"></div>
       <textarea id="review-comment" placeholder="Komentar (opsional)..." style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical;"></textarea>
       <div style="display:flex;gap:8px;margin-top:12px;">
@@ -2169,6 +2170,12 @@ function renderStarPicker() {
 window.__setReviewRating = function (n) {
   reviewModalRating = n;
   renderStarPicker();
+  const note = document.getElementById('review-visibility-note');
+  if (note) {
+    note.innerHTML = n >= 3
+      ? `Rating ${n}★ akan tampil publik di kartu pedagang.`
+      : `Rating ${n}★ tidak langsung publik — dikirim dulu sebagai masukan ke pedagang lewat chat.`;
+  }
 };
 
 window.__submitReview = async function (vendorId) {
