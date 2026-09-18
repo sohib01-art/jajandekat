@@ -224,7 +224,7 @@ function ensureGuideHelpButton() {
   btn.textContent = '❓';
   btn.title = 'Panduan penggunaan';
   btn.onclick = () => window.__openGuideModal(mode);
-  btn.style.cssText = 'position:fixed;right:16px;bottom:86px;width:44px;height:44px;border-radius:50%;border:none;background:var(--brand);color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:150;cursor:pointer;';
+  btn.style.cssText = 'position:fixed;left:16px;bottom:86px;width:44px;height:44px;border-radius:50%;border:none;background:var(--brand);color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:40;cursor:pointer;';
   document.body.appendChild(btn);
 }
 
