@@ -226,6 +226,7 @@ main{ flex:1; padding:0 18px; }
 .vp-float-btn.wa{ background:#25D366; color:#fff; }
 .vp-float-btn.following{ background:#fff; }
 .vp-btn-icon{ width:18px; height:18px; object-fit:contain; display:block; }
+.vp-btn-emoji{ font-size:18px; line-height:1; display:block; }
 .vp-body{ padding:12px 14px 14px; }
 .vp-name{ font-family:'Poppins'; font-weight:700; font-size:14px; color:var(--text); }
 .vp-rating{ font-size:11.5px; font-weight:700; color:#B8860B; margin-top:2px; }
@@ -256,6 +257,7 @@ main{ flex:1; padding:0 18px; }
 .vp-card-compact .vp-float-icons{ gap:6px; right:7px; bottom:7px; }
 .vp-card-compact .vp-float-btn{ width:28px; height:28px; }
 .vp-card-compact .vp-btn-icon{ width:14px; height:14px; }
+.vp-card-compact .vp-btn-emoji{ font-size:14px; }
 .vp-card-compact .vp-inactive-badge{ font-size:9px; padding:4px 8px; left:7px; bottom:7px; }
 
 /* --- Badge jarak (floating, pojok kanan atas foto) --- */
