@@ -115,6 +115,154 @@ function showToast(text) {
   setTimeout(() => t.classList.remove('show'), 3200);
 }
 
+// ---------- PANDUAN PENGGUNAAN (popup, muncul otomatis di kunjungan pertama) ----------
+const GUIDE_STEPS = {
+  pembeli: {
+    title: '👤 Panduan untuk Pembeli',
+    steps: [
+      { icon: '🗺️', text: 'Buka tab <b>Peta</b> untuk melihat pedagang keliling yang sedang jualan di sekitarmu, lengkap dengan jaraknya.' },
+      { icon: '🔍', text: 'Pakai tab <b>Cari</b> untuk menemukan pedagang tertentu berdasarkan nama atau kategori jualan.' },
+      { icon: '⭐', text: 'Tekan tombol follow pada kartu pedagang untuk mengikuti — kamu akan tahu kapan mereka mulai jualan lagi.' },
+      { icon: '💬', text: 'Tekan ikon chat di halaman pedagang untuk tanya-tanya langsung, atau hubungi lewat WhatsApp.' },
+      { icon: '⭐', text: 'Setelah membeli, beri ulasan bintang untuk membantu pembeli lain.' },
+      { icon: '📰', text: 'Cek tab <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.' },
+    ],
+  },
+  pedagang: {
+    title: '🛒 Panduan untuk Pedagang',
+    steps: [
+      { icon: '📝', text: 'Daftar sebagai pedagang lewat tombol Pedagang, isi nama toko dan kategori jualan.' },
+      { icon: '📍', text: 'Tekan "Saya Jualan" dan aktifkan GPS supaya lokasimu otomatis muncul di peta pembeli.' },
+      { icon: '📦', text: 'Kelola daftar produk/menu kamu lewat menu Kelola Produk.' },
+      { icon: '✅', text: 'Ajukan verifikasi toko (unggah foto KTP) supaya tokomu tampil lebih terpercaya — biasanya diproses 1-2 hari kerja.' },
+      { icon: '🚀', text: 'Aktifkan Premium untuk tampil lebih menonjol, atau pasang Promosi Lokal untuk menarik lebih banyak pembeli.' },
+      { icon: '⏰', text: 'Atur pengingat jam buka lapak supaya kamu tidak lupa update status "Saya Jualan".' },
+      { icon: '🔗', text: 'Bagikan link referral ke pembeli/teman pedagang lain untuk dapat reward.' },
+    ],
+  },
+};
+
+let guideActiveTab = mode;
+
+function guideStepsHtml(tabKey) {
+  return GUIDE_STEPS[tabKey].steps.map(s => `
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;">
+      <div style="font-size:18px;flex-shrink:0;">${s.icon}</div>
+      <div style="font-size:12.5px;line-height:1.55;color:var(--text-dim);">${s.text}</div>
+    </div>
+  `).join('');
+}
+
+window.__switchGuideTab = function (tabKey) {
+  guideActiveTab = tabKey;
+  const modal = document.getElementById('guide-modal-overlay');
+  if (!modal) return;
+  modal.querySelector('#guide-title').textContent = GUIDE_STEPS[tabKey].title;
+  modal.querySelector('#guide-steps').innerHTML = guideStepsHtml(tabKey);
+  modal.querySelectorAll('.guide-tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === tabKey;
+    btn.style.background = active ? 'var(--brand)' : 'transparent';
+    btn.style.color = active ? '#fff' : 'var(--text-dim)';
+  });
+};
+
+window.__openGuideModal = function (preferredTab) {
+  document.getElementById('guide-modal-overlay')?.remove();
+  guideActiveTab = preferredTab || mode || 'pembeli';
+  const overlay = document.createElement('div');
+  overlay.id = 'guide-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:80vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="guide-tab-btn" data-tab="pembeli" onclick="window.__switchGuideTab('pembeli')" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--stroke);font-weight:700;font-size:12.5px;cursor:pointer;">👤 Pembeli</button>
+        <button class="guide-tab-btn" data-tab="pedagang" onclick="window.__switchGuideTab('pedagang')" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--stroke);font-weight:700;font-size:12.5px;cursor:pointer;">🛒 Pedagang</button>
+      </div>
+      <div id="guide-title" style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:14px;"></div>
+      <div id="guide-steps"></div>
+      <button onclick="document.getElementById('guide-modal-overlay').remove()" style="width:100%;margin-top:6px;padding:12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:13px;">Mengerti, tutup</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  window.__switchGuideTab(guideActiveTab);
+};
+
+function ensureGuideHelpButton() {
+  if (document.getElementById('guide-help-btn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'guide-help-btn';
+  btn.textContent = '❓';
+  btn.title = 'Panduan penggunaan';
+  btn.onclick = () => window.__openGuideModal(mode);
+  btn.style.cssText = 'position:fixed;right:16px;bottom:86px;width:44px;height:44px;border-radius:50%;border:none;background:var(--brand);color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:150;cursor:pointer;';
+  document.body.appendChild(btn);
+}
+
+function maybeShowGuideOnFirstVisit() {
+  ensureGuideHelpButton();
+  if (localStorage.getItem('jd_guide_seen')) return;
+  localStorage.setItem('jd_guide_seen', '1');
+  window.__openGuideModal(mode);
+}
+
+// ---------- FAQ PEDAGANG (dari tabel `faq`, diisi via admin) ----------
+let faqOpenId = null;
+
+window.__openFaqModal = async function () {
+  document.getElementById('faq-modal-overlay')?.remove();
+  faqOpenId = null;
+  const overlay = document.createElement('div');
+  overlay.id = 'faq-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:80vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:14px;">❓ Bantuan & FAQ</div>
+      <div id="faq-list">${'<div style="color:var(--text-faint);font-size:12.5px;">Memuat FAQ...</div>'}</div>
+      <button onclick="document.getElementById('faq-modal-overlay').remove()" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:13px;">Tutup</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const el = document.getElementById('faq-list');
+  try {
+    const { data, error } = await sb.from('faq').select('id,question,answer,category').eq('active', true).order('sort_order', { ascending: true });
+    if (error) throw error;
+    if (!el) return; // modal sudah ditutup sebelum data selesai dimuat
+    if (!data || data.length === 0) {
+      el.innerHTML = '<div style="color:var(--text-faint);font-size:12.5px;">Belum ada FAQ tersedia.</div>';
+      return;
+    }
+    el.innerHTML = data.map(f => `
+      <div style="border:1px solid var(--stroke);border-radius:12px;margin-bottom:8px;overflow:hidden;">
+        <button onclick="window.__toggleFaqItem('${f.id}')" style="width:100%;text-align:left;padding:12px;background:var(--bg);border:none;color:var(--text);font-weight:600;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;">
+          <span>${escapeHtml(f.question)}</span>
+          <span id="faq-caret-${f.id}" style="flex-shrink:0;color:var(--text-faint);">▾</span>
+        </button>
+        <div id="faq-answer-${f.id}" style="display:none;padding:0 12px 12px;font-size:12px;color:var(--text-dim);line-height:1.55;">${escapeHtml(f.answer)}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    if (el) el.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat FAQ: ${e.message}</div>`;
+  }
+};
+
+window.__toggleFaqItem = function (id) {
+  const answerEl = document.getElementById(`faq-answer-${id}`);
+  const caretEl = document.getElementById(`faq-caret-${id}`);
+  if (!answerEl) return;
+  const isOpen = faqOpenId === id;
+  // Tutup jawaban yang sedang terbuka sebelumnya (satu jawaban terbuka dalam satu waktu)
+  if (faqOpenId && faqOpenId !== id) {
+    const prevAnswer = document.getElementById(`faq-answer-${faqOpenId}`);
+    const prevCaret = document.getElementById(`faq-caret-${faqOpenId}`);
+    if (prevAnswer) prevAnswer.style.display = 'none';
+    if (prevCaret) prevCaret.textContent = '▾';
+  }
+  answerEl.style.display = isOpen ? 'none' : 'block';
+  if (caretEl) caretEl.textContent = isOpen ? '▾' : '▴';
+  faqOpenId = isOpen ? null : id;
+};
+
 // ---------- SETUP SCREEN (kalau config.js belum diisi) ----------
 function renderSetupNeeded() {
   main.innerHTML = `
@@ -1377,6 +1525,7 @@ function renderPedagang() {
     </div>
 
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
+    <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openFaqModal()">❓ Bantuan & FAQ</button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
@@ -3126,6 +3275,8 @@ async function init() {
     if (wantMode || wantView) {
       history.replaceState(null, '', location.pathname);
     }
+
+    maybeShowGuideOnFirstVisit();
   } catch (e) {
     console.error(e);
     renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
