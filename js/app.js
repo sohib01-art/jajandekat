@@ -345,12 +345,12 @@ async function renderArtikelListView() {
   main.innerHTML = `<div class="section-label">📰 Artikel</div><div class="vendor-list" id="artikel-list"><div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div></div>`;
   const el = document.getElementById('artikel-list');
   try {
-    const { data, error } = await sb.from('artikel_admin').select('id,title,slug,excerpt,cover_image_url,created_at').eq('published', true).order('created_at', { ascending: false });
+    const { data, error } = await sb.from('articles').select('id,title,slug,excerpt,cover_image,created_at').eq('status', 'published').order('created_at', { ascending: false });
     if (error) throw error;
     if (!data || data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:12.5px;padding:12px 0;">Belum ada artikel.</div>'; return; }
     el.innerHTML = data.map(a => `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;cursor:pointer;" onclick="window.__openArtikel('${a.slug}')">
-        ${a.cover_image_url ? `<img src="${a.cover_image_url}" style="width:100%;border-radius:10px;" />` : ''}
+        ${a.cover_image ? `<img src="${a.cover_image}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">${escapeHtml(a.title)}</div>
         ${a.excerpt ? `<div style="font-size:12px;color:var(--text-dim);">${escapeHtml(a.excerpt)}</div>` : ''}
         <div style="font-size:10px;color:var(--text-faint);">${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
@@ -370,11 +370,11 @@ window.__openArtikel = function (slug) {
 async function renderArtikelDetailView(slug) {
   main.innerHTML = `<div style="color:var(--text-faint);font-size:12.5px;">Memuat artikel...</div>`;
   try {
-    const { data, error } = await sb.from('artikel_admin').select('*').eq('slug', slug).eq('published', true).single();
+    const { data, error } = await sb.from('articles').select('*').eq('slug', slug).eq('status', 'published').single();
     if (error || !data) throw error || new Error('Artikel tidak ditemukan.');
     main.innerHTML = `
       <button class="follow-btn" style="margin-bottom:12px;" onclick="window.__backFromArtikel()">← Kembali ke Artikel</button>
-      ${data.cover_image_url ? `<img src="${data.cover_image_url}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ''}
+      ${data.cover_image ? `<img src="${data.cover_image}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ''}
       <div style="font-family:'Poppins';font-weight:800;font-size:18px;margin-bottom:6px;">${escapeHtml(data.title)}</div>
       <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:14px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
       <div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(data.content)}</div>
