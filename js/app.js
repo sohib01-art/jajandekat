@@ -1414,7 +1414,18 @@ let announcements = [];
 let regPinValue = '';
 let regReminderValue = '';
 let regTagsValue = '';
+let catPickerQuery = '';
 let knownTagSuggestions = [];
+
+window.__updateCatPickerQuery = function (value) {
+  catPickerQuery = value;
+  renderPedagang();
+  // Fokus & posisi kursor tetap di kolom cari setelah re-render
+  requestAnimationFrame(() => {
+    const el = document.getElementById('reg-cat-search');
+    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
+};
 let isRegistering = false;
 
 window.__updateRegField = function (field, value) {
@@ -1463,53 +1474,88 @@ const VENDOR_MODE_OPTIONS = [
   { label: 'Jasa Antar/Kurir', icon: 'kurir' },
 ];
 const CATEGORY_OPTIONS = [
-  { label: 'Bakso', icon: 'bakso' },
-  { label: 'Mi Ayam', icon: 'mi_ayam' },
-  { label: 'Siomay', icon: 'siomay' },
-  { label: 'Sate', icon: 'sate' },
-  { label: 'Gorengan', icon: 'gorengan' },
-  { label: 'Kebab', icon: 'kebab' },
-  { label: 'Nasi', icon: 'nasi' },
-  { label: 'Jajanan', icon: 'jajanan' },
-  { label: 'Minuman', icon: 'minuman' },
-  { label: 'Kopi', icon: 'kopi' },
-  { label: 'Roti & Kue', icon: 'roti_kue' },
-  { label: 'Snack & Camilan', icon: 'snack_camilan' },
-  { label: 'Buah', icon: 'buah' },
-  { label: 'Sayur', icon: 'sayur' },
-  { label: 'Ikan & Seafood', icon: 'ikan_seafood' },
-  { label: 'Ayam & Daging', icon: 'ayam_daging' },
-  { label: 'Telur', icon: 'telur' },
-  { label: 'Sembako', icon: 'sembako' },
-  { label: 'Warung', icon: 'warung' },
-  { label: 'Toko Kelontong', icon: 'toko_kelontong' },
-  { label: 'Pakaian', icon: 'pakaian' },
-  { label: 'Sepatu & Sandal', icon: 'sepatu_sandal' },
-  { label: 'Tas & Koper', icon: 'tas_koper' },
-  { label: 'Aksesoris', icon: 'aksesoris' },
-  { label: 'Kosmetik', icon: 'kosmetik' },
-  { label: 'HP & Aksesoris', icon: 'hp_aksesoris' },
-  { label: 'Elektronik', icon: 'elektronik' },
-  { label: 'Alat Tulis', icon: 'alat_tulis' },
-  { label: 'Mainan', icon: 'mainan' },
-  { label: 'Bunga & Tanaman', icon: 'bunga_tanaman' },
-  { label: 'Peralatan & Perkakas', icon: 'peralatan_perkakas' },
-  { label: 'Rumah Tangga', icon: 'rumah_tangga' },
-  { label: 'Sabun & Perawatan', icon: 'sabun_perawatan' },
-  { label: 'BBM Eceran', icon: 'bbm_eceran' },
-  { label: 'Gas LPG', icon: 'gas_lpg' },
-  { label: 'Air Galon', icon: 'air_galon' },
-  { label: 'Pulsa & Token', icon: 'pulsa_token' },
-  { label: 'Fotokopi & Percetakan', icon: 'fotokopi_percetakan' },
-  { label: 'Pangkas Rambut', icon: 'pangkas_rambut' },
-  { label: 'Laundry', icon: 'laundry' },
-  { label: 'Bengkel / Jasa Perbaikan', icon: 'bengkel_jasa_perbaikan' },
-  { label: 'Jasa Antar', icon: 'jasa_antar' },
-  { label: 'Jasa Keliling', icon: 'jasa_keliling' },
-  { label: 'Bunga, Hadiah & Dekorasi', icon: 'bunga_hadiah_dekorasi' },
-  { label: 'Kerajinan', icon: 'kerajinan' },
-  { label: 'Lainnya', icon: 'lainnya' },
+  // Makanan Siap Saji / Jajanan
+  { label: 'Bakso', icon: 'bakso', group: 'Makanan Siap Saji' },
+  { label: 'Mi Ayam', icon: 'mi_ayam', group: 'Makanan Siap Saji' },
+  { label: 'Siomay', icon: 'siomay', group: 'Makanan Siap Saji' },
+  { label: 'Sate', icon: 'sate', group: 'Makanan Siap Saji' },
+  { label: 'Gorengan', icon: 'gorengan', group: 'Makanan Siap Saji' },
+  { label: 'Kebab', icon: 'kebab', group: 'Makanan Siap Saji' },
+  { label: 'Nasi', icon: 'nasi', group: 'Makanan Siap Saji' },
+  { label: 'Jajanan', icon: 'jajanan', group: 'Makanan Siap Saji' },
+  // Minuman & Camilan
+  { label: 'Minuman', icon: 'minuman', group: 'Minuman & Camilan' },
+  { label: 'Kopi', icon: 'kopi', group: 'Minuman & Camilan' },
+  { label: 'Roti & Kue', icon: 'roti_kue', group: 'Minuman & Camilan' },
+  { label: 'Snack & Camilan', icon: 'snack_camilan', group: 'Minuman & Camilan' },
+  // Bahan Makanan Segar
+  { label: 'Buah', icon: 'buah', group: 'Bahan Makanan Segar' },
+  { label: 'Sayur', icon: 'sayur', group: 'Bahan Makanan Segar' },
+  { label: 'Ikan & Seafood', icon: 'ikan_seafood', group: 'Bahan Makanan Segar' },
+  { label: 'Ayam & Daging', icon: 'ayam_daging', group: 'Bahan Makanan Segar' },
+  { label: 'Telur', icon: 'telur', group: 'Bahan Makanan Segar' },
+  { label: 'Sembako', icon: 'sembako', group: 'Bahan Makanan Segar' },
+  { label: 'Warung', icon: 'warung', group: 'Bahan Makanan Segar' },
+  { label: 'Toko Kelontong', icon: 'toko_kelontong', group: 'Bahan Makanan Segar' },
+  // Fashion & Aksesoris
+  { label: 'Pakaian', icon: 'pakaian', group: 'Fashion & Aksesoris' },
+  { label: 'Sepatu & Sandal', icon: 'sepatu_sandal', group: 'Fashion & Aksesoris' },
+  { label: 'Tas & Koper', icon: 'tas_koper', group: 'Fashion & Aksesoris' },
+  { label: 'Aksesoris', icon: 'aksesoris', group: 'Fashion & Aksesoris' },
+  { label: 'Kosmetik', icon: 'kosmetik', group: 'Fashion & Aksesoris' },
+  // Barang & Perlengkapan
+  { label: 'HP & Aksesoris', icon: 'hp_aksesoris', group: 'Barang & Perlengkapan' },
+  { label: 'Elektronik', icon: 'elektronik', group: 'Barang & Perlengkapan' },
+  { label: 'Alat Tulis', icon: 'alat_tulis', group: 'Barang & Perlengkapan' },
+  { label: 'Mainan', icon: 'mainan', group: 'Barang & Perlengkapan' },
+  { label: 'Bunga & Tanaman', icon: 'bunga_tanaman', group: 'Barang & Perlengkapan' },
+  { label: 'Peralatan & Perkakas', icon: 'peralatan_perkakas', group: 'Barang & Perlengkapan' },
+  { label: 'Rumah Tangga', icon: 'rumah_tangga', group: 'Barang & Perlengkapan' },
+  { label: 'Sabun & Perawatan', icon: 'sabun_perawatan', group: 'Barang & Perlengkapan' },
+  // Kebutuhan Harian
+  { label: 'BBM Eceran', icon: 'bbm_eceran', group: 'Kebutuhan Harian' },
+  { label: 'Gas LPG', icon: 'gas_lpg', group: 'Kebutuhan Harian' },
+  { label: 'Air Galon', icon: 'air_galon', group: 'Kebutuhan Harian' },
+  { label: 'Pulsa & Token', icon: 'pulsa_token', group: 'Kebutuhan Harian' },
+  // Jasa & Layanan
+  { label: 'Fotokopi & Percetakan', icon: 'fotokopi_percetakan', group: 'Jasa & Layanan' },
+  { label: 'Pangkas Rambut', icon: 'pangkas_rambut', group: 'Jasa & Layanan' },
+  { label: 'Laundry', icon: 'laundry', group: 'Jasa & Layanan' },
+  { label: 'Bengkel / Jasa Perbaikan', icon: 'bengkel_jasa_perbaikan', group: 'Jasa & Layanan' },
+  { label: 'Jasa Antar', icon: 'jasa_antar', group: 'Jasa & Layanan' },
+  { label: 'Jasa Keliling', icon: 'jasa_keliling', group: 'Jasa & Layanan' },
+  { label: 'Bunga, Hadiah & Dekorasi', icon: 'bunga_hadiah_dekorasi', group: 'Jasa & Layanan' },
+  { label: 'Kerajinan', icon: 'kerajinan', group: 'Jasa & Layanan' },
+  // Lainnya
+  { label: 'Lainnya', icon: 'lainnya', group: 'Lainnya' },
 ];
+const CATEGORY_GROUP_ORDER = ['Makanan Siap Saji', 'Minuman & Camilan', 'Bahan Makanan Segar', 'Fashion & Aksesoris', 'Barang & Perlengkapan', 'Kebutuhan Harian', 'Jasa & Layanan', 'Lainnya'];
+
+// Render grid kategori terkelompok + kolom cari di atas. selectedLabels: array label yg lagi dipilih.
+// toggleFn: nama fungsi global (string) yang dipanggil onclick, mis. "window.__toggleCategory".
+function renderCategoryPickerGrouped(selectedLabels, toggleFn, query) {
+  const q = (query || '').trim().toLowerCase();
+  const matches = q ? CATEGORY_OPTIONS.filter(c => c.label.toLowerCase().includes(q)) : CATEGORY_OPTIONS;
+  if (q && matches.length === 0) {
+    return '<div style="font-size:11.5px;color:var(--text-faint);padding:10px 0;">Gak ketemu — coba tulis di kolom tag di bawah.</div>';
+  }
+  const groups = q ? [...new Set(matches.map(c => c.group))] : CATEGORY_GROUP_ORDER;
+  return groups.map(g => {
+    const items = matches.filter(c => c.group === g);
+    if (items.length === 0) return '';
+    return `
+      <div style="font-size:10.5px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 6px;">${g}</div>
+      <div class="cat-picker-grid">
+        ${items.map(c => `
+          <button type="button" class="cat-picker-item ${selectedLabels.includes(c.label) ? 'picked' : ''}" onclick="${toggleFn}('${c.label.replace(/'/g, "\\'")}')">
+            <div class="cat-picker-icon-wrap">${categoryIconImgTag(c.label, c.icon, '')}</div>
+            <span>${c.label}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+}
 // Ikon vendor: foto dagangan (kalau aktif) > mode jualan (gambar) > emoji lama (fallback data lama)
 function vendorIconStyle(v) {
   if (v.active && v.photo_url) return `background-image:url('${v.photo_url}');background-size:cover;background-position:center;`;
@@ -1555,25 +1601,29 @@ window.__pickModeIcon = function (icon) {
 // ---------- EDIT PROFIL TOKO ----------
 let editCategories = [];
 let editModeIcon = null;
+let editCatPickerQuery = '';
 
 window.__openEditProfile = function (vendorId) {
   const v = vendors.find(v => v.id === vendorId);
   if (!v) return;
   editCategories = [...(v.categories || [])];
   editModeIcon = v.mode_icon || null;
+  editCatPickerQuery = '';
   renderEditProfile(vendorId);
+};
+
+window.__updateEditCatPickerQuery = function (vendorId, value) {
+  editCatPickerQuery = value;
+  renderEditProfile(vendorId);
+  requestAnimationFrame(() => {
+    const el = document.getElementById('edit-cat-search');
+    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
 };
 
 function renderEditProfile(vendorId) {
   const v = vendors.find(v => v.id === vendorId);
   if (!v) return;
-
-  const catHtml = CATEGORY_OPTIONS.map(c => `
-    <button type="button" class="cat-picker-item ${editCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__editToggleCategory('${c.label.replace(/'/g, "\\'")}')">
-      <div class="cat-picker-icon-wrap">${categoryIconImgTag(c.label, c.icon, '')}</div>
-      <span>${c.label}</span>
-    </button>
-  `).join('');
 
   const modeHtml = VENDOR_MODE_OPTIONS.map(m => `
     <button type="button" class="cat-picker-item ${editModeIcon === m.icon ? 'picked' : ''}" onclick="window.__editPickModeIcon('${m.icon}')">
@@ -1600,11 +1650,11 @@ function renderEditProfile(vendorId) {
             `).join('')}
           </div>
         ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih</div>`}
-        <div class="cat-picker-grid">${catHtml}</div>
-
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:8px;">Jualan lain yang belum ada di daftar atas? Tulis di sini (pisahkan koma)</div>
+        <input id="edit-cat-search" type="text" value="${editCatPickerQuery.replace(/"/g, '&quot;')}" oninput="window.__updateEditCatPickerQuery('${vendorId}', this.value)" placeholder="🔍 Cari kategori, misal: rujak" style="margin-top:8px;" />
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jualan lain yang belum ada di daftar? Tulis di sini (pisahkan koma)</div>
         <input id="edit-tags" type="text" list="tag-suggestions-list" value="${(v.custom_tags || []).join(', ').replace(/"/g, '&quot;')}" placeholder="misal: rujak serut, es duren" />
         <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
+        ${renderCategoryPickerGrouped(editCategories, 'window.__editToggleCategory', editCatPickerQuery)}
 
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
         <input id="edit-reminder" type="time" value="${v.reminder_time ? v.reminder_time.slice(0, 5) : ''}" />
@@ -1719,18 +1769,12 @@ function renderPedagang() {
                 <span class="selected-cat-pill">${label} <button type="button" onclick="window.__toggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
               `).join('')}
             </div>
-          ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih — tap ikon di bawah</div>`}
-          <div class="cat-picker-grid">
-            ${CATEGORY_OPTIONS.map(c => `
-              <button type="button" class="cat-picker-item ${selectedCategories.includes(c.label) ? 'picked' : ''}" onclick="window.__toggleCategory('${c.label.replace(/'/g, "\\'")}')">
-                <div class="cat-picker-icon-wrap">${categoryIconImgTag(c.label, c.icon, '')}</div>
-                <span>${c.label}</span>
-              </button>
-            `).join('')}
-          </div>
-          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:8px;">Jualan lain yang belum ada di daftar atas? Tulis di sini (pisahkan koma)</div>
+          ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih — cari atau tap ikon di bawah</div>`}
+          <input id="reg-cat-search" type="text" value="${catPickerQuery.replace(/"/g, '&quot;')}" oninput="window.__updateCatPickerQuery(this.value)" placeholder="🔍 Cari kategori, misal: rujak" style="margin-top:8px;" />
+          <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jualan lain yang belum ada di daftar? Tulis di sini (pisahkan koma)</div>
           <input id="reg-tags" type="text" list="tag-suggestions-list" value="${regTagsValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('tags', this.value)" placeholder="misal: rujak serut, es duren" />
           <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
+          ${renderCategoryPickerGrouped(selectedCategories, 'window.__toggleCategory', catPickerQuery)}
           <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">Mode jualan Anda (pilih 1)</div>
           <div class="cat-picker-grid">
             ${VENDOR_MODE_OPTIONS.map(m => `
