@@ -1219,13 +1219,13 @@ function renderVendorCardHtml(v, opts = {}) {
         ${distanceLabel ? `<div class="vp-distance-badge">📍 ${distanceLabel}</div>` : ''}
         <div class="vp-float-icons" onclick="event.stopPropagation();">
           ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})"><img class="vp-btn-icon" src="icons/icon_map.png" alt="Peta"></button>` : ''}
-          <button class="vp-float-btn" title="Lihat menu" onclick="window.__openProductCatalog('${v.id}','${v.name.replace(/'/g, "\\'")}')">🍽️</button>
+          <button class="vp-float-btn" title="Lihat menu" onclick="window.__openProductCatalog('${v.id}','${v.name.replace(/'/g, "\\'")}')"><span class="vp-btn-emoji">🍽️</span></button>
           <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"><img class="vp-btn-icon" src="icons/icon_chat_app.png" alt="Chat di app"></button>
           ${v.show_whatsapp !== false && v.whatsapp ? `
             <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
                class="vp-float-btn wa" title="Chat WhatsApp"><img class="vp-btn-icon" src="icons/icon_chat_wa.png" alt="Chat WhatsApp"></a>
           ` : ''}
-          <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '<img class="vp-btn-icon" src="icons/icon_check.png" alt="Mengikuti">' : '➕'}</button>
+          <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '<img class="vp-btn-icon" src="icons/icon_check.png" alt="Mengikuti">' : '<span class="vp-btn-emoji">➕</span>'}</button>
         </div>
       </div>
       <div class="vp-body">
