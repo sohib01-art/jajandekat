@@ -228,6 +228,9 @@ main{ flex:1; padding:0 18px; }
 .vp-btn-icon{ width:18px; height:18px; object-fit:contain; display:block; }
 .vp-body{ padding:12px 14px 14px; }
 .vp-name{ font-family:'Poppins'; font-weight:700; font-size:14px; color:var(--text); }
+.vp-rating{ font-size:11.5px; font-weight:700; color:#B8860B; margin-top:2px; }
+.vp-rating-count{ font-weight:500; color:var(--text-faint); }
+.vp-card-compact .vp-rating{ font-size:10px; }
 .vp-meta{ display:flex; align-items:center; gap:6px; margin-top:4px; font-size:11.5px; color:var(--text-dim); }
 .vp-sub{ font-size:11px; color:var(--text-faint); margin-top:3px; }
 .vp-region{ color:var(--text-dim); font-weight:600; }
