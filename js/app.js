@@ -914,6 +914,9 @@ function subscribeRealtime() {
 // ---------- BUYER VIEW ----------
 let artikelDetailSlug = null;
 
+// Ikon "Semua" di baris kategori (mengikuti warna teks tile: putih di tile oranye, oranye di tile aktif)
+const CAT_ALL_ICON_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2.2"/><rect x="13" y="3" width="8" height="8" rx="2.2"/><rect x="3" y="13" width="8" height="8" rx="2.2"/><rect x="13" y="13" width="8" height="8" rx="2.2"/></svg>';
+
 function renderPembeli() {
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
@@ -921,17 +924,22 @@ function renderPembeli() {
 
   const followed = vendors.filter(v => followedIds.has(v.id));
 
+  // Ketuk story = buka menu pedagang (dulu: berhenti mengikuti tanpa sengaja). Berhenti mengikuti tetap lewat tombol ✓ di kartu.
   const storyHtml = followed.map(v => `
-    <button class="story ${v.active ? 'on' : ''}" onclick="window.__toggleFollow('${v.id}')">
-      <div class="story-ring" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
-      <div class="story-name">${v.name.split(' ')[0]}</div>
+    <button class="story ${v.active ? 'on' : ''}" onclick="window.__openProductCatalog('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+      <div class="story-avatar">
+        <div class="story-ring" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
+        ${v.active ? '<span class="story-dot"></span>' : ''}
+      </div>
+      <div class="story-name">${escapeHtml(v.name)}</div>
+      <div class="story-sub">${escapeHtml((v.categories || [])[0] || '')}</div>
     </button>
   `).join('');
 
   const catList = ['semua', ...Array.from(new Set(vendors.flatMap(v => v.categories || []))).sort()];
   const catRowHtml = catList.map(c => `
     <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c.replace(/'/g, "\\'")}')">
-      <div class="cat-circle">${c === 'semua' ? '🍽️' : categoryIconImgTag(c, CATEGORY_OPTIONS.find(x => x.label === c)?.icon || c, '')}</div>
+      <div class="cat-circle">${c === 'semua' ? CAT_ALL_ICON_SVG : categoryIconImgTag(c, CATEGORY_OPTIONS.find(x => x.label === c)?.icon || c, '')}</div>
       <div class="cat-label">${c === 'semua' ? 'Semua' : c}</div>
     </button>
   `).join('');
@@ -940,12 +948,13 @@ function renderPembeli() {
   main.innerHTML = `
     ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
+    <div class="sec-head"><h2>Kategori</h2></div>
     <div class="cat-row">${catRowHtml}</div>
-    <div class="section-label">Pedagang yang kamu ikuti</div>
+    <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2></div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
-    <div class="section-label">Pedagang unggulan</div>
+    <div class="sec-head"><h2>Pedagang unggulan</h2></div>
     ${renderVendorCarouselHtml(filteredVendors)}
-    <div class="section-label">Semua pedagang</div>
+    <div class="sec-head"><h2>Semua pedagang</h2></div>
     ${renderVendorGridHtml(filteredVendors)}
   `;
 }
