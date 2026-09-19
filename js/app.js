@@ -153,6 +153,7 @@ window.__enablePush = async function () {
   } catch (e) {
     console.error('Gagal mengaktifkan notifikasi:', e);
   }
+  refreshBell();
   if (mode === 'pembeli') renderPembeli();
 };
 
@@ -200,6 +201,30 @@ document.querySelectorAll('nav.bottom .nav-item').forEach(el => {
     renderPembeli();
   };
 });
+
+// ---------- LONCENG NOTIFIKASI DI HEADER ----------
+// Titik merah muncul selama izin notifikasi belum diputuskan. Disembunyikan kalau browser tidak mendukung push.
+const bellBtn = document.getElementById('btn-bell');
+function refreshBell() {
+  if (!bellBtn) return;
+  if (!pushSupported()) { bellBtn.hidden = true; return; }
+  bellBtn.hidden = false;
+  bellBtn.classList.toggle('needs-attention', Notification.permission === 'default');
+}
+if (bellBtn) {
+  bellBtn.onclick = async () => {
+    if (!pushSupported()) return;
+    if (Notification.permission === 'granted') {
+      showToast('Notifikasi sudah aktif 🔔');
+    } else if (Notification.permission === 'denied') {
+      showToast('Notifikasi diblokir. Aktifkan lewat pengaturan situs di browser.');
+    } else {
+      await window.__enablePush();
+    }
+    refreshBell();
+  };
+  refreshBell();
+}
 
 function showToast(text) {
   const t = document.getElementById('toast');
