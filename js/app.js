@@ -1187,6 +1187,9 @@ let chatSeenMessageIds = new Set();
 let myThreadIds = new Set();
 let myThreadVendorName = {};
 let globalChatChannel = null;
+let globalChatPollTimer = null;
+let lastGlobalChatCheckAt = null;
+let globalChatNotifiedIds = new Set();
 
 async function refreshMyChatThreads() {
   try {
@@ -1204,28 +1207,69 @@ async function refreshMyChatThreads() {
   } catch (e) { console.error('Gagal ambil daftar thread chat sendiri:', e); }
 }
 
+function handleGlobalIncomingChat(m) {
+  if (!myThreadIds.has(m.thread_id)) return; // bukan thread kita, abaikan
+  if (globalChatNotifiedIds.has(m.id)) return; // sudah pernah diproses (realtime & polling bisa dobel)
+  globalChatNotifiedIds.add(m.id);
+  if (currentChatThreadId === m.thread_id) return; // sudah ditangani listener modal yang lagi kebuka
+  const asVendor = mode === 'pedagang';
+  const fromOther = (asVendor && m.sender === 'buyer') || (!asVendor && m.sender === 'vendor');
+  if (!fromOther) return;
+  playChatDing();
+  const label = asVendor ? 'Ada pesan baru dari pembeli' : `Pesan baru dari ${myThreadVendorName[m.thread_id] || 'pedagang'}`;
+  showToast(`💬 ${label}`);
+  // Kalau tab lagi tidak aktif/di-minimize dan izin notifikasi browser sudah ada,
+  // tampilkan juga sebagai notifikasi sistem (mirip pengingat "saatnya buka lapak").
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try { new Notification('JajanDekat', { body: label + (m.message ? ': ' + m.message.slice(0, 60) : ''), icon: 'icons/lainnya.png' }); } catch (e) {}
+  }
+}
+
 function startGlobalChatWatch() {
   if (globalChatChannel) { sb.removeChannel(globalChatChannel); globalChatChannel = null; }
+  if (globalChatPollTimer) { clearInterval(globalChatPollTimer); globalChatPollTimer = null; }
+  lastGlobalChatCheckAt = new Date().toISOString(); // jangan bunyi buat pesan LAMA yang sudah ada
   refreshMyChatThreads();
   globalChatChannel = sb.channel('global_chat_watch')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
-      const m = payload.new;
-      if (!myThreadIds.has(m.thread_id)) return; // bukan thread kita, abaikan
-      if (currentChatThreadId === m.thread_id) return; // sudah ditangani listener modal yang lagi kebuka
-      const asVendor = mode === 'pedagang';
-      const fromOther = (asVendor && m.sender === 'buyer') || (!asVendor && m.sender === 'vendor');
-      if (!fromOther) return;
-      playChatDing();
-      const label = asVendor ? 'Ada pesan baru dari pembeli' : `Pesan baru dari ${myThreadVendorName[m.thread_id] || 'pedagang'}`;
-      showToast(`💬 ${label}`);
-      // Kalau tab lagi tidak aktif/di-minimize dan izin notifikasi browser sudah ada,
-      // tampilkan juga sebagai notifikasi sistem (mirip pengingat "saatnya buka lapak").
-      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-        try { new Notification('JajanDekat', { body: label + (m.message ? ': ' + m.message.slice(0, 60) : ''), icon: 'icons/lainnya.png' }); } catch (e) {}
-      }
+      handleGlobalIncomingChat(payload.new);
     })
     .subscribe();
+
+  // Cadangan kalau Realtime tidak sampai ke kunci anon (RLS Supabase kadang memblokir jalur
+  // postgres_changes untuk anon tanpa sesi auth asli — persis seperti dicatat di modal chat
+  // per-thread yang sudah pakai fallback serupa). Tanpa ini, kalaupun logika di atas benar,
+  // notifnya bisa TIDAK PERNAH bunyi sama sekali karena event realtime-nya sendiri tidak sampai.
+  globalChatPollTimer = setInterval(async () => {
+    if (!myThreadIds.size) return;
+    try {
+      const { data, error } = await sb.from('chat_messages').select('*')
+        .in('thread_id', Array.from(myThreadIds))
+        .gt('created_at', lastGlobalChatCheckAt)
+        .order('created_at', { ascending: true });
+      if (error || !data || !data.length) return;
+      data.forEach(m => { lastGlobalChatCheckAt = m.created_at; handleGlobalIncomingChat(m); });
+    } catch (e) { /* koneksi sempat gagal, coba lagi siklus berikutnya */ }
+  }, 8000);
 }
+
+// Browser modern nge-block AudioContext berbunyi kalau belum pernah ada interaksi user
+// SAMA SEKALI (autoplay policy) — konteksnya nyangkut "suspended" terus. Ini "membangunkan"-nya
+// sekali di sentuhan/klik pertama pengguna di mana pun dalam app, supaya nanti pas notifikasi
+// chat masuk sendiri (dipicu dari timer/network, bukan dari tap pengguna), suaranya sudah siap.
+let chatAudioUnlocked = false;
+function unlockChatAudioOnce() {
+  if (chatAudioUnlocked) return;
+  chatAudioUnlocked = true;
+  try {
+    chatAudioCtx = chatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (chatAudioCtx.state === 'suspended') chatAudioCtx.resume();
+  } catch (e) {}
+  document.removeEventListener('pointerdown', unlockChatAudioOnce);
+  document.removeEventListener('touchstart', unlockChatAudioOnce);
+}
+document.addEventListener('pointerdown', unlockChatAudioOnce, { once: true });
+document.addEventListener('touchstart', unlockChatAudioOnce, { once: true });
 
 // Bunyi notifikasi chat — dibuat langsung dari kode (bukan file audio), jadi tetap
 // single-file dan tidak perlu hosting aset tambahan.
@@ -1234,6 +1278,7 @@ function playChatDing() {
   try {
     chatAudioCtx = chatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const ctx = chatAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume(); // jaga-jaga kalau browser nyuspend lagi di tengah jalan
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
