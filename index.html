@@ -29,7 +29,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="css/style.css?v=46">
+<link rel="stylesheet" href="css/style.css?v=47">
 </head>
 <body>
 <div id="app">
@@ -74,11 +74,22 @@
     <div class="loading">Memuat data pedagang…</div>
   </main>
 
-  <nav class="bottom">
-    <div class="nav-item active" data-view="status"><div class="nav-icon"><img src="nav_icons/status.png" alt="Status" /></div>Status</div>
-    <div class="nav-item" data-view="peta"><div class="nav-icon"><img src="nav_icons/peta.png" alt="Peta" /></div>Peta</div>
-    <div class="nav-item" data-view="cari"><div class="nav-icon"><img src="nav_icons/cari.png" alt="Cari" /></div>Cari</div>
-    <div class="nav-item" data-view="artikel"><div class="nav-icon">📰</div>Artikel</div>
+  <nav class="bottom" aria-label="Menu utama">
+    <button type="button" class="nav-item active" data-view="status" aria-current="page">
+      <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.5Z"/></svg></span>Beranda
+    </button>
+    <button type="button" class="nav-item" data-view="peta">
+      <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path fill-rule="evenodd" d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></svg></span>Peta
+    </button>
+    <button type="button" class="nav-item" data-view="cari">
+      <span class="nav-icon"><svg class="" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>Cari
+    </button>
+    <button type="button" class="nav-item" data-view="favorit">
+      <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-8.500-5.100-8.500-11A4.800 4.800 0 0 1 12 6.800a4.800 4.800 0 0 1 8.500 2.700c0 5.900-8.500 11-8.500 11Z"/></svg></span>Favorit
+    </button>
+    <button type="button" class="nav-item" data-view="akun">
+      <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.400 3.600-7 8-7s8 2.600 8 7Z"/></svg></span>Akun
+    </button>
   </nav>
 
   <div class="toast" id="toast">
@@ -89,7 +100,7 @@
 </div>
 
 <script src="js/config.js?v=43"></script>
-<script src="js/app.js?v=46"></script>
+<script src="js/app.js?v=47"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
