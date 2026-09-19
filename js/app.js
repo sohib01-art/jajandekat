@@ -1241,6 +1241,11 @@ function startGlobalChatWatch() {
   // per-thread yang sudah pakai fallback serupa). Tanpa ini, kalaupun logika di atas benar,
   // notifnya bisa TIDAK PERNAH bunyi sama sekali karena event realtime-nya sendiri tidak sampai.
   globalChatPollTimer = setInterval(async () => {
+    // Refresh daftar thread di TIAP siklus (bukan cuma pas ganti mode/login) — supaya
+    // otomatis pulih sendiri kalau sempat ke-refresh lebih dulu daripada link_owner_device
+    // kelar (race condition login pedagang), dan langsung nangkep thread baru dari
+    // pembeli lain yang belum pernah chat sebelumnya.
+    await refreshMyChatThreads();
     if (!myThreadIds.size) return;
     try {
       const { data, error } = await sb.from('chat_messages').select('*')
@@ -3264,7 +3269,10 @@ window.__pickVendor = async function () {
   myVendorPin = enteredPin;
   pickWhatsappValue = '';
   localStorage.setItem('jd_my_vendor_id', myVendorId);
-  Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: myVendorId, p_pin: enteredPin, p_device_id: deviceId })).catch(() => {});
+  // DITUNGGU (bukan fire-and-forget lagi): RLS chat butuh owner_device_id sudah kesimpan
+  // dulu sebelum refreshMyChatThreads() jalan, kalau tidak, hasilnya kosong (diblokir RLS)
+  // dan notifikasi chat toko ini nggak bakal bunyi sampai logout-login ulang.
+  try { await sb.rpc('link_owner_device', { p_vendor_id: myVendorId, p_pin: enteredPin, p_device_id: deviceId }); } catch (e) {}
   ensurePushSubscription();
   refreshMyChatThreads(); // sekarang login sbg pedagang -> pantau thread milik toko ini
   renderPedagang();
