@@ -41,14 +41,65 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 let pushAsked = false;
-async function ensurePushSubscription() {
-  if (pushAsked) return;
-  pushAsked = true;
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+// Wilayah kasar pembeli (NAMA kabupaten/kecamatan/provinsi, bukan koordinat) untuk menarget notifikasi per wilayah.
+// Di-cache di perangkat supaya layanan geocoding tidak dipanggil tiap app dibuka.
+const BUYER_REGION_CACHE_KEY = 'jd_buyer_region';
+let buyerRegionId = null;
+
+function readBuyerRegionCache() {
   try {
+    const c = JSON.parse(localStorage.getItem(BUYER_REGION_CACHE_KEY) || 'null');
+    if (!c || !c.ts) return null;
+    const ttl = (c.names && c.names.length) ? 6 * 3600 * 1000 : 30 * 60 * 1000; // hasil kosong dicoba lagi lebih cepat
+    return (Date.now() - c.ts < ttl) ? c : null;
+  } catch (e) { return null; }
+}
+
+async function getBuyerRegion() {
+  const cached = readBuyerRegionCache();
+  if (cached) { buyerRegionId = cached.region_id || null; return cached; }
+  if (!buyerLoc) return { names: null, region_id: buyerRegionId };
+  let names = null;
+  let regionId = null;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${buyerLoc.lat}&lon=${buyerLoc.lng}&zoom=12&addressdetails=1`);
+    const json = await res.json();
+    const a = json.address || {};
+    const found = [a.city_district, a.suburb, a.municipality, a.county, a.city, a.state_district, a.state].filter(Boolean);
+    if (found.length) {
+      names = found;
+      const { data } = await sb.rpc('resolve_region_ids', { p_names: found });
+      regionId = data || null;
+    }
+  } catch (e) {
+    console.error('Gagal deteksi wilayah pembeli:', e);
+  }
+  const result = { names, region_id: regionId, ts: Date.now() };
+  try { localStorage.setItem(BUYER_REGION_CACHE_KEY, JSON.stringify(result)); } catch (e) {}
+  buyerRegionId = regionId;
+  return result;
+}
+
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+// opts.silent = true -> tidak pernah memunculkan dialog izin; hanya menyegarkan langganan
+// (dan wilayahnya) kalau izin sudah diberikan sebelumnya.
+async function ensurePushSubscription(opts = {}) {
+  const silent = !!opts.silent;
+  if (!silent) {
+    if (pushAsked) return;
+    pushAsked = true;
+  }
+  if (!pushSupported()) return;
+  try {
+    if (silent && Notification.permission !== 'granted') return;
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
+      if (silent) return;
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') return;
       sub = await reg.pushManager.subscribe({
@@ -57,16 +108,58 @@ async function ensurePushSubscription() {
       });
     }
     const json = sub.toJSON();
-    await sb.from('push_subscriptions').upsert({
-      device_id: deviceId,
-      endpoint: json.endpoint,
-      p256dh: json.keys.p256dh,
-      auth: json.keys.auth,
-    }, { onConflict: 'endpoint' });
+    const region = await getBuyerRegion();
+    const { error } = await sb.rpc('upsert_push_subscription', {
+      p_device_id: deviceId,
+      p_endpoint: json.endpoint,
+      p_p256dh: json.keys.p256dh,
+      p_auth: json.keys.auth,
+      p_region_names: region && region.names ? region.names : null,
+    });
+    if (error) throw error;
   } catch (e) {
     console.error('Gagal langganan push:', e);
   }
 }
+
+// Ajakan aktifkan notifikasi (tanpa harus follow dulu). Muncul di beranda pembeli selama izin belum diputuskan.
+function renderPushPromptBanner() {
+  if (!pushSupported() || Notification.permission !== 'default') return '';
+  const until = Number(localStorage.getItem('jd_push_prompt_until') || 0);
+  if (Date.now() < until) return '';
+  return `
+    <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <span style="font-size:18px;">🔔</span>
+        <div style="flex:1;">
+          <div style="font-size:12.5px;line-height:1.5;">Aktifkan notifikasi supaya tahu saat pedagang favoritmu mulai jualan, plus promo &amp; info dari JajanDekat.</div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="follow-btn" style="background:var(--brand);color:#fff;" onclick="window.__enablePush()">Aktifkan</button>
+            <button class="follow-btn" onclick="window.__dismissPushPrompt()">Nanti saja</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+window.__enablePush = async function () {
+  try {
+    const perm = await Notification.requestPermission(); // dipanggil langsung dari ketukan pengguna
+    if (perm === 'granted') {
+      pushAsked = false;
+      await ensurePushSubscription();
+      showToast('Notifikasi aktif 🔔');
+    }
+  } catch (e) {
+    console.error('Gagal mengaktifkan notifikasi:', e);
+  }
+  if (mode === 'pembeli') renderPembeli();
+};
+
+window.__dismissPushPrompt = function () {
+  localStorage.setItem('jd_push_prompt_until', String(Date.now() + 7 * 24 * 3600 * 1000));
+  if (mode === 'pembeli') renderPembeli();
+};
 
 let vendors = [];
 let followedIds = new Set();
@@ -615,7 +708,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,rating_avg,rating_count,verification_status').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -820,6 +913,7 @@ function renderPembeli() {
   const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => (v.categories || []).includes(activeCat));
 
   main.innerHTML = `
+    ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     <div class="cat-row">${catRowHtml}</div>
     <div class="section-label">Pedagang yang kamu ikuti</div>
@@ -937,21 +1031,65 @@ async function fetchAnnouncements() {
   return data || [];
 }
 
+// ---------- WILAYAH (tabel regions: provinsi → kabupaten/kota → kecamatan) ----------
+let regionsById = new Map();
+async function fetchRegions() {
+  try {
+    const { data, error } = await sb.from('regions').select('id,name,level,parent_id');
+    if (error) throw error;
+    regionsById = new Map((data || []).map(r => [r.id, r]));
+  } catch (e) {
+    console.error('Gagal ambil daftar wilayah:', e);
+  }
+}
+
+function regionChain(regionId) { // wilayah itu + semua induknya sampai provinsi
+  const chain = [];
+  let cur = regionId ? regionsById.get(regionId) : null;
+  let guard = 0;
+  while (cur && guard++ < 6) {
+    chain.push(cur);
+    cur = cur.parent_id ? regionsById.get(cur.parent_id) : null;
+  }
+  return chain;
+}
+function regionIsWithin(regionId, rootId) {
+  return regionChain(regionId).some(r => r.id === rootId);
+}
+
+// Pengumuman zona hanya cocok kalau wilayah perangkat DIKETAHUI dan berada di dalam zona itu (sama dengan aturan pengiriman push di server).
+function announcementMatchesRegion(a, regionId, fallbackText) {
+  if (!a.zone_level || a.zone_level === 'nasional') return true;
+  if (a.region_id) return !!regionId && regionIsWithin(regionId, a.region_id);
+  if (!a.zone_value) return true;
+  // Pengumuman lama (belum punya region_id): cocokkan nama zona dengan SEMUA tingkat wilayah, bukan hanya kabupaten
+  const zv = String(a.zone_value).toLowerCase();
+  const names = regionChain(regionId).map(r => r.name.toLowerCase());
+  if (fallbackText) names.push(String(fallbackText).toLowerCase());
+  return names.some(n => n.includes(zv));
+}
+
+function regionOptionsHtml(rootLabel, selectedId = '') {
+  const all = [...regionsById.values()];
+  const kids = (pid) => all.filter(r => (r.parent_id || null) === pid).sort((a, b) => a.name.localeCompare(b.name, 'id'));
+  const walk = (pid, depth) => kids(pid).map(r =>
+    `<option value="${r.id}" ${r.id === selectedId ? 'selected' : ''}>${'— '.repeat(depth)}${escapeHtml(r.name)}</option>` + walk(r.id, depth + 1)
+  ).join('');
+  return `<option value="">${rootLabel}</option>` + walk(null, 0);
+}
+
 function getRelevantAnnouncementsForVendor(v) {
   const audienceType = v.is_premium ? 'premium' : 'biasa';
   return announcements.filter(a => {
     if (a.audience !== 'semua' && a.audience !== audienceType) return false;
-    if (a.zone_level && a.zone_level !== 'nasional' && a.zone_value) {
-      return (v.region || '').toLowerCase().includes(a.zone_value.toLowerCase());
-    }
-    return true;
+    return announcementMatchesRegion(a, v.region_id, v.region);
   });
 }
 
 function getRelevantAnnouncementsForBuyer() {
-  // Catatan: lokasi pembeli tidak disimpan di aplikasi ini, jadi filter zona
-  // untuk audiens "Pembeli" belum bisa diterapkan — semua pembeli akan melihatnya.
-  return announcements.filter(a => a.audience === 'semua' || a.audience === 'pembeli');
+  return announcements.filter(a =>
+    (a.audience === 'semua' || a.audience === 'pembeli') && announcementMatchesRegion(a, buyerRegionId, null)
+  );
 }
 
 function renderAnnouncementBanner(list) {
@@ -967,6 +1105,7 @@ function renderAnnouncementBanner(list) {
           ${a.image_url ? `<img src="${a.image_url}" style="width:100%;max-height:min(280px,42vh);object-fit:cover;border-radius:10px;margin-bottom:8px;display:block;" />` : ''}
           <div style="font-size:12.5px;line-height:1.5;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
           ${a.link && /^https?:\/\//.test(a.link) ? `<a href="${escapeHtml(a.link)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11.5px;color:var(--brand);font-weight:700;">Selengkapnya →</a>` : ''}
+          ${a.link && /^\?(vendor|artikel)=[A-Za-z0-9_%.-]+$/.test(a.link) ? `<button class="follow-btn" style="margin-top:6px;" onclick="window.__openInternalLink('${a.link}')">Selengkapnya →</button>` : ''}
         </div>
       </div>
     </div>
@@ -1196,6 +1335,11 @@ function tryLocateBuyer() {
     (pos) => {
       buyerLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       if (mode === 'pembeli') renderPembeli();
+      const regionBefore = buyerRegionId;
+      getBuyerRegion().then(() => {
+        ensurePushSubscription({ silent: true }); // kalau notifikasi sudah aktif, perbarui wilayah langganan
+        if (buyerRegionId !== regionBefore && mode === 'pembeli') renderPembeli(); // filter pengumuman per zona
+      }).catch(() => {});
     },
     () => { /* pembeli menolak/gagal lokasi — diamkan, jarak cukup disembunyikan */ },
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
@@ -1291,6 +1435,46 @@ window.__goToVendorOnMap = function (id, lat, lng) {
     }
   }, 200);
 };
+
+// ---------- LINK DARI NOTIFIKASI / PENGUMUMAN (?vendor= / ?artikel= / ?ann=) ----------
+function openVendorFromLink(vendorId) {
+  const key = String(vendorId).toLowerCase();
+  const v = vendors.find(x => String(x.id).toLowerCase() === key);
+  if (!v) { renderPembeli(); showToast('Pedagang tidak ditemukan.'); return; }
+  // Posisi diambil dari data terbaru (sudah di-fetch saat app dibuka), bukan dari isi notifikasi
+  if (v.active && v.lat && v.lng) {
+    window.__goToVendorOnMap(v.id, v.lat, v.lng);
+  } else {
+    goToBottomView('status');
+    showToast(`${v.name} sedang tidak berjualan.`);
+    window.__openReviewModal(v.id, v.name);
+  }
+}
+
+function openArtikelFromLink(slug) {
+  artikelDetailSlug = String(slug); // kalau slug tidak ada, halaman detail menampilkan "Artikel tidak ditemukan"
+  goToBottomView('artikel');
+}
+
+function openAnnouncementFromLink(id) {
+  const ann = announcements.find(a => a.id === id);
+  if (!ann) { goToBottomView('status'); showToast('Pengumuman ini sudah tidak aktif.'); return; }
+  try { // tampilkan lagi walau sebelumnya pernah ditutup
+    const dismissed = JSON.parse(localStorage.getItem('jd_dismissed_ann') || '[]').filter(x => x !== id);
+    localStorage.setItem('jd_dismissed_ann', JSON.stringify(dismissed));
+  } catch (e) {}
+  if (ann.audience === 'premium' || ann.audience === 'biasa') goToPedagangDashboard();
+  else goToBottomView('status');
+}
+
+function openInternalLink(link) {
+  const p = new URLSearchParams(String(link).replace(/^\?/, ''));
+  if (p.get('vendor')) { openVendorFromLink(p.get('vendor')); return true; }
+  if (p.get('artikel')) { openArtikelFromLink(p.get('artikel')); return true; }
+  if (p.get('ann')) { openAnnouncementFromLink(p.get('ann')); return true; }
+  return false;
+}
+window.__openInternalLink = function (link) { openInternalLink(link); };
 
 // ---------- PETA VIEW (tab "Peta") ----------
 function renderPetaView() {
@@ -2975,19 +3159,29 @@ let adminVendorData = [];
 
 const brandTapZone = document.getElementById('brand-tap-zone');
 if (brandTapZone) {
-  brandTapZone.addEventListener('click', () => {
+  brandTapZone.addEventListener('click', async () => {
     tapCount++;
     clearTimeout(tapTimer);
     tapTimer = setTimeout(() => { tapCount = 0; }, 1500);
     if (tapCount >= 5) {
       tapCount = 0;
       const pw = prompt('Password admin:');
-      if (pw === SUPER_ADMIN_PASSWORD) {
+      if (pw === null) return;
+      if (!pw) { alert('Password salah.'); return; }
+      // Password diperiksa di server (Edge Function), tidak lagi dibandingkan di browser
+      try {
+        const { data, error } = await sb.functions.invoke('admin-action', { body: { password: pw, action: 'verify_admin' } });
+        if (error || !data || !data.ok) {
+          const status = error && error.context && error.context.status;
+          alert(status === 401 || (data && !data.ok) ? 'Password salah.' : 'Tidak bisa terhubung ke server. Coba lagi.');
+          return;
+        }
         isSuperAdmin = true;
         adminPasswordCache = pw;
         renderAdminDashboard();
-      } else if (pw !== null) {
-        alert('Password salah.');
+      } catch (e) {
+        console.error(e);
+        alert('Tidak bisa terhubung ke server. Coba lagi.');
       }
     }
   });
@@ -3091,7 +3285,7 @@ async function renderAdminDashboard() {
     <div class="admin-panel" data-panel="announcements" style="display:none;">
       <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
         <textarea id="ann-message" rows="3" placeholder="Isi pengumuman..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
-        <input id="ann-link" type="url" placeholder="Link (opsional) — https://..." style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
+        <input id="ann-link" type="text" placeholder="Link (opsional) — https://... atau tujuan dalam app: ?artikel=slug / ?vendor=ID" style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
         <input type="file" id="ann-image-input" accept="image/*" style="display:none" onchange="window.__onAnnouncementImageSelected(event)" />
         <div id="ann-image-zone" onclick="document.getElementById('ann-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
           📷 Tambah gambar (opsional)
@@ -3103,17 +3297,15 @@ async function renderAdminDashboard() {
             <option value="biasa">Pedagang Biasa</option>
             <option value="pembeli">Pembeli</option>
           </select>
-          <select id="ann-zone-level" onchange="document.getElementById('ann-zone-value-wrap').style.display = this.value === 'nasional' ? 'none' : ''" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
-            <option value="nasional">Zona: Nasional</option>
-            <option value="provinsi">Zona: Provinsi</option>
-            <option value="kabupaten">Zona: Kabupaten/Kota</option>
-            <option value="kecamatan">Zona: Kecamatan</option>
+          <select id="ann-region" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+            ${regionOptionsHtml('🌏 Zona: Nasional (semua wilayah)')}
           </select>
         </div>
-        <div id="ann-zone-value-wrap" style="display:none;margin-top:8px;">
-          <input id="ann-zone-value" type="text" placeholder="Nama wilayah, misal: Kutai Timur" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
-          <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Dicocokkan dengan wilayah (kabupaten/kota) yang terdeteksi otomatis saat pedagang daftar. Zona untuk audiens Pembeli belum didukung penuh (lokasi pembeli tidak disimpan).</div>
-        </div>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Zona memakai daftar wilayah resmi (provinsi → kabupaten/kota → kecamatan). Pengumuman zona hanya tampil &amp; terkirim ke perangkat yang wilayahnya diketahui berada di dalam zona itu; pembeli yang belum membagikan lokasi hanya menerima yang Nasional.</div>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:var(--text-dim);cursor:pointer;">
+          <input type="checkbox" id="ann-send-push" style="margin-top:2px;" />
+          <span>📣 Kirim juga sebagai notifikasi push (ada pratinjau jumlah penerima sebelum benar-benar dikirim)</span>
+        </label>
         <button onclick="window.__adminCreateAnnouncement()" style="margin-top:10px;">📢 Kirim Pengumuman</button>
         <div id="ann-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
       </div>
@@ -3389,24 +3581,38 @@ window.__jumpToVendor = function (vendorId, whatsapp) {
   }
 };
 
+const ANN_AUDIENCE_LABEL = { semua: 'Semua', premium: 'Pedagang Premium', biasa: 'Pedagang Biasa', pembeli: 'Pembeli' };
+const ANN_LEVEL_LABEL = { provinsi: 'Provinsi', kabupaten: 'Kabupaten/Kota', kecamatan: 'Kecamatan' };
+
+function annZoneLabel(a) {
+  if (!a.zone_level || a.zone_level === 'nasional') return 'Nasional';
+  const reg = a.region_id ? regionsById.get(a.region_id) : null;
+  const name = reg ? reg.name : a.zone_value;
+  return `${name || '?'} (${ANN_LEVEL_LABEL[a.zone_level] || a.zone_level})`;
+}
+
 async function loadAdminAnnouncements() {
   const el = document.getElementById('admin-announcements');
   if (!el) return;
   try {
-    const { data, error } = await sb.from('announcements').select('*').eq('active', true).order('created_at', { ascending: false });
-    if (error) throw error;
-    if (!data || data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada pengumuman aktif.</div>'; return; }
-    const audienceLabel = { semua: 'Semua', premium: 'Pedagang Premium', biasa: 'Pedagang Biasa', pembeli: 'Pembeli' };
-    const zoneLabel = { nasional: 'Nasional', provinsi: 'Provinsi', kabupaten: 'Kabupaten/Kota', kecamatan: 'Kecamatan' };
+    const res = await callAdminAction('list_announcements');
+    const data = (res.announcements || []).filter(a => a.active);
+    if (data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada pengumuman aktif.</div>'; return; }
+    const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     el.innerHTML = data.map(a => `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
         ${a.image_url ? `<img src="${a.image_url}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="font-size:12px;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
+        ${a.link ? `<div style="font-size:10px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(a.link)}</div>` : ''}
         <div style="font-size:10px;color:var(--text-faint);">
-          🎯 ${audienceLabel[a.audience] || a.audience} · 📍 ${zoneLabel[a.zone_level] || 'Nasional'}${a.zone_value ? ' (' + escapeHtml(a.zone_value) + ')' : ''}
+          🎯 ${ANN_AUDIENCE_LABEL[a.audience] || a.audience} · 📍 ${escapeHtml(annZoneLabel(a))}
         </div>
-        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeactivateAnnouncement('${a.id}')">✕ Nonaktifkan</button>
+        <div style="font-size:10px;color:${a.push_sent_at ? 'var(--brand)' : 'var(--text-faint)'};">${a.push_sent_at ? '📣 Push terkirim ' + fmt(a.push_sent_at) : '🔕 Belum dikirim sebagai push'}</div>
+        <div style="font-size:9.5px;color:var(--text-faint);">${fmt(a.created_at)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="follow-btn" onclick="window.__adminBroadcastPush('announcement','${a.id}')">📣 ${a.push_sent_at ? 'Kirim Ulang Push' : 'Kirim Push'}</button>
+          <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeactivateAnnouncement('${a.id}')">✕ Nonaktifkan</button>
+        </div>
       </div>
     `).join('');
   } catch (e) {
@@ -3419,53 +3625,93 @@ window.__adminCreateAnnouncement = async function () {
   const message = document.getElementById('ann-message').value.trim();
   const link = document.getElementById('ann-link').value.trim();
   const audience = document.getElementById('ann-audience').value;
-  const zoneLevel = document.getElementById('ann-zone-level').value;
-  const zoneValue = document.getElementById('ann-zone-value').value.trim();
+  const regionId = document.getElementById('ann-region').value || null;
+  const sendPush = !!(document.getElementById('ann-send-push') && document.getElementById('ann-send-push').checked);
 
   if (!message) { errEl.textContent = 'Isi pengumuman wajib diisi.'; return; }
-  if (zoneLevel !== 'nasional' && !zoneValue) { errEl.textContent = 'Isi nama wilayah untuk zona yang dipilih, atau ganti ke Nasional.'; return; }
+  if (link && !/^https:\/\//.test(link) && !/^\?(vendor|artikel)=[A-Za-z0-9_%.-]+$/.test(link)) {
+    errEl.textContent = 'Link harus diawali https:// atau berupa tujuan dalam app, misal ?artikel=slug-artikel atau ?vendor=ID.';
+    return;
+  }
 
-  errEl.textContent = 'Mengirim...';
+  errEl.textContent = 'Menyimpan...';
   try {
     let imageUrl = null;
     if (pendingAnnImageFile) {
       imageUrl = await uploadAnnouncementImage(pendingAnnImageFile);
     }
-    const { error } = await sb.from('announcements').insert({
-      message,
-      link: link || null,
-      image_url: imageUrl,
-      audience,
-      zone_level: zoneLevel,
-      zone_value: zoneLevel === 'nasional' ? null : zoneValue,
+    const res = await callAdminAction('create_announcement', undefined, {
+      message, link: link || null, image_url: imageUrl, audience, region_id: regionId,
     });
-    if (error) throw error;
 
     pendingAnnImageFile = null; pendingAnnImagePreview = null;
     document.getElementById('ann-message').value = '';
     document.getElementById('ann-link').value = '';
-    document.getElementById('ann-zone-value').value = '';
+    document.getElementById('ann-region').value = '';
+    const pushBox = document.getElementById('ann-send-push');
+    if (pushBox) pushBox.checked = false;
     const zone = document.getElementById('ann-image-zone');
     if (zone) zone.innerHTML = '📷 Tambah gambar (opsional)';
     errEl.textContent = '';
-    showToast('Pengumuman terkirim! 📢');
+    showToast('Pengumuman dibuat! 📢');
     announcements = await fetchAnnouncements();
-    loadAdminAnnouncements();
+    await loadAdminAnnouncements();
+    if (sendPush && res && res.id) await window.__adminBroadcastPush('announcement', res.id);
   } catch (e) {
-    errEl.textContent = 'Gagal mengirim: ' + e.message;
+    errEl.textContent = 'Gagal menyimpan: ' + e.message;
   }
 };
 
 window.__adminDeactivateAnnouncement = async function (id) {
   if (!confirm('Nonaktifkan pengumuman ini?')) return;
   try {
-    await sb.from('announcements').update({ active: false }).eq('id', id);
+    await callAdminAction('deactivate_announcement', undefined, { announcement_id: id });
     announcements = await fetchAnnouncements();
     loadAdminAnnouncements();
   } catch (e) {
     alert('Gagal menonaktifkan: ' + e.message);
   }
 };
+
+// ---------- KIRIM PUSH DARI ADMIN (pengumuman & artikel) ----------
+async function callBroadcastPush(body) {
+  const { data, error } = await sb.functions.invoke('send-broadcast-push', { body: { password: adminPasswordCache, ...body } });
+  if (error) {
+    let payload = null;
+    try { payload = await error.context.json(); } catch (e) {}
+    throw new Error((payload && payload.error) || error.message);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
+// Selalu pratinjau dulu (dry_run): admin melihat berapa perangkat yang akan menerima, baru konfirmasi.
+window.__adminBroadcastPush = async function (kind, id) {
+  try {
+    const pv = await callBroadcastPush({ kind, id, dry_run: true });
+    const aud = ANN_AUDIENCE_LABEL[pv.audience] || pv.audience;
+    const zona = pv.region ? `wilayah ${pv.region}` : 'Nasional';
+    if (!pv.targets) {
+      alert(`Tidak ada perangkat yang cocok untuk dikirimi.\n\nTarget: ${aud} · ${zona}\nTotal langganan push: ${pv.total_subs}\n\nPerangkat yang wilayahnya belum diketahui hanya menerima siaran Nasional.`);
+      return;
+    }
+    const again = !!pv.already_sent_at;
+    const when = again ? new Date(pv.already_sent_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const ok = confirm(`${again ? `⚠️ Sudah pernah dikirim (${when}). Kirim ULANG?\n\n` : ''}Notifikasi akan dikirim ke ${pv.targets} dari ${pv.total_subs} perangkat berlangganan.\nTarget: ${aud} · ${zona}\n\nLanjut kirim?`);
+    if (!ok) return;
+    const res = await callBroadcastPush({ kind, id, force: again });
+    showToast(`Push terkirim ke ${res.sent} perangkat 📣${res.failed ? ` (${res.failed} gagal)` : ''}`);
+    if (kind === 'announcement') loadAdminAnnouncements(); else loadAdminArticles();
+  } catch (e) {
+    alert('Gagal mengirim push: ' + e.message);
+  }
+};
+
+function offerArticlePush(id) {
+  if (confirm('Artikel sudah terbit. Kirim notifikasi push ke pembaca sekarang?\n\nKamu akan melihat pratinjau jumlah penerima dulu sebelum benar-benar terkirim.')) {
+    window.__adminBroadcastPush('article', id);
+  }
+}
 
 // ---------- ARTIKEL (ADMIN) ----------
 let adminArticlesData = [];
@@ -3478,9 +3724,8 @@ async function loadAdminArticles() {
   const pendingEl = document.getElementById('admin-articles-pending');
   if (!el) return;
   try {
-    const { data, error } = await sb.from('articles').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    adminArticlesData = data || [];
+    const res = await callAdminAction('list_articles');
+    adminArticlesData = res.articles || [];
 
     const pending = adminArticlesData.filter(a => a.status === 'in_review');
     const rest = adminArticlesData.filter(a => a.status !== 'in_review');
@@ -3514,10 +3759,11 @@ async function loadAdminArticles() {
           <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
           <span style="flex-shrink:0;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;${badge.style}">${badge.label}</span>
         </div>
-        <div style="font-size:9.5px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+        <div style="font-size:9.5px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}${a.push_sent_at ? ' · 📣 push terkirim' : ''}</div>
         <div class="admin-row" style="margin-top:2px;">
           <button class="follow-btn" style="flex-shrink:0;" onclick="window.__adminOpenArticleForm('${a.id}')">✏️ Edit</button>
           <button class="icon-btn" title="${a.status === 'published' ? 'Jadikan draf' : 'Terbitkan'}" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'published'})">${a.status === 'published' ? '🙈' : '🚀'}</button>
+          ${a.status === 'published' ? `<button class="icon-btn" title="${a.push_sent_at ? 'Kirim ulang notifikasi push' : 'Kirim notifikasi push'}" onclick="window.__adminBroadcastPush('article','${a.id}')">📣</button>` : ''}
           <button class="icon-btn danger" title="Hapus" onclick="window.__adminDeleteArticle('${a.id}','${a.title.replace(/'/g, "\\'")}')">🗑️</button>
         </div>
       </div>
@@ -3530,9 +3776,10 @@ async function loadAdminArticles() {
 
 window.__adminApproveArticle = async function (id) {
   try {
-    await sb.from('articles').update({ status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    await callAdminAction('set_article_status', undefined, { article_id: id, status: 'published' });
     showToast('Artikel disetujui & diterbitkan! 🚀');
-    loadAdminArticles();
+    await loadAdminArticles();
+    offerArticlePush(id);
   } catch (e) {
     alert('Gagal menyetujui: ' + e.message);
   }
@@ -3540,7 +3787,7 @@ window.__adminApproveArticle = async function (id) {
 
 window.__adminRejectArticle = async function (id) {
   try {
-    await sb.from('articles').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', id);
+    await callAdminAction('set_article_status', undefined, { article_id: id, status: 'rejected' });
     showToast('Artikel ditolak.');
     loadAdminArticles();
   } catch (e) {
@@ -3579,6 +3826,11 @@ window.__adminOpenArticleForm = function (articleId) {
       <div id="art-cover-zone" onclick="document.getElementById('art-cover-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         ${pendingArticleCoverPreview ? `<img src="${pendingArticleCoverPreview}" style="width:100%;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti gambar</span>` : '📷 Tambah gambar sampul'}
       </div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Wilayah artikel (opsional — dipakai untuk menarget notifikasi push)</label>
+      <select id="art-region" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 10px;">
+        ${regionOptionsHtml('🌏 Umum (semua wilayah)', existing?.region_id || '')}
+      </select>
 
       <label style="font-size:11px;color:var(--text-faint);">Status</label>
       <select id="art-status" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 14px;">
@@ -3636,32 +3888,33 @@ window.__adminSaveArticle = async function () {
     if (pendingArticleCoverFile) {
       coverUrl = await uploadArticleCoverImage(pendingArticleCoverFile);
     }
-    const payload = { title, slug, excerpt: excerpt || null, content, cover_image: coverUrl || null, status, updated_at: new Date().toISOString() };
-    if (published) payload.published_at = new Date().toISOString();
-    if (!editingArticleId) payload.source = 'admin'; // artikel baru lewat form ini selalu ditulis admin sendiri
-
-    let error;
-    if (editingArticleId) {
-      ({ error } = await sb.from('articles').update(payload).eq('id', editingArticleId));
-    } else {
-      ({ error } = await sb.from('articles').insert(payload));
-    }
-    if (error) throw error;
+    const existing = editingArticleId ? adminArticlesData.find(a => a.id === editingArticleId) : null;
+    const newlyPublished = published && !(existing && existing.status === 'published');
+    const article = {
+      title, slug, excerpt: excerpt || null, content, cover_image: coverUrl || null, status,
+      region_id: (document.getElementById('art-region') && document.getElementById('art-region').value) || null,
+    };
+    if (editingArticleId) article.id = editingArticleId;
+    if (newlyPublished) article.published_at = new Date().toISOString(); // revisi artikel yang sudah terbit tidak mengubah tanggal terbit
+    const res = await callAdminAction('save_article', undefined, { article });
+    const savedId = res && res.article ? res.article.id : editingArticleId;
 
     document.getElementById('article-form-overlay').remove();
     pendingArticleCoverFile = null; pendingArticleCoverPreview = null; editingArticleId = null;
     showToast(published ? 'Artikel diterbitkan! 📝' : 'Artikel disimpan sebagai draf.');
-    loadAdminArticles();
+    await loadAdminArticles();
+    if (newlyPublished && savedId) offerArticlePush(savedId); // revisi/typo tidak memicu push otomatis
   } catch (e) {
-    errEl.textContent = 'Gagal menyimpan: ' + (e.message.includes('duplicate') ? 'Slug ini sudah dipakai artikel lain, coba slug lain.' : e.message);
+    errEl.textContent = 'Gagal menyimpan: ' + ((e.message.includes('duplicate') || e.message.includes('object Object')) ? 'kemungkinan slug ini sudah dipakai artikel lain, coba slug lain.' : e.message);
   }
 };
 
 window.__adminTogglePublishArticle = async function (id, newState) {
   try {
-    await sb.from('articles').update({ status: newState ? 'published' : 'draft', published_at: newState ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('id', id);
+    await callAdminAction('set_article_status', undefined, { article_id: id, status: newState ? 'published' : 'draft' });
     showToast(newState ? 'Artikel diterbitkan! 🚀' : 'Artikel dijadikan draf.');
-    loadAdminArticles();
+    await loadAdminArticles();
+    if (newState) offerArticlePush(id);
   } catch (e) {
     alert('Gagal mengubah status: ' + e.message);
   }
@@ -3670,7 +3923,7 @@ window.__adminTogglePublishArticle = async function (id, newState) {
 window.__adminDeleteArticle = async function (id, title) {
   if (!confirm(`Hapus artikel "${title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
   try {
-    await sb.from('articles').delete().eq('id', id);
+    await callAdminAction('delete_article', undefined, { article_id: id });
     showToast('Artikel dihapus.');
     loadAdminArticles();
   } catch (e) {
@@ -3761,7 +4014,11 @@ async function callAdminAction(action, vendorId, extra = {}) {
   const { data, error } = await sb.functions.invoke('admin-action', {
     body: { password: adminPasswordCache, action, vendor_id: vendorId, ...extra },
   });
-  if (error) throw error;
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
   if (data && data.error) throw new Error(data.error);
   return data;
 }
@@ -3848,7 +4105,10 @@ async function init() {
     vendors = (await fetchVendors()).map(normalizeExpiry);
     const followList = await fetchFollows();
     followedIds = new Set(followList);
+    await fetchRegions();
+    await getBuyerRegion().catch(() => {}); // wilayah pembeli dari cache (kalau ada), dipakai filter pengumuman
     announcements = await fetchAnnouncements();
+    ensurePushSubscription({ silent: true }); // izin sudah diberikan sebelumnya -> segarkan langganan & wilayahnya
     loadKnownTagSuggestions(); // tidak perlu ditunggu, isi belakangan pas render form pendaftaran
     subscribeRealtime();
     tryLocateBuyer();
@@ -3867,16 +4127,27 @@ async function init() {
       history.replaceState(null, '', location.pathname);
     }
 
-    // Dukungan shortcut app: ?view=peta / ?view=cari / ?mode=pedagang
+    // Shortcut app & link dari notifikasi:
+    //   ?view=peta | ?view=cari | ?mode=pedagang
+    //   ?vendor=ID (fokus ke pedagang di peta) | ?artikel=slug | ?ann=ID (pengumuman)
     const urlParams = new URLSearchParams(location.search);
     const wantMode = urlParams.get('mode');
     const wantView = urlParams.get('view');
+    const wantVendor = urlParams.get('vendor');
+    const wantArtikel = urlParams.get('artikel');
+    const wantAnn = urlParams.get('ann');
 
     if (wantMode === 'pedagang') {
       mode = 'pedagang';
       btnPedagang.classList.add('active');
       btnPembeli.classList.remove('active');
       renderPedagang();
+    } else if (wantVendor) {
+      openVendorFromLink(wantVendor);
+    } else if (wantArtikel) {
+      openArtikelFromLink(wantArtikel);
+    } else if (wantAnn) {
+      openAnnouncementFromLink(wantAnn);
     } else if (wantView === 'peta' || wantView === 'cari') {
       bottomView = wantView;
       document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
@@ -3887,7 +4158,7 @@ async function init() {
       renderPembeli();
     }
 
-    if (wantMode || wantView) {
+    if (wantMode || wantView || wantVendor || wantArtikel || wantAnn) {
       history.replaceState(null, '', location.pathname);
     }
 
