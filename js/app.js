@@ -179,11 +179,13 @@ const btnPedagang = document.getElementById('btn-pedagang');
 btnPembeli.onclick = () => {
   mode = 'pembeli';
   btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
+  refreshMyChatThreads(); // ganti mode -> daftar thread yang "punya kita" ikut ganti
   renderPembeli();
 };
 btnPedagang.onclick = () => {
   mode = 'pedagang';
   btnPedagang.classList.add('active'); btnPembeli.classList.remove('active');
+  refreshMyChatThreads();
   renderPedagang();
 };
 
@@ -1175,6 +1177,56 @@ let currentChatIsVendor = false;
 let chatPollTimer = null;
 let chatSeenMessageIds = new Set();
 
+// ---------- NOTIFIKASI CHAT GLOBAL (bukan cuma pas modal chat lagi kebuka) ----------
+// Sebelumnya bunyi/toast pesan baru CUMA jalan selagi modal chat thread itu terbuka —
+// jadi kalau lagi di Beranda/Peta/tab lain, pesan baru nggak kerasa sama sekali.
+// Ini nyimpen daftar thread_id milik kita sendiri (sebagai pembeli/perangkat ini, atau
+// sebagai pedagang yang lagi login), lalu dengar INSERT baru di seluruh tabel chat_messages
+// dan cocokkan sendiri di sisi klien (server sudah membolehkan baca bebas per thread yang
+// sama seperti dipakai polling chat yang sudah ada, jadi tidak menambah celah baru).
+let myThreadIds = new Set();
+let myThreadVendorName = {};
+let globalChatChannel = null;
+
+async function refreshMyChatThreads() {
+  try {
+    if (mode === 'pedagang' && myVendorId) {
+      const { data } = await sb.from('chat_threads').select('id').eq('vendor_id', myVendorId);
+      myThreadIds = new Set((data || []).map(t => t.id));
+    } else {
+      const { data } = await sb.from('chat_threads').select('id,vendor_id').eq('buyer_device_id', deviceId);
+      myThreadIds = new Set((data || []).map(t => t.id));
+      (data || []).forEach(t => {
+        const v = vendors.find(x => x.id === t.vendor_id);
+        if (v) myThreadVendorName[t.id] = v.name;
+      });
+    }
+  } catch (e) { console.error('Gagal ambil daftar thread chat sendiri:', e); }
+}
+
+function startGlobalChatWatch() {
+  if (globalChatChannel) { sb.removeChannel(globalChatChannel); globalChatChannel = null; }
+  refreshMyChatThreads();
+  globalChatChannel = sb.channel('global_chat_watch')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+      const m = payload.new;
+      if (!myThreadIds.has(m.thread_id)) return; // bukan thread kita, abaikan
+      if (currentChatThreadId === m.thread_id) return; // sudah ditangani listener modal yang lagi kebuka
+      const asVendor = mode === 'pedagang';
+      const fromOther = (asVendor && m.sender === 'buyer') || (!asVendor && m.sender === 'vendor');
+      if (!fromOther) return;
+      playChatDing();
+      const label = asVendor ? 'Ada pesan baru dari pembeli' : `Pesan baru dari ${myThreadVendorName[m.thread_id] || 'pedagang'}`;
+      showToast(`💬 ${label}`);
+      // Kalau tab lagi tidak aktif/di-minimize dan izin notifikasi browser sudah ada,
+      // tampilkan juga sebagai notifikasi sistem (mirip pengingat "saatnya buka lapak").
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+        try { new Notification('JajanDekat', { body: label + (m.message ? ': ' + m.message.slice(0, 60) : ''), icon: 'icons/lainnya.png' }); } catch (e) {}
+      }
+    })
+    .subscribe();
+}
+
 // Bunyi notifikasi chat — dibuat langsung dari kode (bukan file audio), jadi tetap
 // single-file dan tidak perlu hosting aset tambahan.
 let chatAudioCtx = null;
@@ -1197,9 +1249,10 @@ function playChatDing() {
 
 async function getOrCreateChatThread(vendorId, buyerDeviceId) {
   const { data: existing } = await sb.from('chat_threads').select('id').eq('vendor_id', vendorId).eq('buyer_device_id', buyerDeviceId).maybeSingle();
-  if (existing) return existing.id;
+  if (existing) { myThreadIds.add(existing.id); return existing.id; }
   const { data, error } = await sb.from('chat_threads').insert({ vendor_id: vendorId, buyer_device_id: buyerDeviceId }).select('id').single();
   if (error) throw error;
+  myThreadIds.add(data.id);
   return data.id;
 }
 
@@ -1338,6 +1391,7 @@ window.__sendChatMessage = async function () {
     if (error) throw error;
     if (currentChatThreadId === threadId && data) appendChatMessage(data, currentChatIsVendor);
     await sb.from('chat_threads').update({ last_message_at: new Date().toISOString(), last_message_preview: text.slice(0, 80) }).eq('id', threadId);
+    sendChatPushNotification(threadId, sender, text); // best-effort: sampai ke HP lawan bicara walau app-nya lagi ditutup
   } catch (e) {
     input.value = text; // kembalikan teksnya, jangan sampai hilang kalau gagal terkirim
     alert('Gagal mengirim pesan: ' + e.message);
@@ -3167,6 +3221,7 @@ window.__pickVendor = async function () {
   localStorage.setItem('jd_my_vendor_id', myVendorId);
   Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: myVendorId, p_pin: enteredPin, p_device_id: deviceId })).catch(() => {});
   ensurePushSubscription();
+  refreshMyChatThreads(); // sekarang login sbg pedagang -> pantau thread milik toko ini
   renderPedagang();
 };
 
@@ -3174,6 +3229,7 @@ window.__logoutVendor = function () {
   myVendorId = null;
   myVendorPin = null;
   localStorage.removeItem('jd_my_vendor_id');
+  refreshMyChatThreads(); // balik ke pantau thread milik device ini sbg pembeli
   renderPedagang();
 };
 
@@ -3187,6 +3243,20 @@ async function sendPushToFollowers(vendorId, vendorName) {
     await sb.functions.invoke('send-vendor-push', { body: { vendor_id: vendorId, vendor_name: vendorName } });
   } catch (e) {
     console.error('Gagal kirim notifikasi push:', e); // tidak fatal, status tetap aktif walau notif gagal
+  }
+}
+
+// Supaya lawan chat tetap kebagian notifikasi walau app-nya lagi ditutup/di-background,
+// bukan cuma sound/toast di dalam app (yang cuma jalan selagi app-nya lagi kebuka).
+// CATATAN: ini butuh Edge Function 'send-chat-push' di project Supabase-nya (dibuat
+// terpisah, polanya sama seperti 'send-vendor-push' yang sudah ada) — fungsi ini cuma
+// memanggilnya, jadi kalau belum dibuat, panggilan ini gagal diam-diam (tidak mengganggu
+// pengiriman pesannya sendiri, yang sudah pasti berhasil duluan).
+async function sendChatPushNotification(threadId, sender, text) {
+  try {
+    await sb.functions.invoke('send-chat-push', { body: { thread_id: threadId, sender, message: text } });
+  } catch (e) {
+    console.error('Gagal kirim push chat (cek apakah Edge Function send-chat-push sudah dibuat):', e);
   }
 }
 
@@ -4363,6 +4433,7 @@ async function init() {
     ensurePushSubscription({ silent: true }); // izin sudah diberikan sebelumnya -> segarkan langganan & wilayahnya
     loadKnownTagSuggestions(); // tidak perlu ditunggu, isi belakangan pas render form pendaftaran
     subscribeRealtime();
+    startGlobalChatWatch();
     tryLocateBuyer();
 
     // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
