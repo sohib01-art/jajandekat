@@ -924,9 +924,9 @@ function renderPembeli() {
 
   const followed = vendors.filter(v => followedIds.has(v.id));
 
-  // Ketuk story = buka menu pedagang (dulu: berhenti mengikuti tanpa sengaja). Berhenti mengikuti tetap lewat tombol ✓ di kartu.
+  // Ketuk story = buka detail pedagang (dulu: berhenti mengikuti tanpa sengaja). Berhenti mengikuti lewat ♥ di kartu atau tombol Mengikuti di sheet.
   const storyHtml = followed.map(v => `
-    <button class="story ${v.active ? 'on' : ''}" onclick="window.__openProductCatalog('${v.id}','${v.name.replace(/'/g, "\\'")}')">
+    <button class="story ${v.active ? 'on' : ''}" onclick="window.__openVendorSheet('${v.id}')">
       <div class="story-avatar">
         <div class="story-ring" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         ${v.active ? '<span class="story-dot"></span>' : ''}
@@ -952,7 +952,7 @@ function renderPembeli() {
     <div class="cat-row">${catRowHtml}</div>
     <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2></div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
-    <div class="sec-head"><h2>Pedagang unggulan</h2></div>
+    <div class="sec-head"><h2><svg class="sec-star" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.400 6.100 20.500l1.200-6.500L2.500 9.400l6.600-.9L12 2.500Z" fill="#FFB400"/></svg>Pilihan JajanDekat</h2></div>
     ${renderVendorCarouselHtml(filteredVendors)}
     <div class="sec-head"><h2>Semua pedagang</h2></div>
     ${renderVendorGridHtml(filteredVendors)}
@@ -1380,54 +1380,57 @@ function tryLocateBuyer() {
   );
 }
 
+// Ikon kecil untuk kartu & sheet (inline SVG supaya ikut warna teks)
+const VP_ICON_CROWN = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8Z"/></svg>';
+const VP_ICON_PIN = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
+const VP_ICON_CHAT = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/></svg>';
+const VP_ICON_HEART = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+
+function vendorPhotoStyle(v) {
+  if (v.photo_url) return `background-image:url('${v.photo_url}');`;
+  if (v.mode_icon) return `background-image:url('mode_icons/${v.mode_icon}.png');`;
+  return '';
+}
+function vendorDistanceLabel(v) {
+  return (buyerLoc && v.lat && v.lng)
+    ? formatDistance(haversineMeters(buyerLoc.lat, buyerLoc.lng, v.lat, v.lng))
+    : null;
+}
+
+// Kartu pedagang: foto + lencana, nama, rating · kategori, jarak + tombol Chat.
+// Aksi lain (menu, WhatsApp, peta, ulasan) ada di sheet detail: window.__openVendorSheet.
 function renderVendorCardHtml(v, opts = {}) {
   const compact = !!opts.compact;
   const following = followedIds.has(v.id);
-  const untilStr = v.active_until
-    ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-    : null;
   const hasPhoto = !!v.photo_url;
-  const photoStyle = hasPhoto
-    ? `background-image:url('${v.photo_url}');`
-    : (v.mode_icon ? `background-image:url('mode_icons/${v.mode_icon}.png');` : '');
-  const distanceLabel = (buyerLoc && v.lat && v.lng)
-    ? formatDistance(haversineMeters(buyerLoc.lat, buyerLoc.lng, v.lat, v.lng))
-    : null;
+  const distanceLabel = vendorDistanceLabel(v);
+  const cats = v.categories || [];
+  const catLabel = cats.length ? escapeHtml(cats[0]) + (cats.length > 1 ? ` +${cats.length - 1}` : '') : '';
+  const locLabel = distanceLabel || (v.region ? escapeHtml(v.region) : '');
+  const nameJs = v.name.replace(/'/g, "\\'");
   return `
-    <div class="vp-card ${compact ? 'vp-card-compact' : ''}" onclick="if(!event.target.closest('button,a')) window.__openReviewModal('${v.id}','${v.name.replace(/'/g, "\\'")}')" style="${isPromoActive(v) ? 'box-shadow:0 0 0 2px #F5A623;' : ''}">
+    <div class="vp-card ${compact ? 'vp-card-compact' : ''} ${isPromoActive(v) ? 'vp-card-promo' : ''}" onclick="if(!event.target.closest('button,a')) window.__openVendorSheet('${v.id}')">
       <div class="vp-photo-wrap">
-        <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${photoStyle}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
-        ${!v.active ? '<div class="vp-inactive-badge">😴 Belum jualan</div>' : ''}
+        <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${vendorPhotoStyle(v)}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
         <div class="vp-badges-top">
-          ${v.is_premium ? '<img class="vp-badge-icon" src="icons/badge_premium.png" alt="Premium" title="Premium">' : ''}
-          ${isPromoActive(v) ? '<img class="vp-badge-icon" src="icons/badge_promo.png" alt="Promo" title="Promo">' : ''}
-          ${v.verification_status === 'verified' ? '<span title="Toko Terverifikasi" style="background:var(--navy);color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✓</span>' : ''}
+          ${v.is_premium ? `<span class="vp-pill vp-pill-premium">${VP_ICON_CROWN}Unggulan</span>` : ''}
+          ${isPromoActive(v) ? '<span class="vp-pill vp-pill-promo">🔥 Promo</span>' : ''}
+          ${v.verification_status === 'verified' ? '<span class="vp-verified" title="Toko Terverifikasi">✓</span>' : ''}
         </div>
-        ${distanceLabel ? `<div class="vp-distance-badge">📍 ${distanceLabel}</div>` : ''}
-        <div class="vp-float-icons" onclick="event.stopPropagation();">
-          ${v.active && v.lat && v.lng ? `<button class="vp-float-btn" title="Lihat di peta" onclick="window.__goToVendorOnMap('${v.id}',${v.lat},${v.lng})"><img class="vp-btn-icon" src="icons/icon_map.png" alt="Peta"></button>` : ''}
-          <button class="vp-float-btn" title="Lihat menu" onclick="window.__openProductCatalog('${v.id}','${v.name.replace(/'/g, "\\'")}')"><span class="vp-btn-emoji">🍽️</span></button>
-          <button class="vp-float-btn brand" title="Chat di app" onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"><img class="vp-btn-icon" src="icons/icon_chat_app.png" alt="Chat di app"></button>
-          ${v.show_whatsapp !== false && v.whatsapp ? `
-            <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
-               class="vp-float-btn wa" title="Chat WhatsApp"><img class="vp-btn-icon" src="icons/icon_chat_wa.png" alt="Chat WhatsApp"></a>
-          ` : ''}
-          <button class="vp-float-btn ${following ? 'following' : ''}" title="${following ? 'Berhenti mengikuti' : 'Ikuti'}" onclick="window.__toggleFollow('${v.id}')">${following ? '<img class="vp-btn-icon" src="icons/icon_check.png" alt="Mengikuti">' : '<span class="vp-btn-emoji">➕</span>'}</button>
-        </div>
+        <button class="vp-heart ${following ? 'on' : ''}" aria-label="${following ? 'Berhenti mengikuti' : 'Ikuti'} ${escapeHtml(v.name)}" aria-pressed="${following}" onclick="window.__toggleFollow('${v.id}')">${VP_ICON_HEART}</button>
+        <div class="vp-status-pill ${v.active ? 'on' : 'off'}">${v.active ? '<span class="vp-status-dot"></span>Sedang buka' : 'Belum buka'}</div>
       </div>
       <div class="vp-body">
-        <div class="vp-name">${v.name}</div>
-        ${v.rating_count > 0 ? `<div class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count})</span></div>` : ''}
-        <div class="vp-meta">
-          <span class="status-dot ${v.active ? 'aktif' : 'nonaktif'}"></span>
-          <span class="status-text ${v.active ? 'aktif' : 'nonaktif'} mono">
-            ${v.active ? 'SEDANG JUALAN · sampai ' + untilStr : 'Belum jualan'}
-          </span>
+        <div class="vp-name">${escapeHtml(v.name)}</div>
+        <div class="vp-rating-line">
+          ${v.rating_count > 0 ? `<span class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count})</span></span>` : ''}
+          ${catLabel ? `<span class="vp-cat">${catLabel}</span>` : ''}
         </div>
-        <div class="vp-sub">${(v.categories || []).join(' · ')}${v.active && !v.lat ? ' · 📍 lokasi tidak tersedia' : ''}</div>
-        ${v.region ? `<div class="vp-sub vp-region">📍 ${escapeHtml(v.region)}</div>` : ''}
-        ${isPromoActive(v) && v.promo_text ? `<div class="vp-sub" style="color:#F5A623;font-weight:700;">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
-        ${!compact ? `<div class="vp-sub" style="font-size:10.5px;">Tap kartu untuk beri masukan ke pedagang 💬</div>` : ''}
+        ${isPromoActive(v) && v.promo_text ? `<div class="vp-promo-text">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
+        <div class="vp-foot">
+          ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
+          <button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>
+        </div>
       </div>
     </div>
   `;
@@ -1453,6 +1456,83 @@ function renderVendorGridHtml(list) {
   return `<div class="vp-grid">${sorted.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>`;
 }
 
+
+// ---------- SHEET DETAIL PEDAGANG ----------
+window.__closeVendorSheet = function () {
+  document.getElementById('vendor-sheet-overlay')?.remove();
+};
+
+window.__openVendorSheet = function (vendorId, opts = {}) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  document.getElementById('vendor-sheet-overlay')?.remove();
+
+  const following = followedIds.has(v.id);
+  const untilStr = v.active_until
+    ? new Date(v.active_until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const distanceLabel = vendorDistanceLabel(v);
+  const cats = (v.categories || []).map(escapeHtml).join(' · ');
+  const canMap = v.active && v.lat && v.lng;
+  const canWa = v.show_whatsapp !== false && v.whatsapp;
+  const waUrl = canWa ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}` : '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'vendor-sheet-overlay';
+  overlay.className = 'vs-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) window.__closeVendorSheet(); };
+  overlay.innerHTML = `
+    <div class="vs-sheet ${opts.still ? 'still' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(v.name)}">
+      <div class="vs-photo-wrap">
+        <div class="vs-photo ${!v.active ? 'inactive' : ''}" style="${vendorPhotoStyle(v)}">${v.photo_url || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
+        <button class="vs-close" aria-label="Tutup" onclick="window.__closeVendorSheet()">✕</button>
+        <div class="vp-badges-top">
+          ${v.is_premium ? `<span class="vp-pill vp-pill-premium">${VP_ICON_CROWN}Unggulan</span>` : ''}
+          ${isPromoActive(v) ? '<span class="vp-pill vp-pill-promo">🔥 Promo</span>' : ''}
+          ${v.verification_status === 'verified' ? '<span class="vp-verified" title="Toko Terverifikasi">✓</span>' : ''}
+        </div>
+      </div>
+      <div class="vs-body">
+        <div class="vs-title">${escapeHtml(v.name)}</div>
+        <div class="vs-meta">
+          ${v.rating_count > 0 ? `<span class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count} ulasan)</span></span>` : '<span class="vs-muted">Belum ada ulasan</span>'}
+          ${cats ? `<span class="vs-muted">${cats}</span>` : ''}
+        </div>
+        <div class="vs-status ${v.active ? 'on' : ''}">
+          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : 'Belum buka'}
+        </div>
+        ${distanceLabel ? `<div class="vs-line">${VP_ICON_PIN}<span>${distanceLabel} dari kamu</span></div>` : ''}
+        ${v.region ? `<div class="vs-line">${VP_ICON_PIN}<span>${escapeHtml(v.region)}</span></div>` : ''}
+        ${v.active && !v.lat ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
+        ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
+        <div class="vs-actions">
+          <button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>
+          ${canWa ? `<a class="vs-btn wa" href="${waUrl}" target="_blank" rel="noopener"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
+          <button class="vs-btn" onclick="window.__vsAct('menu','${v.id}')"><span class="vs-emoji">🍽️</span>Lihat menu</button>
+          ${canMap ? `<button class="vs-btn" onclick="window.__vsAct('map','${v.id}')"><img class="vs-ic" src="icons/icon_map.png" alt="">Lihat di peta</button>` : ''}
+          <button class="vs-btn ${following ? 'on' : ''}" onclick="window.__vsAct('follow','${v.id}')">${following ? '<img class="vs-ic" src="icons/icon_check.png" alt="">Mengikuti' : '<span class="vs-emoji">➕</span>Ikuti'}</button>
+          <button class="vs-btn ghost wide" onclick="window.__vsAct('review','${v.id}')">💬 Beri ulasan atau masukan</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__vsAct = async function (kind, id) {
+  const v = vendors.find(x => x.id === id);
+  if (!v) return;
+  if (kind === 'follow') {
+    await window.__toggleFollow(id);
+    window.__openVendorSheet(id, { still: true }); // segarkan tombol Ikuti tanpa animasi ulang
+    return;
+  }
+  window.__closeVendorSheet();
+  if (kind === 'chat') window.__openChatModal(id, v.name);
+  else if (kind === 'menu') window.__openProductCatalog(id, v.name);
+  else if (kind === 'review') window.__openReviewModal(id, v.name);
+  else if (kind === 'map') window.__goToVendorOnMap(id, v.lat, v.lng);
+};
 
 window.__goToVendorOnMap = function (id, lat, lng) {
   bottomView = 'peta';
