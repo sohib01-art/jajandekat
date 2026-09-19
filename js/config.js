@@ -17,8 +17,7 @@ const ADMIN_WHATSAPP = "6285245174728";
 // Password untuk masuk Dashboard Admin (tersembunyi, akses lewat tap logo 5x).
 // GANTI ini dengan password Anda sendiri, jangan biarkan default.
 // Catatan: ini bukan keamanan tingkat tinggi (situs statis tanpa server),
-// hanya penghalang kasual — jangan simpan data sangat sensitif di sini.
-const SUPER_ADMIN_PASSWORD = "gantiPasswordIni123";
+// hanya penghalang kasual — jangan simpan data sangat sensitif di sini.";
 
 // Kunci publik untuk Web Push (notifikasi sistem). Aman ditaruh di sini —
 // kunci publik memang dirancang untuk terlihat semua orang.
