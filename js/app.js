@@ -344,19 +344,11 @@ window.__openGuideModal = function (preferredTab) {
   window.__switchGuideTab(guideActiveTab);
 };
 
-function ensureGuideHelpButton() {
-  if (document.getElementById('guide-help-btn')) return;
-  const btn = document.createElement('button');
-  btn.id = 'guide-help-btn';
-  btn.textContent = '❓';
-  btn.title = 'Panduan penggunaan';
-  btn.onclick = () => window.__openGuideModal(mode);
-  btn.style.cssText = 'position:fixed;left:16px;bottom:86px;width:44px;height:44px;border-radius:50%;border:none;background:var(--brand);color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:40;cursor:pointer;';
-  document.body.appendChild(btn);
-}
-
+// Dulu ada tombol ❓ mengambang di kiri-bawah, tapi posisinya numpuk di atas kartu
+// "Pilihan JajanDekat" pas discroll (nutupin nama/rating pedagang). Panduan tetap bisa
+// dibuka lewat tab Akun ("❓ Bantuan & FAQ") atau sheet detail pedagang, jadi tombol
+// mengambangnya dihapus saja — cukup tampil otomatis sekali di kunjungan pertama.
 function maybeShowGuideOnFirstVisit() {
-  ensureGuideHelpButton();
   if (localStorage.getItem('jd_guide_seen')) return;
   localStorage.setItem('jd_guide_seen', '1');
   window.__openGuideModal(mode);
