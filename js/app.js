@@ -168,6 +168,7 @@ let mode = 'pembeli';
 let activeCat = 'semua';
 let map = null;
 let markers = {};
+let mapDidInitialFit = false;
 
 const main = document.getElementById('main');
 const btnPembeli = document.getElementById('btn-pembeli');
@@ -1811,6 +1812,21 @@ function renderMap() {
     `;
     markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(popupHtml);
   });
+
+  // Peta dulu selalu diam di lokasi/zoom default (kadang jauh dari pedagang/pembeli),
+  // jadi marker yang ada bisa kelewat kalau di luar area yang kelihatan. Sekali saja,
+  // begitu datanya sudah ada, fokuskan ke marker pedagang (atau ke lokasi pembeli kalau
+  // belum ada pedagang aktif) — supaya sesudah itu pembeli bebas geser/zoom sendiri.
+  if (!mapDidInitialFit) {
+    const markerList = Object.values(markers);
+    if (markerList.length) {
+      map.fitBounds(L.featureGroup(markerList).getBounds(), { padding: [40, 40], maxZoom: 16 });
+      mapDidInitialFit = true;
+    } else if (buyerLoc) {
+      map.setView([buyerLoc.lat, buyerLoc.lng], 14);
+      mapDidInitialFit = true;
+    }
+  }
 }
 
 // ---------- VENDOR VIEW ----------
