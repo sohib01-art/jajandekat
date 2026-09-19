@@ -1,77 +1,34 @@
-const CACHE_NAME = 'jajandekat-v2';
-const CORE_FILES = [
-  './',
-  './index.html',
-  './css/style.css',
-  './js/config.js',
-  './js/app.js',
-  './manifest.json',
-  './offline.html',
-];
+// ============================================
+// Tempel di sw.js (ganti handler 'push' & 'notificationclick' yang lama)
+// ============================================
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_FILES))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
-});
-
-// Strategi: coba jaringan dulu (data pedagang harus selalu fresh).
-// Kalau gagal (offline):
-//  - untuk navigasi halaman (buka app/refresh) -> tampilkan offline.html yang rapi
-//  - untuk file lain (css/js/gambar) -> pakai cache kalau ada
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() =>
-        caches.match('./offline.html').then((r) => r || caches.match('./index.html'))
-      )
-    );
-    return;
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { body: event.data ? event.data.text() : '' };
   }
 
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
-  );
-});
+  const options = {
+    body: data.body || '',
+    icon: 'icons/lainnya.png',      // ikon kecil di kiri (path relatif terhadap sw.js)
+    badge: 'icons/lainnya.png',     // idealnya PNG putih transparan 96x96 untuk ikon status bar
+    image: data.image || undefined, // gambar besar (muncul saat notif di-expand)
+    tag: data.tag || undefined,     // tag sama = notif lama diganti, bukan menumpuk
+    renotify: !!data.tag,           // bunyi/getar lagi walau menggantikan notif lama
+    vibrate: [100, 50, 100],
+    data: { url: data.url || '?view=peta', vendor_id: data.vendor_id },
+    // Tombol "Lihat di Peta" hanya untuk notifikasi pedagang; pengumuman & artikel tidak punya vendor_id
+    actions: data.vendor_id ? [{ action: 'peta', title: '📍 Lihat di Peta' }] : [],
+  };
 
-// ---------- WEB PUSH ----------
-self.addEventListener('push', (event) => {
-  let data = { title: 'JajanDekat', body: 'Ada kabar baru!' };
-  try { data = event.data.json(); } catch (e) {}
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: './icon-192.png',
-      badge: './icon-192.png',
-      data: { vendor_id: data.vendor_id },
-    })
-  );
+  event.waitUntil(self.registration.showNotification(data.title || 'JajanDekat', options));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes(self.registration.scope) && 'focus' in client) return client.focus();
-      }
-      if (clients.openWindow) return clients.openWindow('./');
-    })
-  );
-});
+  // Relatif terhadap scope app, jadi aman walau app ada di subfolder
+  const target = new URL(event.notification.data?.url || '?view=peta', self.registration.scope).href;
+
+  event.waitUntil((async () => {
