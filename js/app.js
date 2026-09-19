@@ -186,13 +186,22 @@ btnPedagang.onclick = () => {
   renderPedagang();
 };
 
-// Pasang tombol nav bawah (Status / Peta / Cari) — hanya berlaku di mode Pembeli
+// Pasang tombol nav bawah (Beranda / Peta / Cari / Favorit / Akun) — hanya berlaku di mode Pembeli.
+// Kunci internal Beranda tetap 'status' (dipakai banyak tempat). Sub-tampilan tanpa tombol sendiri
+// ikut menyalakan tombol induknya: 'artikel' -> Akun, 'terdekat' -> Beranda.
 let bottomView = 'status';
+function setNavActive(view) {
+  const navView = view === 'artikel' ? 'akun' : (view === 'terdekat' ? 'status' : view);
+  document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
+    const on = n.dataset.view === navView;
+    n.classList.toggle('active', on);
+    if (on) n.setAttribute('aria-current', 'page'); else n.removeAttribute('aria-current');
+  });
+}
 document.querySelectorAll('nav.bottom .nav-item').forEach(el => {
   el.onclick = () => {
     bottomView = el.dataset.view;
-    document.querySelectorAll('nav.bottom .nav-item').forEach(n => n.classList.remove('active'));
-    el.classList.add('active');
+    setNavActive(bottomView);
     // Nav bawah selalu membawa ke mode Pembeli
     if (mode !== 'pembeli') {
       mode = 'pembeli';
@@ -211,18 +220,20 @@ function refreshBell() {
   bellBtn.hidden = false;
   bellBtn.classList.toggle('needs-attention', Notification.permission === 'default');
 }
+// Dipakai lonceng di header dan baris Notifikasi di tab Akun
+window.__notifTap = async function () {
+  if (!pushSupported()) return;
+  if (Notification.permission === 'granted') {
+    showToast('Notifikasi sudah aktif 🔔');
+  } else if (Notification.permission === 'denied') {
+    showToast('Notifikasi diblokir. Aktifkan lewat pengaturan situs di browser.');
+  } else {
+    await window.__enablePush();
+  }
+  refreshBell();
+};
 if (bellBtn) {
-  bellBtn.onclick = async () => {
-    if (!pushSupported()) return;
-    if (Notification.permission === 'granted') {
-      showToast('Notifikasi sudah aktif 🔔');
-    } else if (Notification.permission === 'denied') {
-      showToast('Notifikasi diblokir. Aktifkan lewat pengaturan situs di browser.');
-    } else {
-      await window.__enablePush();
-    }
-    refreshBell();
-  };
+  bellBtn.onclick = () => window.__notifTap();
   refreshBell();
 }
 
@@ -240,9 +251,7 @@ let guideActiveTab = mode;
 // dan langsung membawa pengguna ke menu terkait, bukan cuma teks.
 function goToBottomView(view) {
   bottomView = view;
-  document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
-    n.classList.toggle('active', n.dataset.view === view);
-  });
+  setNavActive(view);
   if (mode !== 'pembeli') {
     mode = 'pembeli';
     btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
@@ -262,10 +271,10 @@ const GUIDE_STEPS = {
     steps: [
       { icon: '🗺️', text: 'Buka <b>Peta</b> untuk melihat pedagang keliling yang sedang jualan di sekitarmu, lengkap dengan jaraknya.', action: () => goToBottomView('peta') },
       { icon: '🔍', text: 'Pakai <b>Cari</b> untuk menemukan pedagang tertentu berdasarkan nama atau kategori jualan.', action: () => goToBottomView('cari') },
-      { icon: '⭐', text: 'Di halaman <b>Status</b>, tekan tombol follow pada kartu pedagang untuk mengikuti — kamu akan tahu kapan mereka mulai jualan lagi.', action: () => goToBottomView('status') },
-      { icon: '💬', text: 'Buka profil pedagang dari halaman <b>Status</b> untuk chat langsung dalam app atau hubungi lewat WhatsApp.', action: () => goToBottomView('status') },
-      { icon: '🍽️', text: 'Tekan ikon 🍽️ di kartu pedagang untuk lihat menu/produk yang mereka jual, sebelum datang.', action: () => goToBottomView('status') },
-      { icon: '📰', text: 'Cek <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.', action: () => goToBottomView('artikel') },
+      { icon: '⭐', text: 'Di <b>Beranda</b>, ketuk ♥ pada kartu pedagang untuk mengikuti — kamu akan tahu kapan mereka mulai jualan lagi. Semua pedagang yang kamu ikuti ada di tab <b>Favorit</b>.', action: () => goToBottomView('favorit') },
+      { icon: '💬', text: 'Ketuk kartu pedagang di <b>Beranda</b> untuk melihat detailnya, lalu chat langsung dalam app atau lewat WhatsApp.', action: () => goToBottomView('status') },
+      { icon: '🍽️', text: 'Di detail pedagang, tekan <b>Lihat menu</b> untuk melihat menu/produk yang mereka jual, sebelum datang.', action: () => goToBottomView('status') },
+      { icon: '📰', text: 'Buka tab <b>Akun</b> lalu pilih <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.', action: () => goToBottomView('akun') },
     ],
   },
   pedagang: {
@@ -920,6 +929,9 @@ const CAT_ALL_ICON_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="
 function renderPembeli() {
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
+  if (bottomView === 'favorit') return renderFavoritView();
+  if (bottomView === 'akun') return renderAkunView();
+  if (bottomView === 'terdekat') return renderTerdekatView();
   if (bottomView === 'artikel') return artikelDetailSlug ? renderArtikelDetailView(artikelDetailSlug) : renderArtikelListView();
 
   const followed = vendors.filter(v => followedIds.has(v.id));
@@ -950,10 +962,11 @@ function renderPembeli() {
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     <div class="sec-head"><h2>Kategori</h2></div>
     <div class="cat-row">${catRowHtml}</div>
-    <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2></div>
+    <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2>${followed.length ? '<button onclick="window.__goView(\'favorit\')">Lihat semua ›</button>' : ''}</div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
     <div class="sec-head"><h2><svg class="sec-star" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.400 6.100 20.500l1.200-6.500L2.500 9.400l6.600-.9L12 2.500Z" fill="#FFB400"/></svg>Pilihan JajanDekat</h2></div>
     ${renderVendorCarouselHtml(filteredVendors)}
+    ${renderNearbyHtml(filteredVendors)}
     <div class="sec-head"><h2>Semua pedagang</h2></div>
     ${renderVendorGridHtml(filteredVendors)}
   `;
@@ -1363,7 +1376,7 @@ function formatDistance(meters) {
   if (meters < 950) return Math.round(meters / 10) * 10 + ' m';
   return (meters / 1000).toFixed(1) + ' km';
 }
-function tryLocateBuyer() {
+function tryLocateBuyer(onFail) {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -1375,7 +1388,7 @@ function tryLocateBuyer() {
         if (buyerRegionId !== regionBefore && mode === 'pembeli') renderPembeli(); // filter pengumuman per zona
       }).catch(() => {});
     },
-    () => { /* pembeli menolak/gagal lokasi — diamkan, jarak cukup disembunyikan */ },
+    (err) => { if (onFail) onFail(err); /* tanpa onFail: pembeli menolak/gagal lokasi — diamkan, jarak cukup disembunyikan */ },
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
   );
 }
@@ -1457,6 +1470,115 @@ function renderVendorGridHtml(list) {
 }
 
 
+// ---------- PEDAGANG TERDEKAT (beranda) + halaman "Lihat semua" ----------
+const NEARBY_MAX_M = 10000; // hanya pedagang aktif dalam radius 10 km yang dianggap "terdekat"
+
+function nearbyVendors(list) {
+  if (!buyerLoc) return [];
+  return list
+    .filter(v => v.active && v.lat && v.lng)
+    .map(v => ({ v, d: haversineMeters(buyerLoc.lat, buyerLoc.lng, v.lat, v.lng) }))
+    .filter(x => x.d <= NEARBY_MAX_M)
+    .sort((a, b) => a.d - b.d)
+    .map(x => x.v);
+}
+
+window.__enableLocation = function () {
+  if (!navigator.geolocation) { showToast('Browser ini tidak mendukung lokasi.'); return; }
+  tryLocateBuyer(() => showToast('Lokasi tidak bisa diakses. Izinkan lokasi di pengaturan browser.'));
+};
+
+window.__goView = function (view) { goToBottomView(view); window.scrollTo(0, 0); };
+
+function nearbyEmptyHtml() {
+  if (!buyerLoc) {
+    return `<div class="near-empty">
+      <div class="near-empty-text">Aktifkan lokasi untuk melihat pedagang yang sedang jualan di dekatmu.</div>
+      <button class="near-btn" onclick="window.__enableLocation()">Aktifkan lokasi</button>
+    </div>`;
+  }
+  return `<div class="near-empty"><div class="near-empty-text">Belum ada pedagang yang sedang jualan dalam radius ${NEARBY_MAX_M / 1000} km.</div></div>`;
+}
+
+function renderVendorMiniCardHtml(v) {
+  const cats = v.categories || [];
+  return `
+    <button class="vm-card" onclick="window.__openVendorSheet('${v.id}')">
+      <span class="vm-photo" style="${vendorPhotoStyle(v)}">${v.photo_url || v.mode_icon ? '' : (v.emoji || '🍜')}
+        <span class="vp-status-pill on vm-pill"><span class="vp-status-dot"></span>Sedang buka</span>
+      </span>
+      <span class="vm-name">${escapeHtml(v.name)}</span>
+      <span class="vm-rating">${v.rating_count > 0 ? `⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count})</span>` : escapeHtml(cats[0] || '')}</span>
+      <span class="vm-loc">${VP_ICON_PIN}${vendorDistanceLabel(v) || ''}</span>
+    </button>`;
+}
+
+function renderNearbyHtml(list) {
+  const near = nearbyVendors(list);
+  const more = near.length > 3 ? '<button onclick="window.__goView(\'terdekat\')">Lihat semua ›</button>' : '';
+  return `
+    <div class="sec-head"><h2>Pedagang terdekat</h2>${more}</div>
+    ${near.length ? `<div class="vm-row ${near.length > 3 ? 'scroll' : ''}">${near.slice(0, 6).map(renderVendorMiniCardHtml).join('')}</div>` : nearbyEmptyHtml()}
+  `;
+}
+
+function renderTerdekatView() {
+  const near = nearbyVendors(vendors);
+  main.innerHTML = `
+    <div class="sec-head"><button class="sec-back" onclick="window.__goView('status')">‹ Beranda</button></div>
+    <div class="sec-head"><h2>Pedagang terdekat</h2>${near.length ? `<span class="sec-count">${near.length} sedang buka</span>` : ''}</div>
+    ${near.length ? `<div class="vp-grid">${near.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>` : nearbyEmptyHtml()}
+  `;
+}
+
+// ---------- FAVORIT (tab "Favorit" = pedagang yang diikuti) ----------
+function renderFavoritView() {
+  const favs = sortVendorsForDisplay(vendors.filter(v => followedIds.has(v.id)));
+  const openCount = favs.filter(v => v.active).length;
+  main.innerHTML = `
+    <div class="sec-head"><h2>Favoritmu</h2>${favs.length ? `<span class="sec-count">${openCount} sedang buka</span>` : ''}</div>
+    ${favs.length
+      ? `<div class="vp-grid">${favs.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>`
+      : `<div class="empty-state">
+           <div class="empty-title">Belum ada favorit</div>
+           <div class="empty-text">Ketuk ♥ di kartu pedagang untuk mengikutinya. Kamu akan tahu saat mereka mulai jualan.</div>
+           <button class="near-btn" onclick="window.__goView('status')">Lihat pedagang</button>
+         </div>`}
+  `;
+}
+
+// ---------- AKUN (tab "Akun": pembeli tidak punya login, jadi ini pusat pengaturan & bantuan) ----------
+window.__openArtikelList = function () { artikelDetailSlug = null; window.__goView('artikel'); };
+window.__goPedagang = function () { goToPedagangDashboard(); window.scrollTo(0, 0); };
+
+function renderAkunView() {
+  const perm = pushSupported() ? Notification.permission : null;
+  const row = (icon, title, sub, onclick) => `
+    <button class="acc-row" onclick="${onclick}">
+      <span class="acc-ico">${icon}</span>
+      <span class="acc-text"><span class="acc-title">${title}</span>${sub ? `<span class="acc-sub">${sub}</span>` : ''}</span>
+      <span class="acc-chev">›</span>
+    </button>`;
+  const notifSub = perm === 'granted' ? 'Aktif' : perm === 'denied' ? 'Diblokir di browser' : 'Belum aktif · ketuk untuk mengaktifkan';
+  main.innerHTML = `
+    <div class="acc-hero">
+      <div class="acc-avatar">🧑</div>
+      <div>
+        <div class="acc-name">Pembeli JajanDekat</div>
+        <div class="acc-note">${followedIds.size ? `Mengikuti ${followedIds.size} pedagang` : 'Belum mengikuti pedagang'} · tanpa perlu akun</div>
+      </div>
+    </div>
+    <div class="acc-list">
+      ${perm ? row('🔔', 'Notifikasi', notifSub, 'window.__notifTap()') : ''}
+      ${row('📰', 'Artikel', 'Tips dan info kuliner', 'window.__openArtikelList()')}
+      ${row('🧭', 'Panduan penggunaan', '', "window.__openGuideModal('pembeli')")}
+      ${row('❓', 'Bantuan &amp; FAQ', '', 'window.__openFaqModal()')}
+      ${row('📤', 'Bagikan aplikasi', 'Ajak teman dan pedagang', 'window.__shareApp()')}
+      ${row('🛒', 'Ingin berjualan?', 'Buka mode Pedagang', 'window.__goPedagang()')}
+    </div>
+  `;
+}
+
 // ---------- SHEET DETAIL PEDAGANG ----------
 window.__closeVendorSheet = function () {
   document.getElementById('vendor-sheet-overlay')?.remove();
@@ -1536,7 +1658,7 @@ window.__vsAct = async function (kind, id) {
 
 window.__goToVendorOnMap = function (id, lat, lng) {
   bottomView = 'peta';
-  document.querySelectorAll('nav.bottom .nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === 'peta'));
+  setNavActive('peta');
   if (mode !== 'pembeli') {
     mode = 'pembeli';
     btnPembeli.classList.add('active'); btnPedagang.classList.remove('active');
@@ -4242,7 +4364,7 @@ async function init() {
     }
 
     // Shortcut app & link dari notifikasi:
-    //   ?view=peta | ?view=cari | ?mode=pedagang
+    //   ?view=peta | ?view=cari | ?view=favorit | ?view=akun | ?mode=pedagang
     //   ?vendor=ID (fokus ke pedagang di peta) | ?artikel=slug | ?ann=ID (pengumuman)
     const urlParams = new URLSearchParams(location.search);
     const wantMode = urlParams.get('mode');
@@ -4262,11 +4384,9 @@ async function init() {
       openArtikelFromLink(wantArtikel);
     } else if (wantAnn) {
       openAnnouncementFromLink(wantAnn);
-    } else if (wantView === 'peta' || wantView === 'cari') {
+    } else if (['peta', 'cari', 'favorit', 'akun'].includes(wantView)) {
       bottomView = wantView;
-      document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
-        n.classList.toggle('active', n.dataset.view === wantView);
-      });
+      setNavActive(wantView);
       renderPembeli();
     } else {
       renderPembeli();
