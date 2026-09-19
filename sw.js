@@ -58,7 +58,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || '',
     icon: './icon-192.png',
-    badge: './icon-192.png',
+    badge: './badge-96.png',        // ikon status bar: harus putih polos di latar transparan (logo berwarna jadi kotak putih)
     image: data.image || undefined, // gambar besar (muncul saat notif di-expand)
     tag: data.tag || undefined,     // tag sama = notif lama diganti, bukan menumpuk
     renotify: !!data.tag,           // tetap getar/bunyi walau menggantikan notif lama
