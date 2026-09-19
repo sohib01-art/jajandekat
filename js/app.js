@@ -802,13 +802,18 @@ function compressImage(file, targetSize = 800, quality = 0.75, squareCrop = true
 
 async function uploadVendorPhoto(vendorId, file) {
   const blob = await compressImage(file);
-  const path = `${vendorId}/${Date.now()}.jpg`;
+  // Nama file tetap (bukan pakai timestamp) + upsert:true supaya tiap kali pedagang
+  // ganti foto, file lama di Supabase Storage langsung ketimpa (bukan menumpuk file baru).
+  // Jadi tiap pedagang cuma makan storage untuk 1 foto, seberapa pun sering mereka ganti.
+  const path = `${vendorId}/foto.jpg`;
   const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
     contentType: 'image/jpeg', upsert: true
   });
   if (error) throw error;
   const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
-  return data.publicUrl;
+  // ?t= di belakang URL cuma buat mematahkan cache browser/CDN (nama filenya sama persis),
+  // supaya foto baru langsung kelihatan, bukan foto lama yang ke-cache.
+  return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 async function uploadAnnouncementImage(file) {
@@ -878,7 +883,8 @@ async function deleteVendorPhotoByUrl(photoUrl) {
 // ---------- EXPIRY (lapisan pengaman di sisi aplikasi, cron server jalan tiap 5 menit) ----------
 function normalizeExpiry(v) {
   if (v.active && v.active_until && new Date(v.active_until) < new Date()) {
-    v.active = false; v.active_until = null; v.photo_url = null;
+    // Foto asli terakhir dibiarkan (tidak di-null-kan) supaya jadi default berikutnya.
+    v.active = false; v.active_until = null;
   }
   return v;
 }
@@ -3198,9 +3204,11 @@ window.__toggleStatus = async function () {
   }
   if (v.active) {
     try {
-      await deleteVendorPhotoByUrl(v.photo_url);
       await setVendorStatus(v.id, false);
-      v.active = false; v.active_until = null; v.photo_url = null;
+      // Foto TIDAK dihapus di sini lagi — biar pas nanti "mulai jualan" lagi tanpa pilih
+      // foto baru, tampilannya tetap pakai foto asli terakhir (bukan balik ke ikon aplikasi).
+      // Storage tetap aman karena uploadVendorPhoto menimpa file lama, bukan menumpuk.
+      v.active = false; v.active_until = null;
     } catch (e) {
       alert('Gagal mengubah status: ' + (e.message || 'PIN mungkin salah.'));
       return;
@@ -4452,9 +4460,9 @@ setInterval(async () => {
   const masihJualan = confirm(`Masih jualan di sini, "${v.name}"?\n\nTekan OK kalau masih, Batal kalau sudah selesai (biar pembeli tidak salah datang).`);
   if (!masihJualan) {
     try {
-      await deleteVendorPhotoByUrl(v.photo_url);
       await setVendorStatus(v.id, false);
-      v.active = false; v.active_until = null; v.photo_url = null;
+      // Foto asli terakhir tetap disimpan sebagai default, tidak dihapus di sini.
+      v.active = false; v.active_until = null;
       renderPedagang();
       showToast('Status diubah jadi Selesai Jualan. Sampai jumpa lagi! 👋');
     } catch (e) { console.error(e); }
