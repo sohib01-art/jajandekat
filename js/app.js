@@ -32,6 +32,10 @@ try {
 }
 let referralCodeFromLink = null;
 
+// Saklar fitur chat dalam app. false = disembunyikan dari tampilan (fokus ke chat WhatsApp).
+// Ubah ke true untuk menghidupkannya lagi. Di server (RLS Supabase) chat tetap dibatasi khusus pedagang Premium.
+const CHAT_DALAM_APP_AKTIF = false;
+
 // ---------- WEB PUSH: minta izin & simpan langganan ----------
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -275,7 +279,7 @@ const GUIDE_STEPS = {
       { icon: '🗺️', text: 'Buka <b>Peta</b> untuk melihat pedagang keliling yang sedang jualan di sekitarmu, lengkap dengan jaraknya.', action: () => goToBottomView('peta') },
       { icon: '🔍', text: 'Pakai <b>Cari</b> untuk menemukan pedagang tertentu berdasarkan nama atau kategori jualan.', action: () => goToBottomView('cari') },
       { icon: '⭐', text: 'Di <b>Beranda</b>, ketuk ♥ pada kartu pedagang untuk mengikuti — kamu akan tahu kapan mereka mulai jualan lagi. Semua pedagang yang kamu ikuti ada di tab <b>Favorit</b>.', action: () => goToBottomView('favorit') },
-      { icon: '💬', text: 'Ketuk kartu pedagang di <b>Beranda</b> untuk melihat detailnya, lalu chat langsung dalam app atau lewat WhatsApp.', action: () => goToBottomView('status') },
+      { icon: '💬', text: 'Ketuk kartu pedagang di <b>Beranda</b> untuk melihat detailnya, lalu hubungi pedagang langsung lewat WhatsApp.', action: () => goToBottomView('status') },
       { icon: '🍽️', text: 'Di detail pedagang, tekan <b>Lihat menu</b> untuk melihat menu/produk yang mereka jual, sebelum datang.', action: () => goToBottomView('status') },
       { icon: '📰', text: 'Buka tab <b>Akun</b> lalu pilih <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.', action: () => goToBottomView('akun') },
     ],
@@ -973,6 +977,19 @@ function renderPembeli() {
   `;
 }
 
+// Chat dalam app KHUSUS pedagang Premium yang masih aktif.
+// Aturan yang sama juga dipaksa di server (RLS Supabase: jd_vendor_premium_aktif), jadi ini hanya untuk tampilan.
+function vendorChatEnabled(v) {
+  if (!CHAT_DALAM_APP_AKTIF) return false;
+  return !!(v && v.is_premium && (!v.premium_until || new Date(v.premium_until) > new Date()));
+}
+
+// Link WhatsApp pedagang (kosong kalau nomor tidak ada atau disembunyikan pedagang).
+function vendorWaUrl(v) {
+  if (!v || v.show_whatsapp === false || !v.whatsapp) return '';
+  return `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}`;
+}
+
 function isPromoActive(v) {
   return v.promo_until && new Date(v.promo_until) > new Date();
 }
@@ -1192,6 +1209,7 @@ let lastGlobalChatCheckAt = null;
 let globalChatNotifiedIds = new Set();
 
 async function refreshMyChatThreads() {
+  if (!CHAT_DALAM_APP_AKTIF) return;
   try {
     if (mode === 'pedagang' && myVendorId) {
       const { data } = await sb.from('chat_threads').select('id').eq('vendor_id', myVendorId);
@@ -1226,6 +1244,7 @@ function handleGlobalIncomingChat(m) {
 }
 
 function startGlobalChatWatch() {
+  if (!CHAT_DALAM_APP_AKTIF) return; // chat disembunyikan: tidak perlu Realtime & polling
   if (globalChatChannel) { sb.removeChannel(globalChatChannel); globalChatChannel = null; }
   if (globalChatPollTimer) { clearInterval(globalChatPollTimer); globalChatPollTimer = null; }
   lastGlobalChatCheckAt = new Date().toISOString(); // jangan bunyi buat pesan LAMA yang sudah ada
@@ -1307,15 +1326,20 @@ async function getOrCreateChatThread(vendorId, buyerDeviceId) {
 }
 
 window.__openChatModal = async function (vendorId, vendorName) {
+  if (!CHAT_DALAM_APP_AKTIF) { showToast('Chat dalam app belum tersedia. Hubungi pedagang lewat WhatsApp ya.'); return; }
+  const vObj = vendors.find(x => x.id === vendorId);
+  if (vObj && !vendorChatEnabled(vObj)) { showToast('Chat dalam app khusus untuk pedagang Premium.'); return; }
   try {
     const threadId = await getOrCreateChatThread(vendorId, deviceId);
     openChatUI(threadId, { asVendor: false, title: vendorName, quickReplies: QUICK_REPLIES_BUYER });
   } catch (e) {
-    alert('Gagal membuka chat: ' + e.message);
+    const rls = /row-level security/i.test(e.message || '');
+    alert(rls ? 'Chat dalam app khusus untuk pedagang Premium.' : 'Gagal membuka chat: ' + e.message);
   }
 };
 
 window.__openVendorChatThread = function (threadId, buyerLabel) {
+  if (!CHAT_DALAM_APP_AKTIF) return;
   openChatUI(threadId, { asVendor: true, title: buyerLabel, quickReplies: QUICK_REPLIES_VENDOR });
 };
 
@@ -1561,7 +1585,7 @@ function renderVendorCardHtml(v, opts = {}) {
         ${v.schedule_text ? `<div class="vp-schedule" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(v.schedule_text)}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
-          <button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>
+          ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
         </div>
       </div>
     </div>
@@ -1749,8 +1773,8 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
         ${!canMap ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
         ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
         <div class="vs-actions">
-          <button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>
-          ${canWa ? `<a class="vs-btn wa" href="${waUrl}" target="_blank" rel="noopener"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
+          ${vendorChatEnabled(v) ? `<button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>` : ''}
+          ${canWa ? `<a class="vs-btn wa${vendorChatEnabled(v) ? '' : ' wide'}" href="${waUrl}" target="_blank" rel="noopener"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
           <button class="vs-btn" onclick="window.__vsAct('menu','${v.id}')"><span class="vs-emoji">🍽️</span>Lihat menu</button>
           ${canMap ? `<button class="vs-btn" onclick="window.__vsAct('map','${v.id}')"><img class="vs-ic" src="icons/icon_map.png" alt="">Lihat di peta</button>` : ''}
           <button class="vs-btn ${following ? 'on' : ''}" onclick="window.__vsAct('follow','${v.id}')">${following ? '<img class="vs-ic" src="icons/icon_check.png" alt="">Mengikuti' : '<span class="vs-emoji">➕</span>Ikuti'}</button>
@@ -1927,12 +1951,12 @@ function renderMap() {
       <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;">
         ${v.name}${v.is_premium ? ' ⭐' : ''}
       </div>
-      <button onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"
+      ${vendorChatEnabled(v) ? `<button onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"
          style="display:inline-block;margin-top:6px;background:var(--brand);color:#fff;border:none;text-decoration:none;
          font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;">
         💬 Chat di App
-      </button>
-      ${v.is_premium && v.whatsapp && v.show_whatsapp !== false ? `
+      </button>` : ''}
+      ${v.whatsapp && v.show_whatsapp !== false ? `
         <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
            style="display:inline-block;margin-top:6px;margin-left:4px;background:#25D366;color:#fff;text-decoration:none;
            font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
@@ -2315,14 +2339,16 @@ function renderEditProfile(vendorId) {
             📱 Tampilkan nomor WhatsApp saya ke pembeli
           </label>
           <div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:8px;">
-            Berapa pun pilihannya, pembeli tetap bisa hubungi Anda lewat <b>💬 Chat dalam app</b> — ini cuma soal apakah nomor WA Anda kelihatan juga atau tidak. Bisa diubah kapan saja.
+            ${vendorChatEnabled(v) ? 'Berapa pun pilihannya, pembeli tetap bisa hubungi Anda lewat <b>💬 Chat dalam app</b> — ini cuma soal apakah nomor WA Anda kelihatan juga atau tidak.' : 'WhatsApp adalah cara utama pembeli menghubungi Anda. Kalau nomor disembunyikan, pembeli tidak punya cara menghubungi Anda lewat JajanDekat.'} Bisa diubah kapan saja.
           </div>
           <div style="font-size:10.5px;line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px dashed var(--stroke);">
             <b style="color:#25D366;">✅ Kalau nomor WA ditampilkan:</b> pembeli bisa langsung chat/telpon Anda di WA yang biasa dipakai, lebih cepat & familiar. <b style="color:#f87171;">Risikonya:</b> nomor Anda bisa disimpan/dihubungi orang di luar urusan jual-beli (promosi, spam, dll), dan riwayat chatnya bercampur dengan kontak pribadi Anda.
           </div>
+          ${vendorChatEnabled(v) ? `
           <div style="font-size:10.5px;line-height:1.6;margin-top:6px;">
             <b style="color:#25D366;">✅ Kalau disembunyikan (chat app saja):</b> nomor pribadi Anda tetap privat, semua pesan jualan rapi di satu tempat (tab "💬 Pesan Pembeli"). <b style="color:#f87171;">Risikonya:</b> Anda perlu buka app ini untuk balas, tidak senotifikasi WA yang biasa Anda cek.
           </div>
+          ` : `<div style="font-size:10.5px;line-height:1.6;margin-top:6px;"><b style="color:#f87171;">⚠️ Kalau disembunyikan:</b> pembeli tidak bisa menghubungi Anda lewat JajanDekat, jadi Anda bisa kehilangan calon pembeli. Disarankan tetap ditampilkan.</div>`}
         </div>
 
         <button onclick="window.__saveEditProfile('${vendorId}')">💾 Simpan Perubahan</button>
@@ -2625,16 +2651,18 @@ function renderPedagang() {
       </button>
     </div>
 
+    ${CHAT_DALAM_APP_AKTIF ? `
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">💬</span>
         <div>
           <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Pesan Pembeli</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Chat langsung dari pembeli lewat app, gratis, tanpa perlu nomor WA Anda.</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">${vendorChatEnabled(v) ? 'Chat langsung dari pembeli lewat app, gratis, tanpa perlu nomor WA Anda.' : 'Chat dalam app khusus pedagang Premium. Upgrade Premium untuk menerima pesan langsung dari pembeli.'}</div>
         </div>
       </div>
-      <div id="vendor-chat-inbox"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pesan...</div></div>
+      ${vendorChatEnabled(v) ? `<div id="vendor-chat-inbox"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pesan...</div></div>` : ''}
     </div>
+    ` : ''}
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -3633,7 +3661,7 @@ window.__setReviewRating = function (n) {
   if (note) {
     note.innerHTML = n >= 3
       ? `Rating ${n}★ akan tampil publik di kartu pedagang.`
-      : `Rating ${n}★ tidak langsung publik — dikirim dulu sebagai masukan ke pedagang lewat chat.`;
+      : (CHAT_DALAM_APP_AKTIF ? `Rating ${n}★ tidak langsung publik — dikirim dulu sebagai masukan ke pedagang lewat chat.` : `Rating ${n}★ tidak langsung tampil publik — dicatat sebagai masukan.`);
   }
 };
 
@@ -3644,7 +3672,7 @@ window.__submitReview = async function (vendorId) {
     const { data: reviewId, error } = await sb.rpc('submit_review', { p_vendor_id: vendorId, p_device_id: deviceId, p_rating: rating, p_comment: comment || null });
     if (error) throw error;
 
-    if (rating < 3) {
+    if (rating < 3 && CHAT_DALAM_APP_AKTIF) {
       // Rating rendah: teruskan otomatis sebagai pesan nasihat ke chat pedagang, dan kaitkan ulasan ke thread-nya
       try {
         const threadId = await getOrCreateChatThread(vendorId, deviceId);
