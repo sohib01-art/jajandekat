@@ -741,7 +741,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -1509,14 +1509,66 @@ function vendorIsShowable(v) {
   return !!vendorDisplayLatLng(v);
 }
 
-// Label jam operasional siap-tampil: 24 jam > jam_buka/jam_tutup terstruktur >
-// schedule_text lama (bebas teks, dijaga tetap tampil untuk toko yang belum isi ulang).
+// ---------- HARI BUKA & TANGGAL MERAH ----------
+// hari_buka: array angka 0=Minggu .. 6=Sabtu (NULL/kosong/7 hari penuh = buka setiap hari).
+// tutup_libur_nasional: true = toko tutup di tanggal merah (libur nasional, cuti bersama TIDAK dihitung).
+const HARI_SINGKAT = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+const HARI_PANJANG = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const HARI_URUTAN = [1, 2, 3, 4, 5, 6, 0]; // tampilan mulai dari Senin
+let liburNasionalMap = {}; // { 'YYYY-MM-DD': 'Nama hari libur' }, diisi dari tabel libur_nasional
+
+function normalizeHariBuka(days) {
+  if (!Array.isArray(days)) return null;
+  const set = [...new Set(days.map(Number).filter(d => d >= 0 && d <= 6))].sort((a, b) => a - b);
+  return set.length && set.length < 7 ? set : null; // null = setiap hari
+}
+function formatHariBuka(days) {
+  const set = normalizeHariBuka(days);
+  if (!set) return null;
+  const order = HARI_URUTAN.filter(d => set.includes(d));
+  const runs = [];
+  let run = [order[0]];
+  for (let i = 1; i < order.length; i++) {
+    if (HARI_URUTAN.indexOf(order[i]) === HARI_URUTAN.indexOf(order[i - 1]) + 1) run.push(order[i]);
+    else { runs.push(run); run = [order[i]]; }
+  }
+  runs.push(run);
+  return runs.map(r => r.length >= 3
+    ? `${HARI_SINGKAT[r[0]]}–${HARI_SINGKAT[r[r.length - 1]]}`
+    : r.map(d => HARI_SINGKAT[d]).join(', ')).join(', ');
+}
+function localDateKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+async function loadLiburNasional() {
+  try {
+    const { data, error } = await sb.from('libur_nasional').select('tanggal,nama');
+    if (error) throw error;
+    liburNasionalMap = Object.fromEntries((data || []).map(r => [r.tanggal, r.nama]));
+  } catch (e) { console.error('Gagal memuat libur nasional:', e); } // fitur pelengkap, jangan blokir aplikasi
+}
+// Catatan "tutup hari ini" untuk pembeli. Pedagang yang menyalakan mode jualan (v.active) dianggap buka,
+// apa pun jadwalnya. Tanggal memakai jam perangkat pembeli.
+function vendorClosedTodayNote(v) {
+  if (v.active) return null;
+  const now = new Date();
+  if (v.tutup_libur_nasional) {
+    const nama = liburNasionalMap[localDateKey(now)];
+    if (nama) return `Tutup hari ini · ${nama}`;
+  }
+  const hari = normalizeHariBuka(v.hari_buka);
+  if (hari && !hari.includes(now.getDay())) return `Tutup hari ini · libur hari ${HARI_PANJANG[now.getDay()]}`;
+  return null;
+}
+
+// Label jadwal siap-tampil: hari buka · jam (24 jam / jam_buka–jam_tutup) · tanggal merah · schedule_text lama
+// (schedule_text bebas teks dijaga tetap tampil untuk toko yang belum isi ulang).
 function vendorScheduleLabel(v) {
   const jam = v.buka_24jam
     ? 'Buka 24 Jam'
     : (v.jam_buka && v.jam_tutup ? `${v.jam_buka.slice(0, 5)} – ${v.jam_tutup.slice(0, 5)}` : null);
-  if (jam && v.schedule_text) return `${jam} · ${v.schedule_text}`;
-  return jam || v.schedule_text || null;
+  const parts = [formatHariBuka(v.hari_buka), jam, v.tutup_libur_nasional ? 'Tutup tanggal merah' : null, v.schedule_text].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 // ---------- JARAK PEMBELI <-> PEDAGANG ----------
@@ -1598,6 +1650,7 @@ function renderVendorCardHtml(v, opts = {}) {
         </div>
         ${isPromoActive(v) && v.promo_text ? `<div class="vp-promo-text">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
         ${vendorScheduleLabel(v) ? `<div class="vp-schedule" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
+        ${vendorClosedTodayNote(v) ? `<div class="vp-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
           ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
@@ -1778,10 +1831,11 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
           ${v.rating_count > 0 ? `<span class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count} ulasan)</span></span>` : '<span class="vs-muted">Belum ada ulasan</span>'}
           ${cats ? `<span class="vs-muted">${cats}</span>` : ''}
         </div>
-        <div class="vs-status ${canMap ? 'on' : ''}">
-          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : (canMap ? 'Sedang buka' : 'Belum buka')}
+        <div class="vs-status ${canMap && !vendorClosedTodayNote(v) ? 'on' : ''}">
+          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : (vendorClosedTodayNote(v) ? 'Tutup hari ini' : (canMap ? 'Sedang buka' : 'Belum buka'))}
         </div>
         ${vendorScheduleLabel(v) ? `<div class="vs-line">🕐 <span>${escapeHtml(vendorScheduleLabel(v))}</span></div>` : ''}
+        ${vendorClosedTodayNote(v) ? `<div class="vs-line vs-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
         ${distanceLabel ? `<div class="vs-line">${VP_ICON_PIN}<span>${distanceLabel} dari kamu</span></div>` : ''}
         ${v.region ? `<div class="vs-line">${VP_ICON_PIN}<span>${escapeHtml(v.region)}</span></div>` : ''}
         ${v.location_note ? `<div class="vs-line vs-muted">📍 ${escapeHtml(v.location_note)}</div>` : ''}
@@ -2019,6 +2073,8 @@ let regFixedLng = null;
 let regJamBukaValue = '08:00';
 let regJamTutupValue = '21:00';
 let regBuka24Value = false;
+let regHariBukaValue = [0, 1, 2, 3, 4, 5, 6];
+let regTutupLiburValue = false;
 let catPickerQuery = '';
 let regStep = 0;
 let knownTagSuggestions = [];
@@ -2048,6 +2104,25 @@ function jdReminderOptions(current) {
   return '<option value="">Tanpa pengingat</option>' +
     times.map(t => `<option value="${t}"${t === current ? ' selected' : ''}>${t.replace(':', '.')}</option>`).join('');
 }
+function readHariFromDom(p) {
+  const row = document.getElementById(p + '-hari-row');
+  if (!row) return null;
+  return [...row.querySelectorAll('.jd-day[aria-pressed="true"]')].map(b => Number(b.dataset.d)).sort((a, b) => a - b);
+}
+function applyHariToDom(p, days) {
+  const row = document.getElementById(p + '-hari-row');
+  if (row) row.querySelectorAll('.jd-day').forEach(b => b.setAttribute('aria-pressed', days.includes(Number(b.dataset.d)) ? 'true' : 'false'));
+  if (p === 'reg') regHariBukaValue = days.slice(); // simpan agar tidak hilang saat wizard dirender ulang
+}
+window.__toggleHari = function (p, d) {
+  const now = readHariFromDom(p) || [];
+  const next = now.includes(d) ? now.filter(x => x !== d) : [...now, d];
+  if (!next.length) return; // minimal 1 hari buka
+  applyHariToDom(p, next);
+};
+window.__setHariPreset = function (p, kind) {
+  applyHariToDom(p, kind === 'semua' ? [0, 1, 2, 3, 4, 5, 6] : kind === 'sen-sab' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5]);
+};
 function renderJadwalFields(cfg) {
   const p = cfg.p;
   // Di pendaftaran, nilai disimpan ke variabel wizard tiap kali berubah; di Edit Profil dibaca saat simpan.
@@ -2087,8 +2162,19 @@ function renderJadwalFields(cfg) {
         <div class="jd-sec-head">
           ${jdIcon('clock')}
           <div>
-            <div class="jd-sec-title">Jam operasional</div>
-            <div class="jd-sec-help" id="${p}-jam-hint">${cfg.buka24 ? 'Tokomu tampil sebagai “Buka 24 jam” ke pembeli.' : 'Isi jika jam bukamu biasanya sama setiap hari.'}</div>
+            <div class="jd-sec-title">Hari &amp; jam buka</div>
+            <div class="jd-sec-help" id="${p}-jam-hint">${cfg.buka24 ? 'Tokomu tampil sebagai “Buka 24 jam” di hari buka.' : 'Isi jika hari dan jam bukamu biasanya tetap.'}</div>
+          </div>
+        </div>
+        <div class="jd-field">
+          <span class="jd-label" id="${p}-hari-label">Hari buka</span>
+          <div class="jd-days" id="${p}-hari-row" role="group" aria-labelledby="${p}-hari-label">
+            ${HARI_URUTAN.map(d => `<button type="button" class="jd-day" data-d="${d}" aria-pressed="${(normalizeHariBuka(cfg.hari) || [0, 1, 2, 3, 4, 5, 6]).includes(d)}" onclick="window.__toggleHari('${p}', ${d})">${HARI_SINGKAT[d]}</button>`).join('')}
+          </div>
+          <div class="jd-presets">
+            <button type="button" class="jd-preset" onclick="window.__setHariPreset('${p}', 'semua')">Setiap hari</button>
+            <button type="button" class="jd-preset" onclick="window.__setHariPreset('${p}', 'sen-sab')">Sen–Sab</button>
+            <button type="button" class="jd-preset" onclick="window.__setHariPreset('${p}', 'sen-jum')">Sen–Jum</button>
           </div>
         </div>
         <label class="jd-switch-row">
@@ -2105,6 +2191,10 @@ function renderJadwalFields(cfg) {
             <input id="${p}-jam-tutup" type="time" value="${jdEsc(cfg.jamTutup)}"${track('jamTutup', 'oninput')} />
           </div>
         </div>
+        <label class="jd-switch-row">
+          <span class="jd-switch-text"><b>Tutup saat tanggal merah</b><small>Libur nasional saja, cuti bersama tidak dihitung</small></span>
+          <input id="${p}-libur" class="jd-switch" type="checkbox" role="switch" ${cfg.tutupLibur ? 'checked' : ''}${track('liburNasional', 'onchange').replace('this.value', 'this.checked')} />
+        </label>
       </section>
 
       <section class="jd-sec">
@@ -2179,6 +2269,7 @@ window.__updateRegField = function (field, value) {
   if (field === 'locationNote') regLocationNoteValue = value;
   if (field === 'jamBuka') regJamBukaValue = value;
   if (field === 'jamTutup') regJamTutupValue = value;
+  if (field === 'liburNasional') regTutupLiburValue = !!value;
 };
 
 // Toggle "Buka 24 Jam" di form pendaftaran — langsung ubah tampilan (sembunyikan kotak
@@ -2188,7 +2279,7 @@ window.__toggleRegBuka24 = function (checked) {
   const wrap = document.getElementById('reg-jam-wrap');
   if (wrap) wrap.style.display = checked ? 'none' : '';
   const hint = document.getElementById('reg-jam-hint');
-  if (hint) hint.textContent = checked ? 'Tokomu tampil sebagai “Buka 24 jam” ke pembeli.' : 'Isi jika jam bukamu biasanya sama setiap hari.';
+  if (hint) hint.textContent = checked ? 'Tokomu tampil sebagai “Buka 24 jam” di hari buka.' : 'Isi jika hari dan jam bukamu biasanya tetap.';
 };
 
 // Simpan "lokasi mangkal" saat daftar — dipakai buat toko menetap MAUPUN keliling yang
@@ -2447,7 +2538,7 @@ function renderEditProfile(vendorId) {
         <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
         ${renderCategoryPickerGrouped(editCategories, 'window.__editToggleCategory', editCatPickerQuery)}
 
-        ${renderJadwalFields({ p: 'edit', track: false, reminder: v.reminder_time ? v.reminder_time.slice(0, 5) : '', hasLoc: !!editFixedLat, buka24: !!v.buka_24jam, jamBuka: v.jam_buka ? v.jam_buka.slice(0, 5) : '', jamTutup: v.jam_tutup ? v.jam_tutup.slice(0, 5) : '', schedule: v.schedule_text || '', locationNote: v.location_note || '', onToggle: 'window.__toggleEditBuka24', onCapture: 'window.__captureEditLocation' })}
+        ${renderJadwalFields({ p: 'edit', track: false, reminder: v.reminder_time ? v.reminder_time.slice(0, 5) : '', hasLoc: !!editFixedLat, buka24: !!v.buka_24jam, jamBuka: v.jam_buka ? v.jam_buka.slice(0, 5) : '', jamTutup: v.jam_tutup ? v.jam_tutup.slice(0, 5) : '', hari: v.hari_buka, tutupLibur: !!v.tutup_libur_nasional, schedule: v.schedule_text || '', locationNote: v.location_note || '', onToggle: 'window.__toggleEditBuka24', onCapture: 'window.__captureEditLocation' })}
 
         ${editFixedLat ? `
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;margin-top:10px;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;">
@@ -2497,7 +2588,7 @@ window.__toggleEditBuka24 = function (checked) {
   const wrap = document.getElementById('edit-jam-wrap');
   if (wrap) wrap.style.display = checked ? 'none' : '';
   const hint = document.getElementById('edit-jam-hint');
-  if (hint) hint.textContent = checked ? 'Tokomu tampil sebagai “Buka 24 jam” ke pembeli.' : 'Isi jika jam bukamu biasanya sama setiap hari.';
+  if (hint) hint.textContent = checked ? 'Tokomu tampil sebagai “Buka 24 jam” di hari buka.' : 'Isi jika hari dan jam bukamu biasanya tetap.';
 };
 
 // Tombol cepat di dashboard buat "Tutup Sementara"/"Buka Lagi" tanpa perlu buka Edit
@@ -2553,6 +2644,8 @@ window.__saveEditProfile = async function (vendorId) {
     const buka24jam = document.getElementById('edit-buka24')?.checked || false;
     const jamBuka = buka24jam ? null : (document.getElementById('edit-jam-buka')?.value || null);
     const jamTutup = buka24jam ? null : (document.getElementById('edit-jam-tutup')?.value || null);
+    const hariBuka = normalizeHariBuka(readHariFromDom('edit'));
+    const tutupLibur = document.getElementById('edit-libur')?.checked || false;
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
       p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
@@ -2561,12 +2654,14 @@ window.__saveEditProfile = async function (vendorId) {
 
     // Kolom reminder_time, show_whatsapp, custom_tags, lokasi mangkal, jadwal & status
     // buka diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
-    await sb.from('vendors').update({
+    const { error: updateError } = await sb.from('vendors').update({
       reminder_time: reminderTime || null, show_whatsapp: showWhatsapp, custom_tags: customTags,
       fixed_lat: editFixedLat, fixed_lng: editFixedLng, schedule_text: scheduleText,
       location_note: locationNote, default_open: defaultOpen,
       jam_buka: jamBuka, jam_tutup: jamTutup, buka_24jam: buka24jam,
+      hari_buka: hariBuka, tutup_libur_nasional: tutupLibur,
     }).eq('id', vendorId);
+    if (updateError) throw updateError; // dulu gagal diam-diam (mis. izin kolom belum diberikan)
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur simpan
 
     const v = vendors.find(v => v.id === vendorId);
@@ -2576,6 +2671,7 @@ window.__saveEditProfile = async function (vendorId) {
     v.fixed_lat = editFixedLat; v.fixed_lng = editFixedLng; v.schedule_text = scheduleText;
     v.location_note = locationNote; v.default_open = defaultOpen;
     v.jam_buka = jamBuka; v.jam_tutup = jamTutup; v.buka_24jam = buka24jam;
+    v.hari_buka = hariBuka; v.tutup_libur_nasional = tutupLibur;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -2663,7 +2759,7 @@ function renderPedagang() {
             <div class="reg-step">
               <div class="reg-step-title">5. Lokasi &amp; jam buka</div>
               <div class="reg-step-sub">Semua bagian ini opsional dan bisa diubah nanti di Edit Profil Toko.</div>
-              ${renderJadwalFields({ p: 'reg', track: true, reminder: regReminderValue, hasLoc: !!regFixedLat, buka24: regBuka24Value, jamBuka: regJamBukaValue, jamTutup: regJamTutupValue, schedule: regScheduleValue, locationNote: regLocationNoteValue, onToggle: 'window.__toggleRegBuka24', onCapture: 'window.__captureRegLocation' })}
+              ${renderJadwalFields({ p: 'reg', track: true, reminder: regReminderValue, hasLoc: !!regFixedLat, buka24: regBuka24Value, jamBuka: regJamBukaValue, jamTutup: regJamTutupValue, hari: regHariBukaValue, tutupLibur: regTutupLiburValue, schedule: regScheduleValue, locationNote: regLocationNoteValue, onToggle: 'window.__toggleRegBuka24', onCapture: 'window.__captureRegLocation' })}
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button data-reg-submit onclick="window.__registerVendor()">Daftar sekarang</button></div>
             </div>
 
@@ -3567,8 +3663,8 @@ window.__registerVendor = async function () {
 
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null, buka_24jam: regBuka24Value, jam_buka: regBuka24Value ? null : (regJamBukaValue || null), jam_tutup: regBuka24Value ? null : (regJamTutupValue || null) })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam')
+      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null, buka_24jam: regBuka24Value, jam_buka: regBuka24Value ? null : (regJamBukaValue || null), jam_tutup: regBuka24Value ? null : (regJamTutupValue || null), hari_buka: normalizeHariBuka(regHariBukaValue), tutup_libur_nasional: regTutupLiburValue })
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional')
       .single();
 
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur pendaftaran
@@ -3591,6 +3687,7 @@ window.__registerVendor = async function () {
     regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
     regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
     regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
+    regHariBukaValue = [0, 1, 2, 3, 4, 5, 6]; regTutupLiburValue = false;
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
@@ -4853,7 +4950,9 @@ async function init() {
   }
   if (!isConfigured) { renderSetupNeeded(); return; }
   try {
+    const liburPromise = loadLiburNasional(); // paralel dengan ambil data pedagang; gagal pun tidak memblokir
     vendors = (await fetchVendors()).map(normalizeExpiry);
+    await liburPromise;
     const followList = await fetchFollows();
     followedIds = new Set(followList);
     await fetchRegions();
