@@ -669,3 +669,26 @@ nav.bottom{
 .nav-icon svg{ width:24px; height:24px; }
 .nav-item.active .nav-icon svg.fillable{ fill:currentColor; }
 .nav-item:focus-visible{ outline:2px solid var(--navy); outline-offset:-2px; border-radius:14px; }
+
+
+/* ===== Slider banner pengumuman (beranda pembeli) — rasio 8:3 ≈ 324×120 px di layar 360px ===== */
+.ann-slider{ margin:16px 0 4px; }
+.ann-track{
+  position:relative; display:flex; gap:10px; overflow-x:auto;
+  scroll-snap-type:x mandatory; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain; border-radius:16px;
+}
+.ann-track::-webkit-scrollbar{ display:none; }
+.ann-slide{
+  flex:0 0 100%; aspect-ratio:8 / 3; scroll-snap-align:start; scroll-snap-stop:always;
+  display:block; padding:0; border:0; border-radius:16px; overflow:hidden;
+  background:var(--surface-2); cursor:pointer; box-shadow:var(--shadow);
+  -webkit-tap-highlight-color:transparent;
+}
+.ann-slide img{ width:100%; height:100%; object-fit:cover; display:block; user-select:none; -webkit-user-drag:none; }
+.ann-dots{ display:flex; justify-content:center; margin-top:4px; }
+.ann-dot{
+  width:20px; height:20px; padding:7px; border:0; background:var(--stroke); background-clip:content-box;
+  border-radius:50%; cursor:pointer; transition:background-color .2s;
+}
+.ann-dot.on{ background:var(--brand); background-clip:content-box; }
