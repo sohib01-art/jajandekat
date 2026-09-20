@@ -219,13 +219,16 @@ document.querySelectorAll('nav.bottom .nav-item').forEach(el => {
 });
 
 // ---------- LONCENG NOTIFIKASI DI HEADER ----------
-// Titik merah muncul selama izin notifikasi belum diputuskan. Disembunyikan kalau browser tidak mendukung push.
+// Lonceng membuka Kotak Notifikasi (daftar pengumuman). Titik merah = ada pengumuman yang belum dibaca.
+// Izin push diatur dari dalam Kotak Notifikasi dan dari tab Akun.
 const bellBtn = document.getElementById('btn-bell');
 function refreshBell() {
   if (!bellBtn) return;
-  if (!pushSupported()) { bellBtn.hidden = true; return; }
   bellBtn.hidden = false;
-  bellBtn.classList.toggle('needs-attention', Notification.permission === 'default');
+  let n = 0;
+  try { n = notifUnreadCount(); } catch (e) { /* data belum siap saat script baru dimuat */ }
+  bellBtn.classList.toggle('needs-attention', n > 0);
+  bellBtn.setAttribute('aria-label', n > 0 ? `Notifikasi, ${n} belum dibaca` : 'Notifikasi');
 }
 // Dipakai lonceng di header dan baris Notifikasi di tab Akun
 window.__notifTap = async function () {
@@ -240,7 +243,7 @@ window.__notifTap = async function () {
   refreshBell();
 };
 if (bellBtn) {
-  bellBtn.onclick = () => window.__notifTap();
+  bellBtn.onclick = () => window.__openNotifInbox();
   refreshBell();
 }
 
@@ -937,6 +940,7 @@ let artikelDetailSlug = null;
 const CAT_ALL_ICON_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2.2"/><rect x="13" y="3" width="8" height="8" rx="2.2"/><rect x="3" y="13" width="8" height="8" rx="2.2"/><rect x="13" y="13" width="8" height="8" rx="2.2"/></svg>';
 
 function renderPembeli() {
+  refreshBell();
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
   if (bottomView === 'favorit') return renderFavoritView();
@@ -969,7 +973,6 @@ function renderPembeli() {
 
   main.innerHTML = `
     ${renderPushPromptBanner()}
-    ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     <div class="sec-head"><h2>Kategori</h2></div>
     <div class="cat-row">${catRowHtml}</div>
     ${renderBannerSlider(getRelevantBannersForBuyer())}
@@ -1184,6 +1187,85 @@ function renderAnnouncementBanner(list) {
     </div>
   `).join('');
 }
+
+// ---------- KOTAK NOTIFIKASI (lonceng di header) ----------
+// Pengumuman tidak lagi jadi kartu di beranda: tampil di sini, plus push kalau admin mencentangnya.
+function currentNotifList() {
+  if (mode === 'pedagang' && myVendorId) {
+    const v = vendors.find(x => x.id === myVendorId);
+    if (v) return getRelevantAnnouncementsForVendor(v);
+  }
+  return getRelevantAnnouncementsForBuyer();
+}
+function notifSeenAt() { return parseInt(localStorage.getItem('jd_notif_seen_at') || '0', 10) || 0; }
+function notifUnreadCount() {
+  const seen = notifSeenAt();
+  return currentNotifList().filter(a => new Date(a.created_at).getTime() > seen).length;
+}
+function notifRelTime(iso) {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return 'baru saja';
+  if (m < 60) return `${m} menit lalu`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} jam lalu`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d} hari lalu`;
+  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function notifInboxHtml(list, seen) {
+  const perm = pushSupported() ? Notification.permission : null;
+  const permHtml = perm === 'default'
+    ? `<div class="nb-perm"><div>🔔 Aktifkan notifikasi supaya pengumuman baru langsung sampai ke HP-mu.</div><button class="near-btn" onclick="window.__nbEnablePush()">Aktifkan</button></div>`
+    : perm === 'denied'
+      ? `<div class="nb-perm nb-perm-off">Notifikasi diblokir di browser. Aktifkan lewat pengaturan situs kalau ingin menerima pengumuman langsung.</div>`
+      : '';
+  const items = list.length ? list.map(a => `
+    <div class="nb-item ${new Date(a.created_at).getTime() > seen ? 'unread' : ''}">
+      <div class="nb-time">${notifRelTime(a.created_at)}</div>
+      ${a.image_url ? `<img class="nb-img" src="${escapeHtml(a.image_url)}" alt="" loading="lazy" />` : ''}
+      <div class="nb-msg">${escapeHtml(a.message)}</div>
+      ${a.link && /^https?:\/\//.test(a.link) ? `<a class="nb-link" href="${escapeHtml(a.link)}" target="_blank" rel="noopener">Selengkapnya →</a>` : ''}
+      ${a.link && /^\?(vendor|artikel)=[A-Za-z0-9_%.-]+$/.test(a.link) ? `<button class="follow-btn" style="margin-top:6px;" onclick="window.__nbOpenLink('${a.link}')">Selengkapnya →</button>` : ''}
+    </div>`).join('') : '<div class="nb-empty">Belum ada pengumuman.</div>';
+  return permHtml + items;
+}
+
+window.__closeNotifInbox = function () { document.getElementById('nb-overlay')?.remove(); };
+window.__nbOpenLink = function (link) { window.__closeNotifInbox(); window.__openInternalLink(link); };
+window.__nbEnablePush = async function () {
+  await window.__enablePush();
+  refreshBell();
+  if (document.getElementById('nb-overlay')) window.__openNotifInbox();
+};
+
+window.__openNotifInbox = async function () {
+  document.getElementById('nb-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'nb-overlay';
+  overlay.className = 'nb-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) window.__closeNotifInbox(); };
+  document.body.appendChild(overlay);
+
+  const seenSnapshot = notifSeenAt(); // yang baru saat dibuka tetap ditandai di daftar, walau sudah dianggap terbaca
+  const draw = () => {
+    overlay.innerHTML = `
+      <div class="nb-sheet" role="dialog" aria-label="Kotak Notifikasi">
+        <div class="nb-head"><h2>Notifikasi</h2><button class="nb-close" aria-label="Tutup" onclick="window.__closeNotifInbox()">✕</button></div>
+        <div class="nb-body">${notifInboxHtml(currentNotifList(), seenSnapshot)}</div>
+      </div>`;
+  };
+  const markSeen = () => {
+    const newest = Math.max(0, ...currentNotifList().map(a => new Date(a.created_at).getTime()));
+    if (newest > notifSeenAt()) localStorage.setItem('jd_notif_seen_at', String(newest));
+    refreshBell();
+  };
+  draw(); markSeen();
+  try { // ambil yang terbaru dari server, jangan menimpa kalau gagal
+    const fresh = await fetchAnnouncements();
+    if (fresh.length && document.getElementById('nb-overlay')) { announcements = fresh; draw(); markSeen(); }
+  } catch (e) {}
+};
 
 window.__dismissAnnouncement = function (id) {
   const dismissed = JSON.parse(localStorage.getItem('jd_dismissed_ann') || '[]');
@@ -2098,12 +2180,9 @@ function openArtikelFromLink(slug) {
 function openAnnouncementFromLink(id) {
   const ann = announcements.find(a => a.id === id);
   if (!ann) { goToBottomView('status'); showToast('Pengumuman ini sudah tidak aktif.'); return; }
-  try { // tampilkan lagi walau sebelumnya pernah ditutup
-    const dismissed = JSON.parse(localStorage.getItem('jd_dismissed_ann') || '[]').filter(x => x !== id);
-    localStorage.setItem('jd_dismissed_ann', JSON.stringify(dismissed));
-  } catch (e) {}
   if (ann.audience === 'premium' || ann.audience === 'biasa') goToPedagangDashboard();
   else goToBottomView('status');
+  window.__openNotifInbox(); // pengumuman kini dibaca di Kotak Notifikasi, bukan kartu beranda
 }
 
 function openInternalLink(link) {
@@ -2887,6 +2966,7 @@ window.__saveEditProfile = async function (vendorId) {
 };
 
 function renderPedagang() {
+  refreshBell();
   if (!myVendorId) {
     main.innerHTML = `
       ${vendors.length ? `
@@ -2987,7 +3067,6 @@ function renderPedagang() {
   const durations = v.is_premium ? [30, 60, 120, 240, 480] : [30, 60, 120, 240];
 
   main.innerHTML = `
-    ${renderAnnouncementBanner(getRelevantAnnouncementsForVendor(v))}
     ${renderBannerSlider(getRelevantBannersForVendor(v))}
     <div class="vendor-hero">
       <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
@@ -4438,6 +4517,7 @@ async function renderAdminDashboard() {
           <input type="checkbox" id="ann-send-push" style="margin-top:2px;" />
           <span>📣 Kirim juga sebagai notifikasi push (ada pratinjau jumlah penerima sebelum benar-benar dikirim)</span>
         </label>
+        <div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;">🔔 Pengumuman tampil di <b>Kotak Notifikasi</b> (ikon lonceng), bukan di beranda. Untuk gambar promosi di beranda, pakai menu <b>Banner</b>.</div>
         <button onclick="window.__adminCreateAnnouncement()" style="margin-top:10px;">📢 Kirim Pengumuman</button>
         <div id="ann-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
       </div>
@@ -5902,6 +5982,7 @@ async function init() {
     await fetchRegions();
     await getBuyerRegion().catch(() => {}); // wilayah pembeli dari cache (kalau ada), dipakai filter pengumuman
     announcements = await fetchAnnouncements();
+    refreshBell();
     banners = (await fetchBanners()) || [];
     bannersFetchedAt = Date.now();
     scheduleBannerRefresh();
