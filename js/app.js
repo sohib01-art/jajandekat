@@ -822,10 +822,9 @@ async function uploadVendorPhoto(vendorId, file) {
   return `${data.publicUrl}?t=${Date.now()}`;
 }
 
-async function uploadAnnouncementImage(imgEl, focus = 0.5) {
+async function uploadAnnouncementImage(file) {
   // Reuse bucket 'vendor-photos' dengan folder terpisah — hindari bikin bucket baru di Supabase.
-  // Gambar otomatis dipotong ke rasio 8:3 & dikecilkan maks. 1000 px lebar (lihat annBannerBlob).
-  const blob = await annBannerBlob(imgEl, focus);
+  const blob = await compressImage(file, 1000, 0.75, false);
   const path = `announcements/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
     contentType: 'image/jpeg', upsert: true
@@ -970,10 +969,10 @@ function renderPembeli() {
 
   main.innerHTML = `
     ${renderPushPromptBanner()}
-    ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer().filter(a => !a.image_url))}
+    ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     <div class="sec-head"><h2>Kategori</h2></div>
     <div class="cat-row">${catRowHtml}</div>
-    ${renderAnnouncementSlider(getRelevantAnnouncementsForBuyer().filter(a => a.image_url))}
+    ${renderBannerSlider(getRelevantBannersForBuyer())}
     <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2>${followed.length ? '<button onclick="window.__goView(\'favorit\')">Lihat semua ›</button>' : ''}</div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
     <div class="sec-head"><h2><svg class="sec-star" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.400 6.100 20.500l1.200-6.500L2.500 9.400l6.600-.9L12 2.500Z" fill="#FFB400"/></svg>Pilihan JajanDekat</h2></div>
@@ -1192,23 +1191,56 @@ window.__dismissAnnouncement = function (id) {
   if (mode === 'pedagang') renderPedagang(); else renderPembeli();
 };
 
-// ---------- SLIDER BANNER PENGUMUMAN (beranda pembeli) ----------
-// Pengumuman BERGAMBAR tampil sebagai slider (maks. 4 slide, rasio 8:3, geser manual + auto-slide).
-// Pengumuman tanpa gambar tetap memakai kartu teks (renderAnnouncementBanner).
+// ---------- SLIDER BANNER BERANDA ----------
+// Sumber data: tabel `banners` (dikelola dari Dashboard Admin lewat Edge Function admin-banners).
+// RLS di server sudah menyaring banner aktif & dalam jadwal tayang (start_at/end_at); urutan mengikuti sort_order.
+// Maks. ANN_SLIDER_MAX slide, rasio 8:3, geser manual + auto-slide. Pengumuman (tabel `announcements`) tetap kartu teks seperti biasa.
 const ANN_SLIDER_MAX = 4;
 const ANN_SLIDER_INTERVAL_MS = 5500;
+let banners = [];
+let bannersFetchedAt = 0;
 let annSliderIdx = 0;
 let annSliderTimer = null;
 let annSliderPausedUntil = 0;
+const bannerViewed = new Set(); // tayangan dihitung sekali per banner per sesi/perangkat
 
-function renderAnnouncementSlider(list) {
-  const dismissed = JSON.parse(localStorage.getItem('jd_dismissed_ann') || '[]');
-  const slides = list.filter(a => !dismissed.includes(a.id)).slice(0, ANN_SLIDER_MAX);
+// null = gagal ambil (jangan timpa daftar yang sudah ada)
+async function fetchBanners() {
+  try {
+    const { data, error } = await sb.from('banners')
+      .select('id,title,image_url,link,audience,zone_level,zone_value,region_id,sort_order,start_at,end_at,created_at')
+      .order('sort_order', { ascending: true }).order('created_at', { ascending: true });
+    if (error) { console.error('Gagal ambil banner:', error); return null; }
+    return data || [];
+  } catch (e) { console.error('Gagal ambil banner:', e); return null; }
+}
+
+function bannerIsLive(b) {
+  const now = Date.now();
+  return (!b.start_at || new Date(b.start_at).getTime() <= now) && (!b.end_at || new Date(b.end_at).getTime() > now);
+}
+function getRelevantBannersForBuyer() {
+  return banners.filter(b => (b.audience === 'semua' || b.audience === 'pembeli') && bannerIsLive(b) && announcementMatchesRegion(b, buyerRegionId, null));
+}
+function getRelevantBannersForVendor(v) {
+  return banners.filter(b => (b.audience === 'semua' || b.audience === 'pedagang') && bannerIsLive(b) && announcementMatchesRegion(b, v.region_id, v.region));
+}
+
+function trackBanner(id, kind) {
+  try {
+    if (kind === 'view') { if (bannerViewed.has(id)) return; bannerViewed.add(id); }
+    const r = sb.rpc('track_banner', { p_id: id, p_kind: kind });
+    if (r && r.then) r.then(() => {}, () => {});
+  } catch (e) {}
+}
+
+function renderBannerSlider(list) {
+  const slides = list.slice(0, ANN_SLIDER_MAX);
   if (!slides.length) return '';
-  const slideHtml = slides.map((a, i) => `
-    <button type="button" class="ann-slide" data-ann-id="${escapeHtml(String(a.id))}" onclick="window.__annSlideTap('${a.id}')"
-      aria-label="${escapeHtml((a.message || 'Pengumuman').slice(0, 120))}" ${a.link ? '' : 'style="cursor:default"'}>
-      <img src="${escapeHtml(a.image_url)}" alt="" ${i === 0 ? '' : 'loading="lazy"'} decoding="async" draggable="false" />
+  const slideHtml = slides.map((b, i) => `
+    <button type="button" class="ann-slide" data-banner-id="${escapeHtml(String(b.id))}" onclick="window.__bannerTap('${b.id}')"
+      aria-label="${escapeHtml((b.title || 'Banner').slice(0, 120))}" ${b.link ? '' : 'style="cursor:default"'}>
+      <img src="${escapeHtml(b.image_url)}" alt="" ${i === 0 ? '' : 'loading="lazy"'} decoding="async" draggable="false" />
     </button>`).join('');
   const dotsHtml = slides.length > 1
     ? `<div class="ann-dots">${slides.map((_, i) => `<button type="button" class="ann-dot ${i === 0 ? 'on' : ''}" aria-label="Slide ${i + 1}" onclick="window.__annSlideGo(${i})"></button>`).join('')}</div>`
@@ -1216,11 +1248,13 @@ function renderAnnouncementSlider(list) {
   return `<div class="ann-slider" id="ann-slider"><div class="ann-track" id="ann-track">${slideHtml}</div>${dotsHtml}</div>`;
 }
 
-window.__annSlideTap = function (id) {
-  const a = announcements.find(x => String(x.id) === String(id));
-  if (!a || !a.link) return;
-  if (/^https?:\/\//.test(a.link)) window.open(a.link, '_blank', 'noopener');
-  else if (/^\?(vendor|artikel)=[A-Za-z0-9_%.-]+$/.test(a.link)) window.__openInternalLink(a.link);
+window.__bannerTap = function (id) {
+  const b = banners.find(x => String(x.id) === String(id));
+  if (!b) return;
+  trackBanner(b.id, 'click');
+  if (!b.link) return;
+  if (/^https:\/\//i.test(b.link)) window.open(b.link, '_blank', 'noopener');
+  else openInternalLink(b.link);
 };
 
 function annSliderGoTo(i, smooth = true) {
@@ -1235,6 +1269,8 @@ function annSliderGoTo(i, smooth = true) {
 
 function annSliderSyncDots() {
   document.querySelectorAll('#ann-slider .ann-dot').forEach((d, i) => d.classList.toggle('on', i === annSliderIdx));
+  const slide = document.querySelectorAll('#ann-track .ann-slide')[annSliderIdx];
+  if (slide && slide.dataset.bannerId && !document.hidden) trackBanner(slide.dataset.bannerId, 'view');
 }
 
 window.__annSlideGo = function (i) {
@@ -1279,6 +1315,23 @@ function initAnnSlider() {
     if (document.hidden || Date.now() < annSliderPausedUntil) return;
     annSliderGoTo(annSliderIdx + 1);
   }, ANN_SLIDER_INTERVAL_MS);
+}
+
+// Segarkan daftar banner berkala (banner baru / sudah berakhir / diubah urutannya) tanpa mengganggu halaman lain
+async function refreshBanners(force = false) {
+  if (!sb || (!force && Date.now() - bannersFetchedAt < 3 * 60 * 1000)) return;
+  bannersFetchedAt = Date.now();
+  const fresh = await fetchBanners();
+  if (fresh === null) return;
+  const sig = (l) => l.map(b => [b.id, b.image_url, b.sort_order, b.link, b.audience, b.region_id, b.start_at, b.end_at].join('|')).join(',');
+  if (sig(fresh) === sig(banners)) return;
+  banners = fresh;
+  if (document.querySelector('.admin-panel')) return; // Dashboard Admin sedang terbuka: jangan ganti layarnya
+  if (mode === 'pembeli' && !['peta', 'cari', 'favorit', 'akun', 'terdekat', 'artikel'].includes(bottomView)) renderPembeli();
+}
+function scheduleBannerRefresh() {
+  setInterval(() => refreshBanners(), 10 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBanners(); });
 }
 
 // ---------- CHAT DALAM APP (pedagang <-> pembeli, gratis lewat Supabase Realtime) ----------
@@ -2012,6 +2065,26 @@ function openAnnouncementFromLink(id) {
 }
 
 function openInternalLink(link) {
+  const raw = String(link);
+  if (/^app:/.test(raw)) { // tujuan halaman aplikasi (dipakai banner): app:daftar | promo | peta | cari | favorit | terdekat | artikel
+    const page = raw.slice(4);
+    if (page === 'daftar') { goToPedagangDashboard(); return true; }
+    if (page === 'promo') { // halaman pedagang, langsung sorot kartu "Promosi Lokal Harian" (kalau sudah login)
+      goToPedagangDashboard();
+      const focus = () => {
+        const el = document.getElementById('vendor-promo-card');
+        if (!el) return false;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('promo-pulse');
+        setTimeout(() => el.classList.remove('promo-pulse'), 2600);
+        return true;
+      };
+      setTimeout(() => { if (!focus()) setTimeout(focus, 500); }, 200);
+      return true;
+    }
+    if (['peta', 'cari', 'favorit', 'terdekat', 'artikel'].includes(page)) { goToBottomView(page); window.scrollTo(0, 0); return true; }
+    return false;
+  }
   const p = new URLSearchParams(String(link).replace(/^\?/, ''));
   if (p.get('vendor')) { openVendorFromLink(p.get('vendor')); return true; }
   if (p.get('artikel')) { openArtikelFromLink(p.get('artikel')); return true; }
@@ -2873,6 +2946,7 @@ function renderPedagang() {
 
   main.innerHTML = `
     ${renderAnnouncementBanner(getRelevantAnnouncementsForVendor(v))}
+    ${renderBannerSlider(getRelevantBannersForVendor(v))}
     <div class="vendor-hero">
       <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
       <div class="vendor-hero-name">${v.name}</div>
@@ -3071,7 +3145,7 @@ function renderPedagang() {
       `}
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+    <div class="vendor-hero" id="vendor-promo-card" style="margin-top:14px; text-align:left;">
       ${isPromoActive(v) ? `
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:20px;">🔥</span>
@@ -3121,6 +3195,7 @@ function renderPedagang() {
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
   `;
 
+  initAnnSlider();
   renderVendorQr(v.id);
   loadMyReviews(v.id);
 
@@ -3659,116 +3734,17 @@ window.__onPhotoSelected = function (event) {
   reader.readAsDataURL(file);
 };
 
-// ---------- AUTO-RESIZE BANNER SLIDER (hasil akhir 1000 × 375 px, rasio 8:3) ----------
-// Admin boleh unggah gambar ukuran apa saja: sistem memotong ke rasio 8:3 (titik fokus bisa digeser),
-// mengecilkan ke maks. 1000 px lebar (tidak diperbesar), lalu menyimpan sebagai JPG.
-const ANN_BANNER_W = 1000;
-const ANN_BANNER_H = 375;
-const ANN_BANNER_RATIO = 8 / 3;
-let pendingAnnImageFocus = 0.5; // 0 = atas/kiri, 0.5 = tengah, 1 = bawah/kanan
-let pendingAnnImageEl = null;   // gambar asli yang sudah dimuat (dipakai untuk pratinjau & potong ulang)
-
-function annLoadImage(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('File gambar tidak bisa dibaca.'));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Format gambar tidak didukung.'));
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function annBannerCrop(img, focus) {
-  const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
-  let cw, ch;
-  if (sw / sh > ANN_BANNER_RATIO) { ch = sh; cw = sh * ANN_BANNER_RATIO; } // terlalu lebar → potong kiri-kanan
-  else { cw = sw; ch = sw / ANN_BANNER_RATIO; }                            // terlalu tinggi → potong atas-bawah
-  return { sx: (sw - cw) * focus, sy: (sh - ch) * focus, cw, ch, sw, sh, keep: (cw * ch) / (sw * sh), cutsSides: sw / sh > ANN_BANNER_RATIO };
-}
-
-function annBannerCanvas(img, focus, outW) {
-  const r = annBannerCrop(img, focus);
-  const w = Math.max(1, Math.round(outW));
-  const h = Math.max(1, Math.round(w / ANN_BANNER_RATIO));
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // PNG transparan → latar putih (JPG tidak mengenal transparan)
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, r.sx, r.sy, r.cw, r.ch, 0, 0, w, h);
-  return canvas;
-}
-
-function annBannerBlob(img, focus) {
-  const r = annBannerCrop(img, focus);
-  const canvas = annBannerCanvas(img, focus, Math.min(ANN_BANNER_W, r.cw));
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Gagal memproses gambar.')), 'image/jpeg', 0.82));
-}
-
-function renderAnnImagePreview() {
-  const box = document.getElementById('ann-image-preview');
-  if (!box) return;
-  if (!pendingAnnImageEl) { box.innerHTML = ''; return; }
-  const img = pendingAnnImageEl;
-  const r = annBannerCrop(img, pendingAnnImageFocus);
-  const lost = Math.round((1 - r.keep) * 100);
-  const outW = Math.round(Math.min(ANN_BANNER_W, r.cw));
-  const outH = Math.round(outW / ANN_BANNER_RATIO);
-  const dataUrl = annBannerCanvas(img, pendingAnnImageFocus, Math.min(480, r.cw)).toDataURL('image/jpeg', 0.85);
-  const warns = [];
-  if (lost > 30) warns.push(`⚠️ ±${lost}% gambar terpotong (rasio asli ${(r.sw / r.sh).toFixed(2)}:1). Hasil terbaik kalau desain sudah 1000 × 375 px.`);
-  if (r.cw < 800) warns.push(`⚠️ Gambar kecil (${Math.round(r.cw)} px lebar setelah dipotong) — bisa terlihat buram di layar HP yang tajam.`);
-  const canShift = lost >= 1;
-  const lbl = r.cutsSides ? ['Kiri', 'Tengah', 'Kanan'] : ['Atas', 'Tengah', 'Bawah'];
-  const focusBtn = (val, text) => `<button type="button" class="follow-btn" onclick="window.__annImageFocus(${val})" style="${pendingAnnImageFocus === val ? 'border-color:var(--brand);color:var(--brand);font-weight:700;' : ''}">${text}</button>`;
-  box.innerHTML = `
-    <div style="position:relative;aspect-ratio:8/3;border-radius:16px;overflow:hidden;margin-top:8px;background:var(--surface-2);">
-      <img src="${dataUrl}" alt="" style="width:100%;height:100%;display:block;" />
-      <div style="position:absolute;inset:13.3% 4.9%;border:1.5px dashed rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.35);border-radius:6px;pointer-events:none;"></div>
-    </div>
-    <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Pratinjau persis seperti di slider. Kotak putus-putus = area aman teks (min. 16 px dari tepi). Hasil unggah: ${outW} × ${outH} px.</div>
-    ${warns.map(w => `<div style="font-size:10.5px;color:#f59e0b;margin-top:3px;">${w}</div>`).join('')}
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
-      ${canShift ? `<span style="font-size:11px;color:var(--text-dim);">Fokus potong:</span>${focusBtn(0, lbl[0])}${focusBtn(0.5, lbl[1])}${focusBtn(1, lbl[2])}` : ''}
-      <button type="button" class="follow-btn" style="color:#f87171;margin-left:auto;" onclick="window.__annImageClear()">✕ Hapus gambar</button>
-    </div>`;
-}
-
-window.__onAnnouncementImageSelected = async function (event) {
-  const input = event.target;
-  const file = input.files && input.files[0];
+window.__onAnnouncementImageSelected = function (event) {
+  const file = event.target.files[0];
   if (!file) return;
-  const errEl = document.getElementById('ann-error');
-  try {
-    const img = await annLoadImage(file);
-    pendingAnnImageEl = img;
-    pendingAnnImageFile = file;
-    pendingAnnImageFocus = 0.5;
-    if (errEl) errEl.textContent = '';
+  pendingAnnImageFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    pendingAnnImagePreview = e.target.result;
     const zone = document.getElementById('ann-image-zone');
-    if (zone) zone.innerHTML = '🔄 Ganti gambar';
-    renderAnnImagePreview();
-  } catch (e) {
-    if (errEl) errEl.textContent = e.message;
-  }
-  input.value = ''; // supaya memilih file yang sama lagi tetap memicu event
-};
-
-window.__annImageFocus = function (val) {
-  pendingAnnImageFocus = val;
-  renderAnnImagePreview();
-};
-
-window.__annImageClear = function () {
-  pendingAnnImageFile = null; pendingAnnImagePreview = null; pendingAnnImageEl = null; pendingAnnImageFocus = 0.5;
-  const zone = document.getElementById('ann-image-zone');
-  if (zone) zone.innerHTML = '📷 Tambah gambar (opsional)';
-  renderAnnImagePreview();
+    if (zone) zone.innerHTML = `<img src="${pendingAnnImagePreview}" style="width:100%;border-radius:10px;" /><div style="margin-top:4px;color:var(--brand);">Ganti gambar</div>`;
+  };
+  reader.readAsDataURL(file);
 };
 
 // Deteksi kabupaten/kota otomatis dari GPS, pakai layanan gratis OpenStreetMap (Nominatim)
@@ -4285,6 +4261,7 @@ async function renderAdminDashboard() {
       <button class="admin-tab" data-tab="reports" onclick="window.__adminSwitchTab('reports')">🚩 Laporan</button>
       <button class="admin-tab" data-tab="tags" onclick="window.__adminSwitchTab('tags')">🏷️ Ikon</button>
       <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
+      <button class="admin-tab" data-tab="banners" onclick="window.__adminSwitchTab('banners')">🖼️ Banner Slider</button>
     </div>
 
     <div class="admin-panel" data-panel="stats">
@@ -4319,26 +4296,56 @@ async function renderAdminDashboard() {
       <div id="admin-tags" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
     </div>
 
-    <div class="admin-panel" data-panel="announcements" style="display:none;">
-      <details id="ann-guide" open class="vendor-hero" style="text-align:left;margin-bottom:10px;padding:14px 16px;">
+    <div class="admin-panel" data-panel="banners" style="display:none;">
+      <details id="bn-guide" open class="vendor-hero" style="text-align:left;margin-bottom:10px;padding:14px 16px;">
         <summary style="cursor:pointer;font-weight:700;font-size:13px;">📐 Panduan ukuran banner slider — baca sebelum membuat</summary>
         <div style="font-size:11.5px;line-height:1.55;color:var(--text-dim);margin-top:8px;">
           <div><b>Ukuran file:</b> 1000 × 375 px (rasio 8:3). Di HP 6,5" tampil sekitar 324 × 120 px. Gambar ukuran lain otomatis dipotong &amp; dikecilkan, tapi hasil terbaik kalau desain sudah 8:3.</div>
           <div style="margin-top:6px;"><b>Area aman:</b> teks, logo, dan tombol min. 16 px dari tepi layar ≈ <b>50 px</b> dari tiap sisi di file 1000 px (kotak putus-putus di pratinjau).</div>
           <div style="margin-top:6px;"><b>Teks di gambar:</b> judul maks. 2 baris, deskripsi maks. 2 baris, 1 tombol. Tinggi huruf terkecil min. ±38 px di file (≈ 12 px di layar). Taruh teks di kiri (±55% lebar), ilustrasi di kanan.</div>
-          <div style="margin-top:6px;"><b>Jumlah:</b> hanya 4 banner terbaru yang tampil di slider pembeli (auto-slide 5,5 detik). Banner ke-5 dan seterusnya tidak tampil.</div>
-          <div style="margin-top:6px;"><b>Kolom teks pengumuman</b> tidak tampil di slider (teks sudah ada di dalam gambar); isinya dipakai untuk notifikasi push &amp; deskripsi gambar. Banner khusus pedagang tidak masuk slider pembeli. Pengumuman tanpa gambar tampil sebagai kartu teks di atas Kategori.</div>
+          <div style="margin-top:6px;"><b>Jumlah &amp; urutan:</b> hanya 4 banner pertama (urut ▲▼) yang tampil per audiens; auto-slide 5,5 detik. Banner baru masuk di urutan terakhir.</div>
+          <div style="margin-top:6px;"><b>Judul</b> hanya untuk admin &amp; deskripsi gambar, tidak tampil di slider. <b>Jadwal</b> kosong = langsung tayang / tanpa batas akhir. <b>Tujuan klik</b>: pilih dari daftar (Promosi Lokal, WhatsApp Admin, halaman app, pedagang/artikel tertentu, atau link sendiri) — tidak perlu mengetik kode tautan. Pilihan "Untuk pedagang" otomatis menyarankan audiens yang cocok.</div>
         </div>
       </details>
       <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
-        <textarea id="ann-message" rows="3" placeholder="Isi pengumuman (dipakai untuk teks notifikasi push &amp; deskripsi gambar)..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
+        <input id="bn-title" type="text" maxlength="80" placeholder="Judul banner (wajib, maks. 80 karakter — tidak tampil di slider)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
+        <input type="file" id="bn-image-input" accept="image/*" style="display:none" onchange="window.__onBannerImageSelected(event)" />
+        <div id="bn-image-zone" onclick="document.getElementById('bn-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">📷 Pilih gambar banner (wajib)</div>
+        <div id="bn-image-preview"></div>
+        <div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--text-dim);">Tujuan saat banner diketuk</div>
+        <select id="bn-dest" onchange="window.__bnDestChange()" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;">${bnDestOptionsHtml()}</select>
+        <div id="bn-dest-extra" style="margin-top:6px;"></div>
+        <div id="bn-dest-preview" style="font-size:10.5px;color:var(--text-faint);margin-top:4px;word-break:break-all;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <select id="bn-audience" onchange="bnAudienceTouched = true" style="flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+            <option value="semua">Semua</option>
+            <option value="pembeli">Pembeli</option>
+            <option value="pedagang">Pedagang</option>
+          </select>
+          <select id="bn-region" style="flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
+            ${regionOptionsHtml('🌏 Zona: Nasional (semua wilayah)')}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-end;">
+          <label style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);">Mulai tayang (kosong = langsung)
+            <input id="bn-start" type="datetime-local" style="width:100%;box-sizing:border-box;margin-top:2px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;color:var(--text);font-size:12px;" /></label>
+          <label style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);">Berakhir (kosong = tanpa batas)
+            <input id="bn-end" type="datetime-local" style="width:100%;box-sizing:border-box;margin-top:2px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;color:var(--text);font-size:12px;" /></label>
+        </div>
+        <button onclick="window.__adminCreateBanner()" style="margin-top:12px;width:100%;background:var(--brand);border:none;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:13px;color:#fff;cursor:pointer;">🖼️ Tambah ke Slider</button>
+        <div id="bn-error" style="color:#f87171;font-size:12px;margin-top:6px;"></div>
+      </div>
+      <div id="admin-banners-list" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat banner...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="announcements" style="display:none;">
+      <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
+        <textarea id="ann-message" rows="3" placeholder="Isi pengumuman..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
         <input id="ann-link" type="text" placeholder="Link (opsional) — https://... atau tujuan dalam app: ?artikel=slug / ?vendor=ID" style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
         <input type="file" id="ann-image-input" accept="image/*" style="display:none" onchange="window.__onAnnouncementImageSelected(event)" />
         <div id="ann-image-zone" onclick="document.getElementById('ann-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
           📷 Tambah gambar (opsional)
         </div>
-        <div id="ann-image-preview"></div>
-        <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Untuk banner gambar, teks pengumuman di atas <b>tidak</b> tampil di slider.</div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <select id="ann-audience" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
             <option value="semua">Semua</option>
@@ -4476,6 +4483,7 @@ async function renderAdminDashboard() {
   loadAdminReports();
   loadAdminRequests();
   loadAdminAnnouncements();
+  loadAdminBanners();
   loadAdminArticles();
   loadAdminTagSuggestions();
 
@@ -4648,23 +4656,9 @@ async function loadAdminAnnouncements() {
     const data = (res.announcements || []).filter(a => a.active);
     if (data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada pengumuman aktif.</div>'; return; }
     const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    // Urutan slider = banner bergambar untuk pembeli, terbaru dulu, maks. ANN_SLIDER_MAX (perkiraan: tampilan tiap pembeli juga disaring per wilayah)
-    const sliderIds = [...data]
-      .sort((x, y) => new Date(y.created_at) - new Date(x.created_at))
-      .filter(a => a.image_url && (a.audience === 'semua' || a.audience === 'pembeli'))
-      .map(a => a.id);
-    const slotLabel = (a) => {
-      if (!a.image_url) return '📝 Kartu teks di beranda (tanpa gambar, bisa ditutup pengguna)';
-      if (a.audience === 'premium' || a.audience === 'biasa') return '👤 Khusus pedagang — tidak masuk slider pembeli';
-      const n = sliderIds.indexOf(a.id) + 1;
-      const zoneNote = (a.zone_level && a.zone_level !== 'nasional') ? ' · urutan bisa berbeda per wilayah' : '';
-      return n <= ANN_SLIDER_MAX ? `🟢 Tampil di slider · slide #${n}${zoneNote}` : `⚪ Tidak tampil di slider (penuh, maks. ${ANN_SLIDER_MAX})${zoneNote}`;
-    };
-    const sliderSummary = `<div style="font-size:11.5px;font-weight:600;margin:0 0 8px;">🖼️ Slider beranda pembeli: ${Math.min(sliderIds.length, ANN_SLIDER_MAX)}/${ANN_SLIDER_MAX} slot terisi${sliderIds.length > ANN_SLIDER_MAX ? ` · ${sliderIds.length - ANN_SLIDER_MAX} banner tidak tampil` : ''}</div>`;
-    el.innerHTML = sliderSummary + data.map(a => `
+    el.innerHTML = data.map(a => `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
-        ${a.image_url ? `<div style="aspect-ratio:8/3;border-radius:16px;overflow:hidden;background:var(--surface-2);"><img src="${escapeHtml(a.image_url)}" alt="" onload="window.__annCheckRatio(this)" style="width:100%;height:100%;object-fit:cover;display:block;" /></div><div class="ann-ratio-note" style="font-size:10.5px;color:#f59e0b;"></div>` : ''}
-        <div style="font-size:10.5px;font-weight:600;">${slotLabel(a)}</div>
+        ${a.image_url ? `<img src="${a.image_url}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="font-size:12px;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
         ${a.link ? `<div style="font-size:10px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(a.link)}</div>` : ''}
         <div style="font-size:10px;color:var(--text-faint);">
@@ -4683,18 +4677,6 @@ async function loadAdminAnnouncements() {
   }
 }
 
-// Tandai gambar lama yang rasionya jauh dari 8:3 (akan terpotong di slider)
-window.__annCheckRatio = function (img) {
-  try {
-    const note = img.parentElement && img.parentElement.nextElementSibling;
-    if (!note || !note.classList.contains('ann-ratio-note') || !img.naturalWidth || !img.naturalHeight) return;
-    const r = img.naturalWidth / img.naturalHeight;
-    const keep = r > ANN_BANNER_RATIO ? ANN_BANNER_RATIO / r : r / ANN_BANNER_RATIO;
-    const lost = Math.round((1 - keep) * 100);
-    if (lost >= 15) note.textContent = `⚠️ Rasio gambar ${r.toFixed(2)}:1 — di slider ±${lost}% terpotong (ideal 2,67:1 / 1000 × 375 px).`;
-  } catch (e) {}
-};
-
 window.__adminCreateAnnouncement = async function () {
   const errEl = document.getElementById('ann-error');
   const message = document.getElementById('ann-message').value.trim();
@@ -4709,27 +4691,17 @@ window.__adminCreateAnnouncement = async function () {
     return;
   }
 
-  // Pengingat: slider pembeli hanya menampilkan ANN_SLIDER_MAX banner terbaru
-  if (pendingAnnImageEl && (audience === 'semua' || audience === 'pembeli')) {
-    const inSlider = announcements.filter(a => a.image_url && (a.audience === 'semua' || a.audience === 'pembeli')).length;
-    if (inSlider >= ANN_SLIDER_MAX) {
-      const ok = confirm(`Slider beranda pembeli sudah berisi ${inSlider} banner (maks. ${ANN_SLIDER_MAX} tampil).\n\nBanner baru ini akan masuk sebagai slide pertama, dan banner terlama akan tergeser keluar dari slider (masih aktif, tapi tidak tampil).\n\nLanjut?`);
-      if (!ok) return;
-    }
-  }
-
   errEl.textContent = 'Menyimpan...';
   try {
     let imageUrl = null;
     if (pendingAnnImageFile) {
-      imageUrl = await uploadAnnouncementImage(pendingAnnImageEl, pendingAnnImageFocus);
+      imageUrl = await uploadAnnouncementImage(pendingAnnImageFile);
     }
     const res = await callAdminAction('create_announcement', undefined, {
       message, link: link || null, image_url: imageUrl, audience, region_id: regionId,
     });
 
-    pendingAnnImageFile = null; pendingAnnImagePreview = null; pendingAnnImageEl = null; pendingAnnImageFocus = 0.5;
-    renderAnnImagePreview();
+    pendingAnnImageFile = null; pendingAnnImagePreview = null;
     document.getElementById('ann-message').value = '';
     document.getElementById('ann-link').value = '';
     document.getElementById('ann-region').value = '';
@@ -4756,6 +4728,412 @@ window.__adminDeactivateAnnouncement = async function (id) {
   } catch (e) {
     alert('Gagal menonaktifkan: ' + e.message);
   }
+};
+
+// ---------- ADMIN: BANNER SLIDER (tabel `banners` lewat Edge Function admin-banners) ----------
+// Auto-resize: gambar apa pun dipotong ke rasio 8:3 (titik fokus bisa digeser), dikecilkan maks. 1000 px lebar
+// (tidak diperbesar), lalu disimpan sebagai JPG.
+const ANN_BANNER_W = 1000;
+const ANN_BANNER_H = 375;
+const ANN_BANNER_RATIO = 8 / 3;
+const BANNER_LINK_OK = [/^https:\/\/[^\s]+$/i, /^\?vendor=[A-Za-z0-9_-]{8,64}$/, /^\?artikel=[A-Za-z0-9_%.-]{1,120}$/, /^app:(daftar|promo|peta|cari|favorit|terdekat|artikel)$/];
+const BANNER_AUDIENCE_LABEL = { semua: 'Semua', pembeli: 'Pembeli', pedagang: 'Pedagang' };
+let pendingBnImageEl = null;   // gambar asli yang sudah dimuat (untuk pratinjau & potong ulang)
+let pendingBnImageFocus = 0.5; // 0 = atas/kiri, 0.5 = tengah, 1 = bawah/kanan
+let adminBannersData = [];
+
+function annLoadImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('File gambar tidak bisa dibaca.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Format gambar tidak didukung.'));
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function annBannerCrop(img, focus) {
+  const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
+  let cw, ch;
+  if (sw / sh > ANN_BANNER_RATIO) { ch = sh; cw = sh * ANN_BANNER_RATIO; } // terlalu lebar → potong kiri-kanan
+  else { cw = sw; ch = sw / ANN_BANNER_RATIO; }                            // terlalu tinggi → potong atas-bawah
+  return { sx: (sw - cw) * focus, sy: (sh - ch) * focus, cw, ch, sw, sh, keep: (cw * ch) / (sw * sh), cutsSides: sw / sh > ANN_BANNER_RATIO };
+}
+
+function annBannerCanvas(img, focus, outW) {
+  const r = annBannerCrop(img, focus);
+  const w = Math.max(1, Math.round(outW));
+  const h = Math.max(1, Math.round(w / ANN_BANNER_RATIO));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // PNG transparan → latar putih (JPG tidak mengenal transparan)
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, r.sx, r.sy, r.cw, r.ch, 0, 0, w, h);
+  return canvas;
+}
+
+function annBannerBlob(img, focus) {
+  const r = annBannerCrop(img, focus);
+  const canvas = annBannerCanvas(img, focus, Math.min(ANN_BANNER_W, r.cw));
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Gagal memproses gambar.')), 'image/jpeg', 0.82));
+}
+
+async function uploadBannerImage(imgEl, focus) {
+  // Folder banners/ di bucket vendor-photos — Edge Function admin-banners hanya menerima URL dari folder ini.
+  const blob = await annBannerBlob(imgEl, focus);
+  const path = `banners/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+
+function renderBnImagePreview() {
+  const box = document.getElementById('bn-image-preview');
+  if (!box) return;
+  if (!pendingBnImageEl) { box.innerHTML = ''; return; }
+  const img = pendingBnImageEl;
+  const r = annBannerCrop(img, pendingBnImageFocus);
+  const lost = Math.round((1 - r.keep) * 100);
+  const outW = Math.round(Math.min(ANN_BANNER_W, r.cw));
+  const outH = Math.round(outW / ANN_BANNER_RATIO);
+  const dataUrl = annBannerCanvas(img, pendingBnImageFocus, Math.min(480, r.cw)).toDataURL('image/jpeg', 0.85);
+  const warns = [];
+  if (lost > 30) warns.push(`⚠️ ±${lost}% gambar terpotong (rasio asli ${(r.sw / r.sh).toFixed(2)}:1). Hasil terbaik kalau desain sudah 1000 × 375 px.`);
+  if (r.cw < 800) warns.push(`⚠️ Gambar kecil (${Math.round(r.cw)} px lebar setelah dipotong) — bisa terlihat buram di layar HP yang tajam.`);
+  const canShift = lost >= 1;
+  const lbl = r.cutsSides ? ['Kiri', 'Tengah', 'Kanan'] : ['Atas', 'Tengah', 'Bawah'];
+  const focusBtn = (val, text) => `<button type="button" class="follow-btn" onclick="window.__bnImageFocus(${val})" style="${pendingBnImageFocus === val ? 'border-color:var(--brand);color:var(--brand);font-weight:700;' : ''}">${text}</button>`;
+  box.innerHTML = `
+    <div style="position:relative;aspect-ratio:8/3;border-radius:16px;overflow:hidden;margin-top:8px;background:var(--surface-2);">
+      <img src="${dataUrl}" alt="" style="width:100%;height:100%;display:block;" />
+      <div style="position:absolute;inset:13.3% 4.9%;border:1.5px dashed rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.35);border-radius:6px;pointer-events:none;"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Pratinjau persis seperti di slider. Kotak putus-putus = area aman teks (min. 16 px dari tepi). Hasil unggah: ${outW} × ${outH} px.</div>
+    ${warns.map(w => `<div style="font-size:10.5px;color:#f59e0b;margin-top:3px;">${w}</div>`).join('')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+      ${canShift ? `<span style="font-size:11px;color:var(--text-dim);">Fokus potong:</span>${focusBtn(0, lbl[0])}${focusBtn(0.5, lbl[1])}${focusBtn(1, lbl[2])}` : ''}
+      <button type="button" class="follow-btn" style="color:#f87171;margin-left:auto;" onclick="window.__bnImageClear()">✕ Hapus gambar</button>
+    </div>`;
+}
+
+window.__onBannerImageSelected = async function (event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('bn-error');
+  try {
+    pendingBnImageEl = await annLoadImage(file);
+    pendingBnImageFocus = 0.5;
+    if (errEl) errEl.textContent = '';
+    const zone = document.getElementById('bn-image-zone');
+    if (zone) zone.innerHTML = '🔄 Ganti gambar';
+    renderBnImagePreview();
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message;
+  }
+  input.value = ''; // supaya memilih file yang sama lagi tetap memicu event
+};
+window.__bnImageFocus = function (val) { pendingBnImageFocus = val; renderBnImagePreview(); };
+window.__bnImageClear = function () {
+  pendingBnImageEl = null; pendingBnImageFocus = 0.5;
+  const zone = document.getElementById('bn-image-zone');
+  if (zone) zone.innerHTML = '📷 Pilih gambar banner (wajib)';
+  renderBnImagePreview();
+};
+
+async function callAdminBanners(action, extra = {}) {
+  const { data, error } = await sb.functions.invoke('admin-banners', { body: { password: adminPasswordCache, action, ...extra } });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
+const bnFmt = (d) => new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+function bnLocalText(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// '' → null (kosong), teks tak valid → false, selain itu → ISO
+function bnParseLocal(str) {
+  const t = String(str || '').trim();
+  if (!t) return null;
+  const d = new Date(t.replace(' ', 'T'));
+  return isNaN(d.getTime()) ? false : d.toISOString();
+}
+
+// Tandai gambar yang rasionya jauh dari 8:3 (akan terpotong di slider)
+window.__annCheckRatio = function (img) {
+  try {
+    const note = img.parentElement && img.parentElement.nextElementSibling;
+    if (!note || !note.classList.contains('ann-ratio-note') || !img.naturalWidth || !img.naturalHeight) return;
+    const r = img.naturalWidth / img.naturalHeight;
+    const keep = r > ANN_BANNER_RATIO ? ANN_BANNER_RATIO / r : r / ANN_BANNER_RATIO;
+    const lost = Math.round((1 - keep) * 100);
+    if (lost >= 15) note.textContent = `⚠️ Rasio gambar ${r.toFixed(2)}:1 — di slider ±${lost}% terpotong (ideal 2,67:1 / 1000 × 375 px).`;
+  } catch (e) {}
+};
+
+// ---------- PEMILIH TUJUAN KLIK BANNER ----------
+const BANNER_WA_DEFAULT_MSG = 'Halo admin JajanDekat, saya pedagang dan mau pasang promo/iklan di JajanDekat.';
+const BANNER_WA_CHANNEL = 'https://whatsapp.com/channel/0029Vb8okwd4inorfK4UCQ3Z';
+const BANNER_DEST_APP_PAGES = { peta: '🗺️ Peta', cari: '🔍 Cari', favorit: '❤️ Favorit', terdekat: '📍 Pedagang terdekat', artikel: '📰 Daftar artikel' };
+const BANNER_DEST_AUDIENCE_HINT = { promo: 'pedagang', wa_admin: 'pedagang', daftar: 'pembeli' }; // audiens yang paling masuk akal per tujuan
+let bnAudienceTouched = false; // kalau admin sudah memilih audiens sendiri, jangan ditimpa saran otomatis
+let bnArticlesCache = null;
+
+function bnDestOptionsHtml() {
+  return `
+    <option value="none">Tanpa tautan (hanya tampilan)</option>
+    <optgroup label="Untuk pedagang">
+      <option value="promo">🔥 Halaman Promosi Lokal (dashboard pedagang)</option>
+      <option value="wa_admin">💬 Chat WhatsApp Admin — pasang iklan/promo</option>
+      <option value="daftar">🏪 Daftar / masuk sebagai pedagang</option>
+    </optgroup>
+    <optgroup label="Halaman aplikasi">
+      ${Object.entries(BANNER_DEST_APP_PAGES).map(([k, t]) => `<option value="app_${k}">${t}</option>`).join('')}
+    </optgroup>
+    <optgroup label="Pilih isi tertentu">
+      <option value="vendor">🏪 Halaman pedagang tertentu…</option>
+      <option value="artikel">📰 Artikel tertentu…</option>
+      <option value="wa_channel">📢 Saluran WhatsApp JajanDekat</option>
+    </optgroup>
+    <optgroup label="Lainnya">
+      <option value="recent">🕘 Pernah dipakai di banner lain…</option>
+      <option value="custom">🌐 Link lain (ketik sendiri)…</option>
+    </optgroup>`;
+}
+
+// → { link: string|null } atau { error: 'pesan' }
+function bnDestValue() {
+  const sel = document.getElementById('bn-dest');
+  const kind = sel ? sel.value : 'none';
+  const val = (id) => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  if (kind === 'none') return { link: null };
+  if (kind === 'promo') return { link: 'app:promo' };
+  if (kind === 'daftar') return { link: 'app:daftar' };
+  if (kind.startsWith('app_')) return { link: 'app:' + kind.slice(4) };
+  if (kind === 'wa_channel') return { link: BANNER_WA_CHANNEL };
+  if (kind === 'wa_admin') {
+    if (typeof ADMIN_WHATSAPP === 'undefined' || !ADMIN_WHATSAPP) return { error: 'Nomor WhatsApp admin belum diatur di config.js.' };
+    return { link: `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(val('bn-dest-wa') || BANNER_WA_DEFAULT_MSG)}` };
+  }
+  if (kind === 'vendor') { const id = val('bn-dest-vendor'); return id ? { link: `?vendor=${id}` } : { error: 'Pilih pedagang tujuan.' }; }
+  if (kind === 'artikel') { const sl = val('bn-dest-artikel'); return sl ? { link: `?artikel=${encodeURIComponent(sl)}` } : { error: 'Pilih artikel tujuan.' }; }
+  if (kind === 'recent') { const l = val('bn-dest-recent'); return l ? { link: l } : { error: 'Belum ada tautan lama yang bisa dipilih.' }; }
+  if (kind === 'custom') {
+    const l = val('bn-dest-custom');
+    if (!l) return { error: 'Isi link tujuan (diawali https://).' };
+    return /^https:\/\/[^\s]+$/i.test(l) ? { link: l } : { error: 'Link harus diawali https:// dan tanpa spasi.' };
+  }
+  return { link: null };
+}
+
+window.__bnDestUpdate = function () {
+  const box = document.getElementById('bn-dest-preview');
+  if (!box) return;
+  const d = bnDestValue();
+  if (d.error) { box.textContent = ''; return; }
+  if (!d.link) { box.textContent = 'Banner hanya tampil, tidak bisa diketuk.'; return; }
+  const short = d.link.length > 90 ? d.link.slice(0, 90) + '…' : d.link;
+  const test = /^https:\/\//i.test(d.link) ? ` · <a href="${escapeHtml(d.link)}" target="_blank" rel="noopener" style="color:var(--brand);font-weight:700;">Tes tautan ↗</a>` : '';
+  box.innerHTML = `🔗 <code>${escapeHtml(short)}</code>${test}`;
+};
+
+window.__bnDestChange = async function () {
+  const kind = document.getElementById('bn-dest').value;
+  const extra = document.getElementById('bn-dest-extra');
+  const fld = 'width:100%;box-sizing:border-box;font-family:inherit;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;';
+  const note = (t) => `<div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">${t}</div>`;
+  let html = '';
+  if (kind === 'wa_admin') {
+    html = `<textarea id="bn-dest-wa" rows="2" maxlength="300" oninput="window.__bnDestUpdate()" style="${fld}">${escapeHtml(BANNER_WA_DEFAULT_MSG)}</textarea>${note('Pesan ini terisi otomatis di WhatsApp pedagang — mereka tinggal menekan kirim. Boleh diubah.')}`;
+  } else if (kind === 'promo') {
+    html = note('Pedagang dibawa ke halaman pedagang dan kartu "Promosi Lokal Harian" disorot. Kalau belum masuk akun, mereka melihat halaman masuk/daftar.');
+  } else if (kind === 'vendor') {
+    const opts = [...vendors].sort((a, b) => a.name.localeCompare(b.name, 'id')).map(v => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)}${v.region ? ' — ' + escapeHtml(v.region) : ''}</option>`).join('');
+    html = `<select id="bn-dest-vendor" onchange="window.__bnDestUpdate()" style="${fld}"><option value="">— pilih pedagang —</option>${opts}</select>`;
+  } else if (kind === 'artikel') {
+    extra.innerHTML = note('Memuat daftar artikel...');
+    try {
+      if (!bnArticlesCache) {
+        const { data, error } = await sb.from('articles').select('slug,title').eq('status', 'published').order('created_at', { ascending: false }).limit(100);
+        if (error) throw error;
+        bnArticlesCache = data || [];
+      }
+      html = bnArticlesCache.length
+        ? `<select id="bn-dest-artikel" onchange="window.__bnDestUpdate()" style="${fld}"><option value="">— pilih artikel —</option>${bnArticlesCache.map(a => `<option value="${escapeHtml(a.slug)}">${escapeHtml(a.title)}</option>`).join('')}</select>`
+        : note('Belum ada artikel yang terbit.');
+    } catch (e) { html = note('Gagal memuat artikel: ' + escapeHtml(e.message)); }
+    if (document.getElementById('bn-dest').value !== kind) return; // admin sudah ganti pilihan selagi memuat
+  } else if (kind === 'recent') {
+    const seen = new Map();
+    adminBannersData.forEach(b => { if (b.link && !seen.has(b.link)) seen.set(b.link, b.title); });
+    html = seen.size
+      ? `<select id="bn-dest-recent" onchange="window.__bnDestUpdate()" style="${fld}">${[...seen].map(([l, t]) => `<option value="${escapeHtml(l)}">${escapeHtml(t)} — ${escapeHtml(l.length > 40 ? l.slice(0, 40) + '…' : l)}</option>`).join('')}</select>`
+      : note('Belum ada banner dengan tautan. Pilih tujuan lain dulu.');
+  } else if (kind === 'custom') {
+    html = `<input id="bn-dest-custom" type="url" inputmode="url" placeholder="https://…" oninput="window.__bnDestUpdate()" style="${fld}" />`;
+  }
+  extra.innerHTML = html;
+
+  // Saran audiens otomatis (kecuali admin sudah memilih sendiri)
+  const hint = BANNER_DEST_AUDIENCE_HINT[kind];
+  const aud = document.getElementById('bn-audience');
+  if (aud && !bnAudienceTouched) aud.value = hint || 'semua';
+  window.__bnDestUpdate();
+};
+
+async function loadAdminBanners() {
+  const el = document.getElementById('admin-banners-list');
+  if (!el) return;
+  try {
+    const res = await callAdminBanners('list_banners');
+    const list = res.banners || [];
+    adminBannersData = list;
+    if (!list.length) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada banner. Tambahkan lewat form di atas — tanpa banner, slider tidak tampil di beranda.</div>'; return; }
+    const now = Date.now();
+    const state = (b) => !b.active ? 'off'
+      : (b.start_at && new Date(b.start_at).getTime() > now) ? 'soon'
+      : (b.end_at && new Date(b.end_at).getTime() <= now) ? 'ended' : 'live';
+    const live = list.filter(b => state(b) === 'live');
+    const buyerIds = live.filter(b => b.audience === 'semua' || b.audience === 'pembeli').map(b => b.id);
+    const vendorIds = live.filter(b => b.audience === 'semua' || b.audience === 'pedagang').map(b => b.id);
+    const slot = (ids, id) => { const n = ids.indexOf(id) + 1; return n > 0 && n <= ANN_SLIDER_MAX ? `#${n}` : null; };
+    const statusLine = (b) => {
+      const s = state(b);
+      if (s === 'off') return '⏸️ Nonaktif — tidak tampil';
+      if (s === 'soon') return `⏳ Terjadwal — mulai ${bnFmt(b.start_at)}`;
+      if (s === 'ended') return `⌛ Sudah berakhir (${bnFmt(b.end_at)}) — tidak tampil`;
+      const parts = [];
+      if (b.audience === 'semua' || b.audience === 'pembeli') { const n = slot(buyerIds, b.id); parts.push(n ? `pembeli ${n}` : 'TIDAK tampil ke pembeli (slider penuh)'); }
+      if (b.audience === 'semua' || b.audience === 'pedagang') { const n = slot(vendorIds, b.id); parts.push(n ? `pedagang ${n}` : 'TIDAK tampil ke pedagang (slider penuh)'); }
+      const zoneNote = (b.zone_level && b.zone_level !== 'nasional') ? ' · urutan bisa berbeda per wilayah' : '';
+      return `🟢 Tampil di slider — ${parts.join(' · ')}${zoneNote}`;
+    };
+    const overflow = (ids) => ids.length > ANN_SLIDER_MAX ? ` (+${ids.length - ANN_SLIDER_MAX} tidak tampil)` : '';
+    const summary = `<div style="font-size:11.5px;font-weight:600;margin:0 0 8px;">🖼️ Slider pembeli: ${Math.min(buyerIds.length, ANN_SLIDER_MAX)}/${ANN_SLIDER_MAX}${overflow(buyerIds)} · Slider pedagang: ${Math.min(vendorIds.length, ANN_SLIDER_MAX)}/${ANN_SLIDER_MAX}${overflow(vendorIds)}</div>`;
+    el.innerHTML = summary + list.map((b, i) => {
+      const ctr = b.view_count > 0 ? ` · CTR ${(b.click_count / b.view_count * 100).toFixed(1)}%` : '';
+      return `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <div style="aspect-ratio:8/3;border-radius:16px;overflow:hidden;background:var(--surface-2);"><img src="${escapeHtml(b.image_url)}" alt="" onload="window.__annCheckRatio(this)" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>
+        <div class="ann-ratio-note" style="font-size:10.5px;color:#f59e0b;"></div>
+        <div style="font-size:12.5px;font-weight:700;">${i + 1}. ${escapeHtml(b.title)}</div>
+        <div style="font-size:10.5px;font-weight:600;">${statusLine(b)}</div>
+        <div style="font-size:10px;color:var(--text-faint);">🎯 ${BANNER_AUDIENCE_LABEL[b.audience] || b.audience} · 📍 ${escapeHtml(annZoneLabel(b))}</div>
+        <div style="font-size:10px;color:var(--text-faint);">🗓 ${b.start_at ? bnFmt(b.start_at) : 'langsung'} → ${b.end_at ? bnFmt(b.end_at) : 'tanpa batas'}</div>
+        ${b.link ? `<div style="font-size:10px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(b.link)}</div>` : ''}
+        <div style="font-size:10px;color:var(--text-faint);">👁 ${b.view_count || 0} tayangan · 👆 ${b.click_count || 0} klik${ctr}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="follow-btn" ${i === 0 ? 'disabled style="opacity:.4"' : ''} onclick="window.__adminMoveBanner('${b.id}','up')">▲</button>
+          <button class="follow-btn" ${i === list.length - 1 ? 'disabled style="opacity:.4"' : ''} onclick="window.__adminMoveBanner('${b.id}','down')">▼</button>
+          <button class="follow-btn" onclick="window.__adminToggleBanner('${b.id}', ${b.active ? 'false' : 'true'})">${b.active ? '⏸ Nonaktifkan' : '▶ Aktifkan'}</button>
+          <button class="follow-btn" onclick="window.__adminEditBannerSchedule('${b.id}')">🗓 Ubah jadwal</button>
+          <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeleteBanner('${b.id}')">🗑 Hapus</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat banner: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+window.__adminCreateBanner = async function () {
+  const errEl = document.getElementById('bn-error');
+  const title = document.getElementById('bn-title').value.trim();
+  const dest = bnDestValue();
+  const link = dest.link || '';
+  const audience = document.getElementById('bn-audience').value;
+  const regionId = document.getElementById('bn-region').value || null;
+  const startAt = bnParseLocal(document.getElementById('bn-start').value.replace('T', ' '));
+  const endAt = bnParseLocal(document.getElementById('bn-end').value.replace('T', ' '));
+
+  if (!title) { errEl.textContent = 'Judul banner wajib diisi.'; return; }
+  if (!pendingBnImageEl) { errEl.textContent = 'Pilih gambar banner dulu.'; return; }
+  if (dest.error) { errEl.textContent = dest.error; return; }
+  if (link && !BANNER_LINK_OK.some(re => re.test(link))) { errEl.textContent = 'Tautan harus https://…, ?vendor=ID, ?artikel=slug, atau app:daftar / peta / cari / favorit / terdekat / artikel.'; return; }
+  if (startAt === false || endAt === false) { errEl.textContent = 'Format tanggal tidak valid.'; return; }
+  if (endAt && new Date(endAt).getTime() <= Date.now()) { errEl.textContent = 'Waktu berakhir sudah lewat — banner tidak akan pernah tampil.'; return; }
+  if (startAt && endAt && new Date(startAt) >= new Date(endAt)) { errEl.textContent = 'Waktu berakhir harus setelah waktu mulai.'; return; }
+
+  // Pengingat: banner baru masuk di urutan terakhir; slider hanya menampilkan ANN_SLIDER_MAX pertama per audiens
+  const group = audience === 'semua' ? ['semua', 'pembeli', 'pedagang'] : ['semua', audience];
+  const now = Date.now();
+  const liveSame = adminBannersData.filter(b => b.active && group.includes(b.audience) && (!b.end_at || new Date(b.end_at).getTime() > now)).length;
+  if (liveSame >= ANN_SLIDER_MAX) {
+    const ok = confirm(`Sudah ada ${liveSame} banner aktif/terjadwal untuk audiens ini (slider hanya menampilkan ${ANN_SLIDER_MAX} pertama).\n\nBanner baru masuk di urutan terakhir, jadi belum tampil sampai Anda menaikkan urutannya (▲) atau menonaktifkan banner lain.\n\nLanjut?`);
+    if (!ok) return;
+  }
+
+  errEl.textContent = 'Memproses & mengunggah gambar...';
+  let uploaded = null;
+  try {
+    uploaded = await uploadBannerImage(pendingBnImageEl, pendingBnImageFocus);
+    await callAdminBanners('save_banner', { banner: { title, image_url: uploaded.url, link: link || null, audience, region_id: regionId, start_at: startAt, end_at: endAt, active: true } });
+    pendingBnImageEl = null; pendingBnImageFocus = 0.5;
+    renderBnImagePreview();
+    ['bn-title', 'bn-start', 'bn-end'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('bn-region').value = '';
+    document.getElementById('bn-audience').value = 'semua';
+    bnAudienceTouched = false;
+    document.getElementById('bn-dest').value = 'none';
+    window.__bnDestChange();
+    const zone = document.getElementById('bn-image-zone');
+    if (zone) zone.innerHTML = '📷 Pilih gambar banner (wajib)';
+    errEl.textContent = '';
+    showToast('Banner ditambahkan ke slider! 🖼️');
+    await loadAdminBanners();
+    refreshBanners(true);
+  } catch (e) {
+    errEl.textContent = (link === 'app:promo' && /Tautan tidak valid/i.test(e.message))
+      ? 'Server belum menerima tujuan "Halaman Promosi Lokal" — fungsi admin-banners perlu diperbarui (izinkan app:promo). Sementara, pilih tujuan lain.'
+      : 'Gagal menyimpan: ' + e.message;
+    if (uploaded) { try { await sb.storage.from('vendor-photos').remove([uploaded.path]); } catch (x) {} } // jangan tinggalkan file yatim
+  }
+};
+
+window.__adminMoveBanner = async function (id, direction) {
+  try { await callAdminBanners('move_banner', { id, direction }); await loadAdminBanners(); refreshBanners(true); }
+  catch (e) { alert('Gagal memindah urutan: ' + e.message); }
+};
+
+window.__adminToggleBanner = async function (id, active) {
+  try { await callAdminBanners('set_banner_active', { id, active }); await loadAdminBanners(); refreshBanners(true); }
+  catch (e) { alert('Gagal mengubah status: ' + e.message); }
+};
+
+window.__adminDeleteBanner = async function (id) {
+  if (!confirm('Hapus banner ini beserta gambarnya? Tindakan ini tidak bisa dibatalkan.')) return;
+  try { await callAdminBanners('delete_banner', { id }); await loadAdminBanners(); refreshBanners(true); }
+  catch (e) { alert('Gagal menghapus: ' + e.message); }
+};
+
+window.__adminEditBannerSchedule = async function (id) {
+  const b = adminBannersData.find(x => x.id === id);
+  if (!b) return;
+  const s = prompt('Mulai tayang (format 2026-09-25 08:00, jam lokal perangkat).\nKosongkan = langsung tayang.', bnLocalText(b.start_at));
+  if (s === null) return;
+  const e = prompt('Berakhir (format 2026-09-30 23:59).\nKosongkan = tanpa batas akhir.', bnLocalText(b.end_at));
+  if (e === null) return;
+  const startAt = bnParseLocal(s), endAt = bnParseLocal(e);
+  if (startAt === false || endAt === false) { alert('Format tanggal tidak valid. Contoh: 2026-09-25 08:00'); return; }
+  try {
+    await callAdminBanners('save_banner', { banner: { id: b.id, title: b.title, image_url: b.image_url, link: b.link, audience: b.audience, region_id: b.region_id, active: b.active, start_at: startAt, end_at: endAt } });
+    await loadAdminBanners();
+    refreshBanners(true);
+  } catch (err) { alert('Gagal menyimpan jadwal: ' + err.message); }
 };
 
 // ---------- KIRIM PUSH DARI ADMIN (pengumuman & artikel) ----------
@@ -5197,6 +5575,9 @@ async function init() {
     await fetchRegions();
     await getBuyerRegion().catch(() => {}); // wilayah pembeli dari cache (kalau ada), dipakai filter pengumuman
     announcements = await fetchAnnouncements();
+    banners = (await fetchBanners()) || [];
+    bannersFetchedAt = Date.now();
+    scheduleBannerRefresh();
     ensurePushSubscription({ silent: true }); // izin sudah diberikan sebelumnya -> segarkan langganan & wilayahnya
     loadKnownTagSuggestions(); // tidak perlu ditunggu, isi belakangan pas render form pendaftaran
     subscribeRealtime();
