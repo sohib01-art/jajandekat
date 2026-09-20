@@ -2887,23 +2887,66 @@ async function loadCampaignProgress(vendorId) {
   `;
 }
 
-let reviewAlertShown = false; // toast peringatan ulasan rendah cukup sekali per sesi app
+// ---------- PENANDA ULASAN RENDAH (tanpa PIN, dikenali dari perangkat pemilik toko) ----------
+// Tanpa ini pedagang baru tahu ada ulasan rendah kalau membuka daftar ulasan & memasukkan PIN.
+// Dicek saat app dibuka, saat kembali ke app, dan tiap 2 menit selama app terbuka: titik merah di tab Pedagang + toast.
+let lastPendingNotified = 0;
+let reviewAlertTimer = null;
+
+function setPedagangDot(n) {
+  const btn = document.getElementById('btn-pedagang');
+  if (!btn) return;
+  let dot = btn.querySelector('.review-dot');
+  if (n > 0) {
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'review-dot';
+      dot.style.cssText = 'display:inline-block;min-width:16px;height:16px;padding:0 4px;margin-left:6px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;';
+      btn.appendChild(dot);
+    }
+    dot.textContent = n > 9 ? '9+' : String(n);
+  } else if (dot) {
+    dot.remove();
+  }
+}
+
+async function checkMyPendingReviews() {
+  if (!sb || !myVendorId) { lastPendingNotified = 0; setPedagangDot(0); return 0; }
+  try {
+    const { data: n, error } = await sb.rpc('count_my_pending_reviews');
+    if (error) return 0;
+    const cnt = n || 0;
+    setPedagangDot(cnt);
+    if (cnt > lastPendingNotified) {
+      showToast(`Ada ${cnt} ulasan rendah yang perlu Anda tindaklanjuti. Buka tab Pedagang → Ulasan.`);
+    }
+    lastPendingNotified = cnt;
+    return cnt;
+  } catch (e) { console.error('Gagal cek ulasan rendah:', e); return 0; }
+}
+
+function startReviewAlertWatch() {
+  checkMyPendingReviews();
+  if (reviewAlertTimer) clearInterval(reviewAlertTimer);
+  reviewAlertTimer = setInterval(checkMyPendingReviews, 120000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkMyPendingReviews(); });
+}
 
 async function loadMyReviews(vendorId) {
   const el = document.getElementById('my-reviews-list');
   if (!el) return;
   const revealBtn = (label, urgent) => `<button class="follow-btn" style="width:100%;padding:10px;${urgent ? 'background:#f87171;color:#fff;border-color:#f87171;' : ''}" onclick="window.__revealMyReviews('${vendorId}')">${label}</button>`;
   el.innerHTML = revealBtn('🔒 Tap untuk lihat ulasan (perlu PIN)', false);
-  // PIN baru diketahui kalau pedagang sudah login/mengisi PIN di sesi ini; kalau belum, penanda muncul setelah PIN dimasukkan.
-  if (myVendorPin === null) return;
   try {
-    const { data: n, error } = await sb.rpc('count_pending_reviews', { p_vendor_id: vendorId, p_pin: myVendorPin });
-    if (error || !n) return;
-    el.innerHTML = revealBtn(`⚠️ ${n} ulasan rendah perlu ditindaklanjuti — tap untuk lihat`, true);
-    if (!reviewAlertShown) {
-      reviewAlertShown = true;
-      showToast(`Ada ${n} ulasan rendah yang perlu Anda tindaklanjuti.`);
+    let n = 0;
+    if (myVendorPin !== null) {
+      // PIN sudah diketahui di sesi ini -> hitungan paling akurat (dicek di server dengan PIN)
+      const { data, error } = await sb.rpc('count_pending_reviews', { p_vendor_id: vendorId, p_pin: myVendorPin });
+      if (!error) { n = data || 0; setPedagangDot(n); lastPendingNotified = n; }
+    } else {
+      n = await checkMyPendingReviews(); // tanpa PIN, dikenali dari perangkat pemilik toko
     }
+    if (n > 0) el.innerHTML = revealBtn(`⚠️ ${n} ulasan rendah perlu ditindaklanjuti — tap untuk lihat${myVendorPin === null ? ' (perlu PIN)' : ''}`, true);
   } catch (e) { console.error('Gagal menghitung ulasan rendah:', e); }
 }
 
@@ -2947,6 +2990,8 @@ window.__resolveReview = async function (vendorId, reviewId) {
   const { error } = await sb.rpc('resolve_review', { p_vendor_id: vendorId, p_pin: myVendorPin, p_review_id: reviewId });
   if (error) { showToast('Gagal menandai ulasan. Coba lagi.'); return; }
   showToast('Ulasan ditandai sudah ditindaklanjuti ✓');
+  lastPendingNotified = 0;
+  checkMyPendingReviews();
   window.__revealMyReviews(vendorId);
 };
 
@@ -3481,6 +3526,8 @@ window.__pickVendor = async function () {
 window.__logoutVendor = function () {
   myVendorId = null;
   myVendorPin = null;
+  lastPendingNotified = 0;
+  setPedagangDot(0);
   localStorage.removeItem('jd_my_vendor_id');
   refreshMyChatThreads(); // balik ke pantau thread milik device ini sbg pembeli
   renderPedagang();
@@ -4687,6 +4734,7 @@ async function init() {
     loadKnownTagSuggestions(); // tidak perlu ditunggu, isi belakangan pas render form pendaftaran
     subscribeRealtime();
     startGlobalChatWatch();
+    startReviewAlertWatch();
     tryLocateBuyer();
 
     // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
