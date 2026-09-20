@@ -366,7 +366,7 @@ main{ flex:1; padding:0 18px; }
 .vp-rating-count{ font-weight:500; color:var(--text-faint); }
 .vp-cat{ min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .vp-rating + .vp-cat::before{ content:'·'; margin-right:6px; }
-.vp-promo-text{ font-size:11px; font-weight:700; color:#C77F0A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vp-promo-text{ font-size:11px; font-weight:700; line-height:1.3; color:#C77F0A; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word; } /* 2 baris, bukan 1 */
 .vp-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:6px; }
 .vp-loc{ display:inline-flex; align-items:center; gap:3px; flex:1; min-width:0; font-size:12px; font-weight:600; color:var(--text-dim); }
 .vp-loc svg{ color:var(--brand); flex-shrink:0; }
@@ -696,3 +696,32 @@ nav.bottom{
 /* Sorotan sesaat pada kartu Promosi Lokal saat dibuka dari banner (app:promo) */
 .promo-pulse{ animation:promoPulse 1.1s ease-in-out 2; }
 @keyframes promoPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(245,166,35,0); } 50%{ box-shadow:0 0 0 6px rgba(245,166,35,.45); } }
+
+
+/* --- Panel "Promo Hari Ini" (otomatis dari pedagang yang promonya aktif) --- */
+.sec-count-promo{ color:#C77F0A; }
+.pr-row{ display:flex; gap:10px; overflow-x:auto; padding:2px 2px 10px; scrollbar-width:none; scroll-snap-type:x proximity; }
+.pr-row::-webkit-scrollbar{ display:none; }
+.pr-card{
+  flex:0 0 58%; max-width:230px; min-width:0; display:flex; flex-direction:column; gap:3px; padding:0 0 10px;
+  text-align:left; background:var(--surface); border:1px solid #F5C77A; border-radius:14px; overflow:hidden;
+  box-shadow:0 0 0 1px #F5A62333, var(--shadow); cursor:pointer; scroll-snap-align:start;
+  font-family:'Inter', sans-serif; color:var(--text);
+}
+.pr-photo{
+  position:relative; display:flex; align-items:center; justify-content:center; width:100%; aspect-ratio:16/10;
+  background-color:var(--surface-2); background-size:cover; background-position:center; font-size:34px;
+}
+.pr-photo.inactive{ filter:grayscale(1) brightness(.78); }
+.pr-left{
+  position:absolute; left:8px; top:8px; padding:3px 8px; border-radius:999px; background:#F5A623; color:#fff;
+  font-family:'Inter', sans-serif; font-size:10px; font-weight:700;
+}
+.pr-name{ margin:7px 10px 0; font-family:'Poppins', sans-serif; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pr-text{
+  margin:0 10px; font-size:12px; font-weight:700; line-height:1.3; color:#C77F0A; min-height:31px;
+  overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word;
+}
+.pr-loc{ display:flex; align-items:center; gap:3px; margin:0 10px; min-height:15px; font-size:11px; font-weight:600; color:var(--text-dim); }
+.pr-loc svg{ width:11px; height:11px; color:var(--brand); flex-shrink:0; }
+.pr-card:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
