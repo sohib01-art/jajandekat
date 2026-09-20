@@ -859,13 +859,18 @@ async function uploadProductImage(vendorId, file) {
 
 async function uploadKtpImage(vendorId, file) {
   // KTP tidak perlu dicrop persegi & kualitas cukup ringan — cukup jelas terbaca admin.
+  // PENTING: KTP adalah dokumen identitas, jadi harus masuk bucket privat 'vendor-verifications',
+  // BUKAN 'vendor-photos' yang publik. getPublicUrl() di sini sengaja tetap dipakai supaya format
+  // string URL yang disimpan konsisten dengan kolom ktp_photo_url yang sudah ada; URL ini tidak
+  // bisa diakses langsung dari luar (bucket privat, tanpa policy SELECT publik) — untuk melihat
+  // isinya, admin perlu buka lewat Supabase Studio (pakai service role) atau signed URL.
   const blob = await compressImage(file, 1200, 0.75, false);
-  const path = `verifikasi/${vendorId}/${Date.now()}-ktp.jpg`;
-  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+  const path = `${vendorId}/${Date.now()}-ktp.jpg`;
+  const { error } = await sb.storage.from('vendor-verifications').upload(path, blob, {
     contentType: 'image/jpeg', upsert: true
   });
   if (error) throw error;
-  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  const { data } = sb.storage.from('vendor-verifications').getPublicUrl(path);
   return data.publicUrl;
 }
 
