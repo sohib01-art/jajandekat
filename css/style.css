@@ -594,11 +594,11 @@ input[type="checkbox"]{ accent-color:var(--brand); }
 .jd-loc-status{ display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; color:var(--text); }
 .jd-loc-status::before{ content:""; flex:none; width:9px; height:9px; border-radius:50%; background:var(--nonaktif); }
 .jd-loc.is-set .jd-loc-status::before{ background:var(--aktif); }
-.jd-btn-outline{
+.jd-form .jd-btn-outline{
   height:46px; padding:0 14px; border-radius:12px; border:1.5px solid var(--brand); background:#fff;
   color:#C8401F; font-family:'Inter', sans-serif; font-size:14px; font-weight:600; cursor:pointer;
 }
-.jd-btn-outline:focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
+.jd-form .jd-btn-outline:focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
 
 .jd-switch-row{
   display:flex; align-items:center; justify-content:space-between; gap:14px;
@@ -624,6 +624,27 @@ input[type="checkbox"]{ accent-color:var(--brand); }
 @media (prefers-reduced-motion:reduce){
   .jd-switch-row, .jd-switch-row .jd-switch, .jd-switch-row .jd-switch::after{ transition:none; }
 }
+
+
+/* Pilih hari buka: 7 chip (Senin–Minggu) + pilihan cepat */
+.jd-days{ display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; }
+.jd-form .jd-day{
+  height:44px; min-width:0; padding:0; border:1.5px solid var(--field-line); border-radius:12px;
+  background:#fff; color:var(--text-soft); font-family:'Inter', sans-serif; font-size:13px; font-weight:600;
+  cursor:pointer; transition:border-color .15s ease, background .15s ease, color .15s ease;
+}
+.jd-form .jd-day[aria-pressed="true"]{ border-color:var(--brand); background:var(--brand-dim); color:#C8401F; font-weight:700; }
+.jd-form .jd-day:focus-visible, .jd-form .jd-preset:focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
+.jd-presets{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.jd-form .jd-preset{
+  height:34px; padding:0 14px; border-radius:999px; border:1.5px solid var(--field-line); background:#fff;
+  color:var(--text); font-family:'Inter', sans-serif; font-size:12.5px; font-weight:600; cursor:pointer;
+}
+@media (prefers-reduced-motion:reduce){ .jd-form .jd-day{ transition:none; } }
+
+/* Catatan "tutup hari ini" untuk pembeli */
+.vp-closed{ font-size:11px; font-weight:700; color:#C8401F; margin-top:3px; }
+.vs-line.vs-closed{ color:#C8401F; font-weight:600; }
 
 .emoji-grid{ display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; margin-top:2px; }
 .emoji-choice{
