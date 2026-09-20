@@ -2023,6 +2023,112 @@ let catPickerQuery = '';
 let regStep = 0;
 let knownTagSuggestions = [];
 
+// ---------- Bagian form bersama: pengingat, lokasi mangkal, jam operasional, catatan ----------
+// Dipakai di langkah 5 pendaftaran (p:'reg') dan Edit Profil Toko (p:'edit') supaya tampilannya
+// selalu sama. ID elemen mengikuti pola `${p}-...` (reg-reminder, edit-jam-buka, dst).
+const JD_ICON_PATHS = {
+  bell: '<path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+  pin: '<path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  note: '<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+};
+function jdIcon(name) {
+  return `<span class="jd-sec-ico" aria-hidden="true"><svg viewBox="0 0 24 24">${JD_ICON_PATHS[name]}</svg></span>`;
+}
+function jdEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+// Pilihan jam pengingat tiap 30 menit (03.00–23.30). Nilai lama di luar kelipatan 30 menit tetap ditampilkan.
+function jdReminderOptions(current) {
+  const times = [];
+  for (let m = 3 * 60; m <= 23 * 60 + 30; m += 30) {
+    times.push(String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'));
+  }
+  if (current && !times.includes(current)) { times.push(current); times.sort(); }
+  return '<option value="">Tanpa pengingat</option>' +
+    times.map(t => `<option value="${t}"${t === current ? ' selected' : ''}>${t.replace(':', '.')}</option>`).join('');
+}
+function renderJadwalFields(cfg) {
+  const p = cfg.p;
+  // Di pendaftaran, nilai disimpan ke variabel wizard tiap kali berubah; di Edit Profil dibaca saat simpan.
+  const track = (field, evt) => cfg.track ? ` ${evt}="window.__updateRegField('${field}', this.value)"` : '';
+  return `
+    <div class="jd-form${cfg.track ? '' : ' jd-form-edit'}">
+
+      <section class="jd-sec">
+        <div class="jd-sec-head">
+          ${jdIcon('bell')}
+          <div>
+            <div class="jd-sec-title">Pengingat buka lapak</div>
+            <div class="jd-sec-help">Kami kirim notifikasi supaya kamu tidak lupa menyalakan mode jualan.</div>
+          </div>
+        </div>
+        <div class="jd-field">
+          <label class="jd-label" for="${p}-reminder">Ingatkan saya pada jam</label>
+          <select id="${p}-reminder"${track('reminder', 'onchange')}>${jdReminderOptions(cfg.reminder || '')}</select>
+        </div>
+      </section>
+
+      <section class="jd-sec">
+        <div class="jd-sec-head">
+          ${jdIcon('pin')}
+          <div>
+            <div class="jd-sec-title">Lokasi mangkal</div>
+            <div class="jd-sec-help">Untuk toko menetap atau pedagang yang biasa mangkal di satu titik. Tokomu tetap muncul di peta walau mode jualan belum dinyalakan.</div>
+          </div>
+        </div>
+        <div class="jd-loc${cfg.hasLoc ? ' is-set' : ''}" id="${p}-location-box">
+          <div class="jd-loc-status" id="${p}-location-status">${cfg.hasLoc ? 'Lokasi tersimpan' : 'Belum ada lokasi tersimpan'}</div>
+          <button type="button" class="jd-btn-outline" onclick="${cfg.onCapture}()">${cfg.hasLoc ? 'Perbarui dengan lokasi saya sekarang' : 'Pakai lokasi saya sekarang'}</button>
+        </div>
+      </section>
+
+      <section class="jd-sec">
+        <div class="jd-sec-head">
+          ${jdIcon('clock')}
+          <div>
+            <div class="jd-sec-title">Jam operasional</div>
+            <div class="jd-sec-help" id="${p}-jam-hint">${cfg.buka24 ? 'Tokomu tampil sebagai “Buka 24 jam” ke pembeli.' : 'Isi jika jam bukamu biasanya sama setiap hari.'}</div>
+          </div>
+        </div>
+        <label class="jd-switch-row">
+          <span class="jd-switch-text"><b>Buka 24 jam</b><small>Tanpa jam tutup</small></span>
+          <input id="${p}-buka24" class="jd-switch" type="checkbox" role="switch" ${cfg.buka24 ? 'checked' : ''} onchange="${cfg.onToggle}(this.checked)" />
+        </label>
+        <div class="jd-time-row" id="${p}-jam-wrap"${cfg.buka24 ? ' style="display:none;"' : ''}>
+          <div class="jd-field">
+            <label class="jd-label" for="${p}-jam-buka">Jam buka</label>
+            <input id="${p}-jam-buka" type="time" value="${jdEsc(cfg.jamBuka)}"${track('jamBuka', 'oninput')} />
+          </div>
+          <div class="jd-field">
+            <label class="jd-label" for="${p}-jam-tutup">Jam tutup</label>
+            <input id="${p}-jam-tutup" type="time" value="${jdEsc(cfg.jamTutup)}"${track('jamTutup', 'oninput')} />
+          </div>
+        </div>
+      </section>
+
+      <section class="jd-sec">
+        <div class="jd-sec-head">
+          ${jdIcon('note')}
+          <div>
+            <div class="jd-sec-title">Catatan untuk pembeli</div>
+            <div class="jd-sec-help">Info tambahan yang tampil di halaman tokomu.</div>
+          </div>
+        </div>
+        <div class="jd-field">
+          <label class="jd-label" for="${p}-schedule">Catatan jadwal</label>
+          <input id="${p}-schedule" type="text" value="${jdEsc(cfg.schedule)}"${track('schedule', 'oninput')} placeholder="mis. Libur setiap Jumat" />
+        </div>
+        <div class="jd-field">
+          <label class="jd-label" for="${p}-location-note">Catatan lokasi</label>
+          <input id="${p}-location-note" type="text" value="${jdEsc(cfg.locationNote)}"${track('locationNote', 'oninput')} placeholder="mis. Depan gerbang sekolah" />
+        </div>
+      </section>
+
+    </div>
+  `;
+}
+
 window.__updateCatPickerQuery = function (value) {
   catPickerQuery = value;
   renderPedagang();
@@ -2080,9 +2186,9 @@ window.__updateRegField = function (field, value) {
 window.__toggleRegBuka24 = function (checked) {
   regBuka24Value = checked;
   const wrap = document.getElementById('reg-jam-wrap');
-  if (wrap) wrap.style.display = checked ? 'none' : 'flex';
+  if (wrap) wrap.style.display = checked ? 'none' : '';
   const hint = document.getElementById('reg-jam-hint');
-  if (hint) hint.textContent = checked ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.';
+  if (hint) hint.textContent = checked ? 'Tokomu tampil sebagai “Buka 24 jam” ke pembeli.' : 'Isi jika jam bukamu biasanya sama setiap hari.';
 };
 
 // Simpan "lokasi mangkal" saat daftar — dipakai buat toko menetap MAUPUN keliling yang
@@ -2091,14 +2197,15 @@ window.__toggleRegBuka24 = function (checked) {
 window.__captureRegLocation = function () {
   const statusEl = document.getElementById('reg-location-status');
   if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
-  if (statusEl) statusEl.textContent = 'Mengambil lokasi...';
+  if (statusEl) statusEl.textContent = 'Mengambil lokasi…';
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       regFixedLat = pos.coords.latitude;
       regFixedLng = pos.coords.longitude;
-      if (statusEl) statusEl.textContent = '✅ Lokasi tersimpan dari posisi sekarang.';
+      if (statusEl) statusEl.textContent = 'Lokasi tersimpan dari posisi sekarang';
+      document.getElementById('reg-location-box')?.classList.add('is-set');
     },
-    () => { if (statusEl) statusEl.textContent = 'Gagal ambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    () => { if (statusEl) statusEl.textContent = 'Gagal mengambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
     { enableHighAccuracy: true, timeout: 10000 }
   );
 };
@@ -2283,14 +2390,15 @@ window.__openEditProfile = function (vendorId) {
 window.__captureEditLocation = function () {
   const statusEl = document.getElementById('edit-location-status');
   if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
-  if (statusEl) statusEl.textContent = 'Mengambil lokasi...';
+  if (statusEl) statusEl.textContent = 'Mengambil lokasi…';
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       editFixedLat = pos.coords.latitude;
       editFixedLng = pos.coords.longitude;
-      if (statusEl) statusEl.textContent = '✅ Lokasi diperbarui dari posisi sekarang (tekan Simpan Perubahan untuk menyimpan).';
+      if (statusEl) statusEl.textContent = 'Lokasi diperbarui. Tekan Simpan Perubahan untuk menyimpan.';
+      document.getElementById('edit-location-box')?.classList.add('is-set');
     },
-    () => { if (statusEl) statusEl.textContent = 'Gagal ambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    () => { if (statusEl) statusEl.textContent = 'Gagal mengambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
     { enableHighAccuracy: true, timeout: 10000 }
   );
 };
@@ -2339,35 +2447,7 @@ function renderEditProfile(vendorId) {
         <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
         ${renderCategoryPickerGrouped(editCategories, 'window.__editToggleCategory', editCatPickerQuery)}
 
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
-        <input id="edit-reminder" type="time" value="${v.reminder_time ? v.reminder_time.slice(0, 5) : ''}" />
-
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:14px;">📍 Lokasi mangkal tetap (opsional) — tokomu tetap kelihatan di peta/daftar walau lupa nyalain "mulai jualan"</div>
-        <button type="button" onclick="window.__captureEditLocation()" style="width:100%;margin-top:6px;padding:10px;background:var(--surface-2);color:var(--text);border-radius:12px;border:1px solid var(--stroke);font-weight:600;">📍 ${editFixedLat ? 'Perbarui' : 'Simpan'} lokasi mangkal dari sini</button>
-        <div id="edit-location-status" style="font-size:11px;color:var(--text-faint);margin-top:4px;">${editFixedLat ? '✅ Sudah ada lokasi tersimpan.' : 'Belum diisi.'}</div>
-
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">🕐 Jam Operasional (opsional)</div>
-        <label class="jam-op-toggle">
-          <input id="edit-buka24" type="checkbox" ${v.buka_24jam ? 'checked' : ''} onchange="window.__toggleEditBuka24(this.checked)" />
-          🌙 Buka 24 Jam
-        </label>
-        <div id="edit-jam-wrap" class="jam-op-row" style="display:${v.buka_24jam ? 'none' : 'flex'};">
-          <div class="jam-op-col">
-            <div class="jam-op-col-label">Jam buka</div>
-            <input id="edit-jam-buka" type="time" value="${v.jam_buka ? v.jam_buka.slice(0, 5) : ''}" />
-          </div>
-          <div class="jam-op-col">
-            <div class="jam-op-col-label">Jam tutup</div>
-            <input id="edit-jam-tutup" type="time" value="${v.jam_tutup ? v.jam_tutup.slice(0, 5) : ''}" />
-          </div>
-        </div>
-        <div id="edit-jam-hint" class="jam-op-hint">${v.buka_24jam ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.'}</div>
-
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan jadwal tambahan (opsional)</div>
-        <input id="edit-schedule" type="text" value="${(v.schedule_text || '').replace(/"/g, '&quot;')}" placeholder="mis. Kadang libur Jumat" />
-
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan lokasi (opsional)</div>
-        <input id="edit-location-note" type="text" value="${(v.location_note || '').replace(/"/g, '&quot;')}" placeholder="mis. Depan gerbang sekolah, dekat pos satpam" />
+        ${renderJadwalFields({ p: 'edit', track: false, reminder: v.reminder_time ? v.reminder_time.slice(0, 5) : '', hasLoc: !!editFixedLat, buka24: !!v.buka_24jam, jamBuka: v.jam_buka ? v.jam_buka.slice(0, 5) : '', jamTutup: v.jam_tutup ? v.jam_tutup.slice(0, 5) : '', schedule: v.schedule_text || '', locationNote: v.location_note || '', onToggle: 'window.__toggleEditBuka24', onCapture: 'window.__captureEditLocation' })}
 
         ${editFixedLat ? `
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;margin-top:10px;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;">
@@ -2415,9 +2495,9 @@ window.__editPickModeIcon = function (icon) {
 
 window.__toggleEditBuka24 = function (checked) {
   const wrap = document.getElementById('edit-jam-wrap');
-  if (wrap) wrap.style.display = checked ? 'none' : 'flex';
+  if (wrap) wrap.style.display = checked ? 'none' : '';
   const hint = document.getElementById('edit-jam-hint');
-  if (hint) hint.textContent = checked ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.';
+  if (hint) hint.textContent = checked ? 'Tokomu tampil sebagai “Buka 24 jam” ke pembeli.' : 'Isi jika jam bukamu biasanya sama setiap hari.';
 };
 
 // Tombol cepat di dashboard buat "Tutup Sementara"/"Buka Lagi" tanpa perlu buka Edit
@@ -2537,7 +2617,7 @@ function renderPedagang() {
               <div class="reg-step-title">1. Nama Usaha</div>
               <div class="reg-step-sub">Nama yang bakal dilihat pembeli di aplikasi</div>
               <input id="reg-name" type="text" value="${regNameValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('name', this.value)" placeholder="Nama usaha, misal: Bakso Pak Slamet" />
-              <div class="reg-nav-row"><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+              <div class="reg-nav-row"><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
 
             <div class="reg-step">
@@ -2555,7 +2635,7 @@ function renderPedagang() {
               <input id="reg-tags" type="text" list="tag-suggestions-list" value="${regTagsValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('tags', this.value)" placeholder="misal: rujak serut, es duren" />
               <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
               ${renderCategoryPickerGrouped(selectedCategories, 'window.__toggleCategory', catPickerQuery)}
-              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
 
             <div class="reg-step">
@@ -2569,7 +2649,7 @@ function renderPedagang() {
                   </button>
                 `).join('')}
               </div>
-              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
 
             <div class="reg-step">
@@ -2577,43 +2657,14 @@ function renderPedagang() {
               <div class="reg-step-sub">Nomor WA jadi penanda akun, PIN buat masuk lagi nanti</div>
               <input id="reg-whatsapp" type="tel" value="${regWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('whatsapp', this.value)" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
               <input id="reg-pin" type="tel" inputmode="numeric" maxlength="6" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 6 digit (untuk keamanan akun)" />
-              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
 
             <div class="reg-step">
-              <div class="reg-step-title">5. Terakhir!</div>
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
-              <input id="reg-reminder" type="time" value="${regReminderValue}" oninput="window.__updateRegField('reminder', this.value)" />
-
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:14px;">📍 Punya tempat mangkal yang konsisten? (opsional — cocok buat toko menetap ATAU keliling yang biasanya mangkal di titik yang sama). Kalau diisi, tokomu tetap kelihatan di peta/daftar pembeli walau lupa nyalain "mulai jualan".</div>
-              <button type="button" onclick="window.__captureRegLocation()" style="width:100%;margin-top:6px;padding:10px;background:var(--surface-2);color:var(--text);border-radius:12px;border:1px solid var(--stroke);font-weight:600;">📍 Simpan lokasi mangkal dari sini</button>
-              <div id="reg-location-status" style="font-size:11px;color:var(--text-faint);margin-top:4px;">${regFixedLat ? '✅ Lokasi tersimpan dari posisi sekarang.' : 'Belum diisi.'}</div>
-
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:12px;">🕐 Jam Operasional (opsional)</div>
-              <label class="jam-op-toggle">
-                <input id="reg-buka24" type="checkbox" ${regBuka24Value ? 'checked' : ''} onchange="window.__toggleRegBuka24(this.checked)" />
-                🌙 Buka 24 Jam
-              </label>
-              <div id="reg-jam-wrap" class="jam-op-row" style="display:${regBuka24Value ? 'none' : 'flex'};">
-                <div class="jam-op-col">
-                  <div class="jam-op-col-label">Jam buka</div>
-                  <input id="reg-jam-buka" type="time" value="${regJamBukaValue}" oninput="window.__updateRegField('jamBuka', this.value)" />
-                </div>
-                <div class="jam-op-col">
-                  <div class="jam-op-col-label">Jam tutup</div>
-                  <input id="reg-jam-tutup" type="time" value="${regJamTutupValue}" oninput="window.__updateRegField('jamTutup', this.value)" />
-                </div>
-              </div>
-              <div id="reg-jam-hint" class="jam-op-hint">${regBuka24Value ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.'}</div>
-
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:12px;">📝 Catatan jadwal tambahan (opsional)</div>
-              <input id="reg-schedule" type="text" value="${regScheduleValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('schedule', this.value)" placeholder="mis. Kadang libur Jumat" />
-
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan lokasi (opsional)</div>
-              <input id="reg-location-note" type="text" value="${regLocationNoteValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('locationNote', this.value)" placeholder="mis. Depan gerbang sekolah, dekat pos satpam" />
-
-              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button></div>
-              <button data-reg-submit onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
+              <div class="reg-step-title">5. Lokasi &amp; jam buka</div>
+              <div class="reg-step-sub">Semua bagian ini opsional dan bisa diubah nanti di Edit Profil Toko.</div>
+              ${renderJadwalFields({ p: 'reg', track: true, reminder: regReminderValue, hasLoc: !!regFixedLat, buka24: regBuka24Value, jamBuka: regJamBukaValue, jamTutup: regJamTutupValue, schedule: regScheduleValue, locationNote: regLocationNoteValue, onToggle: 'window.__toggleRegBuka24', onCapture: 'window.__captureRegLocation' })}
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button data-reg-submit onclick="window.__registerVendor()">Daftar sekarang</button></div>
             </div>
 
           </div>
@@ -3493,7 +3544,7 @@ window.__registerVendor = async function () {
   // Nama sama tapi WA beda — boleh lanjut, tapi beri peringatan dulu (butuh klik sekali lagi)
   const nameDupe = vendors.find(v => v.name.trim().toLowerCase() === name.toLowerCase());
   if (nameDupe && !confirmedDuplicateName) {
-    errEl.textContent = `Sudah ada pedagang bernama "${nameDupe.name}" terdaftar. Kalau ini memang usaha berbeda, tekan "Daftar Sekarang" sekali lagi untuk lanjut.`;
+    errEl.textContent = `Sudah ada pedagang bernama "${nameDupe.name}" terdaftar. Kalau ini memang usaha berbeda, tekan "Daftar sekarang" sekali lagi untuk lanjut.`;
     confirmedDuplicateName = true;
     return;
   }
@@ -3502,7 +3553,7 @@ window.__registerVendor = async function () {
   errEl.textContent = 'Mendaftarkan...';
   isRegistering = true;
   const submitBtn = document.querySelector('[data-reg-submit]');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Mendaftarkan...'; }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Mendaftarkan…'; }
   try {
     // Deteksi kode rekrut dari link/QR (?follow=KODE) — link yang sama dipakai untuk rekrut pembeli & pedagang
     const refCode = new URLSearchParams(location.search).get('follow') || referralCodeFromLink;
@@ -3549,7 +3600,7 @@ window.__registerVendor = async function () {
   } finally {
     isRegistering = false;
     const btn = document.querySelector('[data-reg-submit]');
-    if (btn) { btn.disabled = false; btn.textContent = '🟢 Daftar Sekarang'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Daftar sekarang'; }
   }
 };
 
