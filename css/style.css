@@ -521,6 +521,27 @@ main{ flex:1; padding:0 18px; }
   font-family:'Inter'; font-weight:700; color:#fff; cursor:pointer;
 }
 
+input[type="checkbox"]{ accent-color:var(--brand); }
+
+/* Jam operasional — dipakai di step pendaftaran & Edit Profil Toko (panel penjual) */
+.jam-op-toggle{
+  display:flex; align-items:center; gap:8px; cursor:pointer;
+  font-family:'Inter'; font-size:12.5px; font-weight:700; color:var(--text);
+  background:var(--bg); border:1px solid var(--stroke); border-radius:12px; padding:12px;
+  transition:border-color .15s ease, background .15s ease;
+}
+.jam-op-toggle:has(input:checked){ border-color:var(--brand); background:var(--brand-dim); }
+.jam-op-toggle input{ width:17px; height:17px; flex-shrink:0; }
+.jam-op-row{ display:flex; gap:8px; margin-top:8px; }
+.jam-op-col{ flex:1; min-width:0; }
+.jam-op-col-label{ font-size:10px; color:var(--text-faint); margin-bottom:3px; text-align:left; }
+.jam-op-col input[type="time"]{
+  background:var(--bg); border:1px solid var(--stroke); border-radius:10px;
+  padding:10px 12px; color:var(--text); font-family:'Inter'; font-size:13px;
+  width:100%; box-sizing:border-box;
+}
+.jam-op-hint{ font-size:10px; color:var(--text-faint); margin-top:4px; text-align:left; }
+
 /* Wizard pendaftaran — geser horizontal antar langkah */
 .reg-dots{ display:flex; justify-content:center; gap:6px; margin:14px 0 0; }
 .reg-dot{ width:7px; height:7px; border-radius:50%; background:var(--stroke); transition:all .25s ease; }
