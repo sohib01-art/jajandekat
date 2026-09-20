@@ -173,6 +173,10 @@ let activeCat = 'semua';
 let map = null;
 let markers = {};
 let mapDidInitialFit = false;
+let mapCat = 'semua';      // filter kategori khusus tab Peta (terpisah dari activeCat di beranda)
+let mapRadiusM = 0;        // 0 = semua jarak; selain itu radius dalam meter
+let buyerMarker = null;    // titik biru posisi pembeli di peta
+let radiusCircle = null;   // lingkaran radius di peta
 
 const main = document.getElementById('main');
 const btnPembeli = document.getElementById('btn-pembeli');
@@ -2077,6 +2081,12 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
   const cats = (v.categories || []).map(escapeHtml).join(' · ');
   const canMap = vendorIsShowable(v);
   const canWa = v.show_whatsapp !== false && v.whatsapp;
+  const rp = canMap ? vendorDisplayLatLng(v) : null;
+  // Rute: buka aplikasi peta di HP (tanpa biaya API). Jalan kaki bila dekat, selain itu biarkan aplikasi peta memilih.
+  const routeUrl = rp
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(rp.lat + ',' + rp.lng)}` +
+      ((buyerLoc && haversineMeters(buyerLoc.lat, buyerLoc.lng, rp.lat, rp.lng) <= 1500) ? '&travelmode=walking' : '')
+    : '';
   const waUrl = canWa ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}` : '';
 
   const overlay = document.createElement('div');
@@ -2110,6 +2120,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
         ${v.location_note ? `<div class="vs-line vs-muted">📍 ${escapeHtml(v.location_note)}</div>` : ''}
         ${!canMap ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
         ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
+        ${routeUrl ? `<a class="vs-route" href="${routeUrl}" target="_blank" rel="noopener">🧭 Rute ke lokasi${distanceLabel ? ' · ' + distanceLabel : ''}</a>` : ''}
         <div class="vs-actions">
           ${vendorChatEnabled(v) ? `<button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>` : ''}
           ${canWa ? `<a class="vs-btn wa${vendorChatEnabled(v) ? '' : ' wide'}" href="${waUrl}" target="_blank" rel="noopener"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
@@ -2118,6 +2129,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
           <button class="vs-btn ${following ? 'on' : ''}" onclick="window.__vsAct('follow','${v.id}')">${following ? '<img class="vs-ic" src="icons/icon_check.png" alt="">Mengikuti' : '<span class="vs-emoji">➕</span>Ikuti'}</button>
           <button class="vs-btn ghost wide" onclick="window.__vsAct('review','${v.id}')">💬 Beri ulasan atau masukan</button>
         </div>
+        <div class="vs-disclaimer">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
       </div>
     </div>
   `;
@@ -2142,6 +2154,7 @@ window.__vsAct = async function (kind, id) {
 window.__goToVendorOnMap = function (id) {
   const v = vendors.find(x => x.id === id);
   const p = v && vendorDisplayLatLng(v);
+  mapCat = 'semua'; mapRadiusM = 0; // pastikan pedagang yang dituju tidak tersaring
   bottomView = 'peta';
   setNavActive('peta');
   if (mode !== 'pembeli') {
@@ -2152,7 +2165,8 @@ window.__goToVendorOnMap = function (id) {
   setTimeout(() => {
     if (map && p) {
       map.setView([p.lat, p.lng], 16);
-      if (markers[id]) markers[id].openPopup();
+      const el = markers[id] && markers[id].getElement();
+      if (el) { el.classList.add('jd-marker-pulse'); setTimeout(() => el.classList.remove('jd-marker-pulse'), 3200); }
     }
   }, 200);
 };
@@ -2215,15 +2229,142 @@ function openInternalLink(link) {
 window.__openInternalLink = function (link) { openInternalLink(link); };
 
 // ---------- PETA VIEW (tab "Peta") ----------
+// ---------- PETA VIEW (tab "Peta") ----------
+const MAP_RADIUS_OPTIONS = [
+  { m: 0, label: 'Semua jarak' }, { m: 500, label: '500 m' }, { m: 1000, label: '1 km' },
+  { m: 3000, label: '3 km' }, { m: 5000, label: '5 km' }, { m: 10000, label: '10 km' },
+];
+
+// Filter kategori & radius berlaku ke marker DAN daftar di bawah peta (satu sumber).
+function mapFilteredVendors() {
+  let list = vendors.filter(vendorIsShowable);
+  if (mapCat !== 'semua') list = list.filter(v => (v.categories || []).includes(mapCat));
+  if (mapRadiusM > 0 && buyerLoc) {
+    list = list.filter(v => {
+      const p = vendorDisplayLatLng(v);
+      return haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) <= mapRadiusM;
+    });
+  }
+  return list;
+}
+
+// Kategori yang dipilih bisa hilang dari chip (tidak ada lagi pedagang aktif di kategori itu),
+// dan radius tanpa lokasi pembeli tidak bisa dihitung — kembalikan ke "semua" supaya tidak kosong misterius.
+function petaNormalizeFilters() {
+  const cats = new Set(vendors.filter(vendorIsShowable).flatMap(v => v.categories || []));
+  if (mapCat !== 'semua' && !cats.has(mapCat)) mapCat = 'semua';
+  if (mapRadiusM > 0 && !buyerLoc) mapRadiusM = 0;
+}
+
+function petaFiltersHtml() {
+  const cats = Array.from(new Set(vendors.filter(vendorIsShowable).flatMap(v => v.categories || []))).sort();
+  const catChips = ['semua', ...cats].map(c =>
+    `<button type="button" class="map-chip ${mapCat === c ? 'active' : ''}" data-cat="${escapeHtml(c)}">${c === 'semua' ? 'Semua' : escapeHtml(c)}</button>`
+  ).join('');
+  const radiusChips = MAP_RADIUS_OPTIONS.map(o =>
+    `<button type="button" class="map-chip ${mapRadiusM === o.m ? 'active' : ''}" data-radius="${o.m}">${o.m === 0 ? o.label : '📍 ' + o.label}</button>`
+  ).join('');
+  return `<div class="map-chip-row" role="group" aria-label="Filter kategori">${catChips}</div>` +
+         `<div class="map-chip-row" role="group" aria-label="Filter jarak">${radiusChips}</div>`;
+}
+
+function bindPetaFilters() {
+  const bar = document.getElementById('peta-filters');
+  if (!bar) return;
+  bar.onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.cat !== undefined) window.__setMapCat(b.dataset.cat);
+    else if (b.dataset.radius !== undefined) window.__setMapRadius(parseInt(b.dataset.radius, 10));
+  };
+}
+
+// Perbarui chip aktif, jumlah, daftar & marker TANPA membangun ulang peta (tile tidak dimuat ulang).
+function petaRefresh() {
+  const bar = document.getElementById('peta-filters');
+  if (bar) {
+    bar.querySelectorAll('[data-cat]').forEach(b => b.classList.toggle('active', b.dataset.cat === mapCat));
+    bar.querySelectorAll('[data-radius]').forEach(b => b.classList.toggle('active', parseInt(b.dataset.radius, 10) === mapRadiusM));
+  }
+  const list = mapFilteredVendors();
+  const radiusLabel = (MAP_RADIUS_OPTIONS.find(o => o.m === mapRadiusM) || {}).label;
+  const countEl = document.getElementById('peta-count');
+  if (countEl) countEl.textContent = `${list.length} pedagang aktif di peta` + (mapRadiusM ? ` · dalam ${radiusLabel}` : '');
+  const listEl = document.getElementById('peta-list');
+  if (listEl) {
+    listEl.innerHTML = list.length
+      ? renderVendorListHtml(list)
+      : '<div style="color:var(--text-faint);font-size:13px;">Belum ada pedagang yang sedang jualan dengan filter ini. Coba perbesar jarak atau pilih "Semua".</div>';
+  }
+  renderMap();
+}
+
+function requestBuyerLocation(onOk, onFail) {
+  if (!navigator.geolocation) {
+    showToast('Browser ini tidak mendukung lokasi.');
+    if (onFail) onFail();
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      buyerLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (onOk) onOk();
+    },
+    () => {
+      showToast('Lokasi tidak bisa diakses. Izinkan lokasi di pengaturan browser.');
+      if (onFail) onFail();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
+}
+
+window.__locateMe = function () {
+  const btn = document.getElementById('btn-locate');
+  if (btn) btn.classList.add('loading');
+  requestBuyerLocation(() => {
+    if (btn) btn.classList.remove('loading');
+    mapDidInitialFit = true; // jangan ditimpa fit otomatis; kita pusatkan sendiri di bawah
+    petaRefresh();
+    if (!map) return;
+    if (radiusCircle) map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
+    else map.setView([buyerLoc.lat, buyerLoc.lng], Math.max(map.getZoom(), 15));
+  }, () => { if (btn) btn.classList.remove('loading'); });
+};
+
+window.__setMapCat = function (c) {
+  mapCat = c;
+  mapDidInitialFit = false; // fokuskan ulang ke hasil filter
+  petaRefresh();
+};
+
+window.__setMapRadius = function (m) {
+  if (m > 0 && !buyerLoc) {
+    // Radius butuh posisi pembeli: minta izin dulu, terapkan begitu lokasi didapat.
+    requestBuyerLocation(() => { mapRadiusM = m; mapDidInitialFit = false; petaRefresh(); });
+    return;
+  }
+  mapRadiusM = m;
+  mapDidInitialFit = false;
+  petaRefresh();
+};
+
 function renderPetaView() {
-  const activeVendors = vendors.filter(vendorIsShowable);
+  petaNormalizeFilters();
   main.innerHTML = `
     <div class="section-label">Peta pedagang yang sedang jualan</div>
-    <div id="map" style="height:calc(100vh - 300px); min-height:300px;"></div>
-    <div class="section-label">${activeVendors.length} pedagang aktif di peta</div>
-    <div class="vendor-list">${renderVendorListHtml(activeVendors)}</div>
+    <div id="peta-filters">${petaFiltersHtml()}</div>
+    <div class="map-wrap">
+      <div id="map" style="height:calc(100vh - 380px); min-height:300px;"></div>
+      <button type="button" id="btn-locate" class="map-locate" aria-label="Pusatkan peta ke lokasiku" onclick="window.__locateMe()">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="7.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        Lokasiku
+      </button>
+    </div>
+    <div class="section-label" id="peta-count"></div>
+    <div class="vendor-list" id="peta-list"></div>
   `;
-  renderMap();
+  bindPetaFilters();
+  petaRefresh();
 }
 
 // ---------- CARI VIEW (tab "Cari") ----------
@@ -2280,8 +2421,16 @@ window.__shareApp = function () {
 function renderMap() {
   const el = document.getElementById('map');
   if (!el) return;
+  // Tampilan Peta dibangun ulang tiap dibuka (main.innerHTML diganti), jadi objek peta lama menempel di
+  // elemen yang sudah lepas. Buang, lalu buat ulang di elemen baru dengan posisi/zoom terakhir.
+  let savedView = null;
+  if (map && map.getContainer() !== el) {
+    savedView = { center: map.getCenter(), zoom: map.getZoom() };
+    map.remove();
+    map = null; markers = {}; buyerMarker = null; radiusCircle = null;
+  }
   if (!map) {
-    map = L.map('map').setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+    map = L.map('map').setView(savedView ? savedView.center : DEFAULT_MAP_CENTER, savedView ? savedView.zoom : DEFAULT_MAP_ZOOM);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19
@@ -2291,7 +2440,9 @@ function renderMap() {
   }
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
-  vendors.filter(vendorIsShowable).forEach(v => {
+  if (buyerMarker) { map.removeLayer(buyerMarker); buyerMarker = null; }
+  if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+  mapFilteredVendors().forEach(v => {
     const p = vendorDisplayLatLng(v);
     const iconHtml = v.photo_url
       ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${v.photo_url}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
@@ -2302,34 +2453,37 @@ function renderMap() {
       html: iconHtml,
       className: '', iconSize: [34, 34]
     });
-    const popupHtml = `
-      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;">
-        ${v.name}${v.is_premium ? ' ⭐' : ''}
-      </div>
-      ${vendorChatEnabled(v) ? `<button onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"
-         style="display:inline-block;margin-top:6px;background:var(--brand);color:#fff;border:none;text-decoration:none;
-         font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;">
-        💬 Chat di App
-      </button>` : ''}
-      ${v.whatsapp && v.show_whatsapp !== false ? `
-        <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
-           style="display:inline-block;margin-top:6px;margin-left:4px;background:#25D366;color:#fff;text-decoration:none;
-           font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
-          📱 WhatsApp
-        </a>
-      ` : ''}
-      <div style="font-size:9px;color:#999;margin-top:5px;">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
-    `;
-    markers[v.id] = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml);
+    // Ketuk marker = buka sheet detail yang sama dengan kartu pedagang (rating, status, jam, jarak, Rute, WA).
+    // Popup lama dibuang: memasukkan nama toko mentah ke HTML popup adalah celah XSS.
+    markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name, keyboard: true })
+      .addTo(map)
+      .on('click', () => window.__openVendorSheet(v.id));
   });
+
+  // Posisi pembeli (titik biru) + lingkaran radius kalau filter jarak aktif.
+  if (buyerLoc) {
+    buyerMarker = L.marker([buyerLoc.lat, buyerLoc.lng], {
+      icon: L.divIcon({ html: '<div class="buyer-dot"></div>', className: '', iconSize: [22, 22], iconAnchor: [11, 11] }),
+      interactive: false, keyboard: false, zIndexOffset: 1000,
+    }).addTo(map);
+    if (mapRadiusM > 0) {
+      radiusCircle = L.circle([buyerLoc.lat, buyerLoc.lng], {
+        radius: mapRadiusM, color: '#FF6B4A', weight: 2, dashArray: '6 6', fillColor: '#FF6B4A', fillOpacity: 0.06, interactive: false,
+      }).addTo(map);
+    }
+  }
 
   // Peta dulu selalu diam di lokasi/zoom default (kadang jauh dari pedagang/pembeli),
   // jadi marker yang ada bisa kelewat kalau di luar area yang kelihatan. Sekali saja,
   // begitu datanya sudah ada, fokuskan ke marker pedagang (atau ke lokasi pembeli kalau
   // belum ada pedagang aktif) — supaya sesudah itu pembeli bebas geser/zoom sendiri.
+  // Filter jarak aktif: fokus ke lingkaran radius.
   if (!mapDidInitialFit) {
     const markerList = Object.values(markers);
-    if (markerList.length) {
+    if (radiusCircle) {
+      map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
+      mapDidInitialFit = true;
+    } else if (markerList.length) {
       map.fitBounds(L.featureGroup(markerList).getBounds(), { padding: [40, 40], maxZoom: 16 });
       mapDidInitialFit = true;
     } else if (buyerLoc) {
