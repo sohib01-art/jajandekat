@@ -741,7 +741,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,promo_text_pending,promo_text_note,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -973,6 +973,7 @@ function renderPembeli() {
     <div class="sec-head"><h2>Kategori</h2></div>
     <div class="cat-row">${catRowHtml}</div>
     ${renderBannerSlider(getRelevantBannersForBuyer())}
+    ${renderPromoTodayHtml(filteredVendors)}
     <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2>${followed.length ? '<button onclick="window.__goView(\'favorit\')">Lihat semua ›</button>' : ''}</div>
     <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
     <div class="sec-head"><h2><svg class="sec-star" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.400 6.100 20.500l1.200-6.500L2.500 9.400l6.600-.9L12 2.500Z" fill="#FFB400"/></svg>Pilihan JajanDekat</h2></div>
@@ -1825,6 +1826,47 @@ function renderVendorGridHtml(list) {
   return `<div class="vp-grid">${sorted.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>`;
 }
 
+
+// ---------- PROMO HARI INI (beranda) ----------
+// Otomatis dari data pedagang: tampil selama promo_until belum lewat, hilang sendiri saat berakhir.
+// Kalau tidak ada promo aktif, seluruh panel tidak dirender. Tidak butuh kerja admin.
+function promoTimeLeftLabel(until) {
+  const ms = new Date(until) - new Date();
+  if (!(ms > 0)) return '';
+  const h = Math.floor(ms / 3600000);
+  if (h < 1) return 'sisa < 1 jam';
+  if (h < 24) return `sisa ${h} jam`;
+  return `sisa ${Math.ceil(h / 24)} hari`;
+}
+
+function renderPromoTodayHtml(list) {
+  const promos = list.filter(isPromoActive).map(v => {
+    const p = vendorDisplayLatLng(v);
+    const d = (buyerLoc && p) ? haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) : Infinity;
+    return { v, d };
+  }).sort((a, b) => {
+    const sa = vendorIsShowable(a.v) ? 1 : 0, sb2 = vendorIsShowable(b.v) ? 1 : 0;
+    if (sa !== sb2) return sb2 - sa;            // yang sedang buka dulu
+    return a.d === b.d ? 0 : (a.d < b.d ? -1 : 1); // lalu yang terdekat
+  }).slice(0, 8).map(x => x.v);
+  if (!promos.length) return '';
+  return `
+    <div class="sec-head"><h2>🔥 Promo Hari Ini</h2><span class="sec-count sec-count-promo">${promos.length} promo aktif</span></div>
+    <div class="pr-row">${promos.map(v => {
+      const showable = vendorIsShowable(v);
+      const loc = vendorDistanceLabel(v) || (v.region ? escapeHtml(v.region) : '');
+      const left = promoTimeLeftLabel(v.promo_until);
+      return `
+      <button class="pr-card" onclick="window.__openVendorSheet('${v.id}')">
+        <span class="pr-photo ${showable ? '' : 'inactive'}" style="${vendorPhotoStyle(v)}">${v.photo_url || v.mode_icon ? '' : (v.emoji || '🍜')}
+          ${left ? `<span class="pr-left">⏳ ${left}</span>` : ''}
+        </span>
+        <span class="pr-name">${escapeHtml(v.name)}</span>
+        <span class="pr-text">${v.promo_text ? escapeHtml(v.promo_text) : 'Sedang ada promo'}</span>
+        <span class="pr-loc">${loc ? VP_ICON_PIN + loc : ''}</span>
+      </button>`;
+    }).join('')}</div>`;
+}
 
 // ---------- PEDAGANG TERDEKAT (beranda) + halaman "Lihat semua" ----------
 const NEARBY_MAX_M = 10000; // hanya pedagang aktif dalam radius 10 km yang dianggap "terdekat"
@@ -3170,9 +3212,11 @@ function renderPedagang() {
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke);">
         <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;">Tulisan promo (tampil di kartu Anda saat promo aktif) — contoh: "Diskon 20% khusus hari ini!"</div>
         <div style="display:flex;gap:6px;">
-          <input id="promo-text-input" type="text" maxlength="80" value="${(v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Tulis promo Anda di sini..." style="flex:1;" />
+          <input id="promo-text-input" type="text" maxlength="80" oninput="window.__promoTextCount(this)" value="${(v.promo_text_pending || v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Tulis promo Anda di sini..." style="flex:1;" />
           <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;">💾</button>
         </div>
+        <div id="promo-text-count" style="font-size:11px;margin-top:4px;color:${promoTextCountInfo((v.promo_text_pending || v.promo_text || '').length).color};">${promoTextCountInfo((v.promo_text_pending || v.promo_text || '').length).text}</div>
+        <div id="promo-text-status">${promoTextStatusHtml(v)}</div>
         <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
       </div>
     </div>
@@ -4220,6 +4264,31 @@ window.__requestPromo = async function (vendorId) {
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
+// Status review teks promo untuk pedagang: menunggu persetujuan admin / ditolak (dengan alasan)
+function promoTextStatusHtml(v) {
+  if (v.promo_text_pending) {
+    return `<div style="font-size:11px;margin-top:6px;padding:6px 8px;border-radius:8px;background:#FFF4DC;color:#9A6200;">⏳ Menunggu persetujuan admin, belum tampil ke pembeli.${v.promo_text ? ` Yang tampil sekarang: “${escapeHtml(v.promo_text)}”` : ''}</div>`;
+  }
+  if (v.promo_text_note) {
+    return `<div style="font-size:11px;margin-top:6px;padding:6px 8px;border-radius:8px;background:#FDECEC;color:#B42318;">❌ ${escapeHtml(v.promo_text_note)}</div>`;
+  }
+  return '';
+}
+
+const PROMO_TEXT_IDEAL = 30; // di kartu kecil, ±30 karakter tampil utuh (lebih dari itu dipotong di baris ke-2)
+function promoTextCountInfo(n) {
+  return n > PROMO_TEXT_IDEAL
+    ? { color: '#C77F0A', text: `${n}/80 karakter · di atas ${PROMO_TEXT_IDEAL} karakter bisa terpotong di kartu` }
+    : { color: 'var(--text-faint)', text: `${n}/80 karakter · ideal maks ${PROMO_TEXT_IDEAL} supaya tampil utuh di kartu` };
+}
+window.__promoTextCount = function (input) {
+  const el = document.getElementById('promo-text-count');
+  if (!el) return;
+  const info = promoTextCountInfo(input.value.length);
+  el.textContent = info.text;
+  el.style.color = info.color;
+};
+
 window.__savePromoText = async function (vendorId) {
   const errEl = document.getElementById('promo-text-error');
   const text = document.getElementById('promo-text-input').value.trim();
@@ -4239,9 +4308,16 @@ window.__savePromoText = async function (vendorId) {
     });
     if (error) throw error;
     const v = vendors.find(v => v.id === vendorId);
-    if (v) v.promo_text = text || null;
+    let pending = false;
+    if (v) {
+      const { data: fresh } = await sb.from('vendors').select('promo_text,promo_text_pending,promo_text_note').eq('id', vendorId).maybeSingle();
+      if (fresh) Object.assign(v, fresh); else v.promo_text = text || null;
+      pending = !!v.promo_text_pending;
+      const st = document.getElementById('promo-text-status');
+      if (st) st.innerHTML = promoTextStatusHtml(v);
+    }
     errEl.textContent = '';
-    showToast('Tulisan promo disimpan! ✅');
+    showToast(pending ? 'Terkirim ke admin, menunggu persetujuan ⏳' : 'Tulisan promo disimpan! ✅');
   } catch (e) {
     errEl.textContent = 'Gagal menyimpan: ' + e.message;
   }
@@ -4519,7 +4595,7 @@ function renderAdminVendorList(list) {
         <button class="icon-btn danger" title="Hapus Akun" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️</button>
         <span style="flex:1;"></span>
         ${v.is_premium ? `<button class="admin-cancel-link" onclick="window.__adminCancelPremium('${v.id}')">Cabut Premium</button>` : ''}
-        ${v.promo_until && new Date(v.promo_until) > new Date() ? `<button class="admin-cancel-link" onclick="window.__adminCancelPromo('${v.id}')">Cabut Promo</button>` : ''}
+        ${v.promo_until && new Date(v.promo_until) > new Date() ? `<button class="admin-cancel-link" style="color:var(--brand);" onclick="window.__adminPromoToBanner('${v.id}')">🖼️ Jadikan banner</button><button class="admin-cancel-link" onclick="window.__adminCancelPromo('${v.id}')">Cabut Promo</button>` : ''}
       </div>
       <div class="admin-row">
         <span class="label">⭐ Premium</span>
@@ -4559,6 +4635,50 @@ window.__adminSearchVendors = function (query) {
   listEl.innerHTML = renderAdminVendorList(filtered);
 };
 
+function renderPromoReviewCardHtml(v) {
+  const active = v.promo_until && new Date(v.promo_until) > new Date();
+  return `
+    <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:12.5px;">${escapeHtml(v.name)}</span>
+        <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;white-space:nowrap;">📝 Review teks promo</span>
+      </div>
+      <div style="font-size:12.5px;font-weight:700;color:#C77F0A;">“${escapeHtml(v.promo_text_pending)}”</div>
+      <div style="font-size:10.5px;color:var(--text-faint);">${v.promo_text ? `Yang tampil sekarang: “${escapeHtml(v.promo_text)}”` : 'Belum ada teks yang tampil.'} · ${active ? 'Promo sedang aktif' : 'Promo belum/tidak aktif'}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+        <button class="follow-btn" onclick="window.__adminReviewPromoText('${v.id}','approve')">✓ Setujui</button>
+        <button class="follow-btn" style="color:#f87171;" onclick="window.__adminReviewPromoText('${v.id}','reject')">✕ Tolak</button>
+      </div>
+    </div>`;
+}
+
+async function callAdminPromo(action, vendorId, extra = {}) {
+  const { data, error } = await sb.functions.invoke('admin-promo', { body: { password: adminPasswordCache, action, vendor_id: vendorId, ...extra } });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
+window.__adminReviewPromoText = async function (vendorId, decision) {
+  let note = '';
+  if (decision === 'reject') {
+    const input = prompt('Alasan penolakan (dibaca pedagang, boleh dikosongkan):', '');
+    if (input === null) return;
+    note = input.trim();
+  }
+  try {
+    await callAdminPromo(decision === 'approve' ? 'approve_promo_text' : 'reject_promo_text', vendorId, { note });
+    showToast(decision === 'approve' ? 'Teks promo disetujui ✅' : 'Teks promo ditolak');
+    loadAdminRequests();
+  } catch (e) {
+    alert('Gagal memproses teks promo: ' + e.message);
+  }
+};
+
 async function loadAdminRequests() {
   const el = document.getElementById('admin-requests');
   if (!el) return;
@@ -4569,8 +4689,10 @@ async function loadAdminRequests() {
     if (error) throw error;
     if (data && data.error) throw new Error(data.error);
     const rows = (data.requests || []).filter(r => r.status === 'pending');
-    if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada permintaan masuk. 👍</div>'; return; }
-    el.innerHTML = rows.map(r => {
+    const { data: pendTexts } = await sb.from('vendors').select('id,name,whatsapp,category,promo_text,promo_text_pending,promo_until').not('promo_text_pending', 'is', null).order('name');
+    const textRows = pendTexts || [];
+    if (rows.length === 0 && textRows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada permintaan masuk. 👍</div>'; return; }
+    el.innerHTML = textRows.map(renderPromoReviewCardHtml).join('') + rows.map(r => {
       const v = r.vendors;
       if (!v) return '';
       const label = r.request_type === 'premium' ? '⭐ Upgrade Premium' : '🔥 Pasang Promo Lokal';
@@ -4886,6 +5008,34 @@ window.__annCheckRatio = function (img) {
 };
 
 // ---------- PEMILIH TUJUAN KLIK BANNER ----------
+// Daftar pedagang di pemilih tujuan: grup teratas "Sedang promo" (dengan sisa waktu) dan
+// "Mengajukan promo" (permintaan masih pending), sisanya urut abjad.
+let bnPendingPromoIds = new Set();
+async function bnLoadPendingPromo() {
+  try {
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_upgrade_requests' } });
+    if (error) throw error;
+    if (data && data.error) throw new Error(data.error);
+    bnPendingPromoIds = new Set((data.requests || [])
+      .filter(r => r.status === 'pending' && r.request_type === 'promo' && r.vendors)
+      .map(r => r.vendors.id));
+  } catch (e) { bnPendingPromoIds = new Set(); } // gagal = tampilkan tanpa grup "Mengajukan promo"
+}
+
+function bnVendorOptionsHtml() {
+  const opt = (v, suffix) => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)}${suffix ? ' — ' + escapeHtml(suffix) : ''}</option>`;
+  const byName = (a, b) => a.name.localeCompare(b.name, 'id');
+  const active = vendors.filter(isPromoActive).sort((a, b) => new Date(a.promo_until) - new Date(b.promo_until));
+  const activeIds = new Set(active.map(v => v.id));
+  const pending = vendors.filter(v => bnPendingPromoIds.has(v.id) && !activeIds.has(v.id)).sort(byName);
+  const usedIds = new Set([...activeIds, ...pending.map(v => v.id)]);
+  const rest = vendors.filter(v => !usedIds.has(v.id)).sort(byName);
+  return '<option value="">— pilih pedagang —</option>'
+    + (active.length ? `<optgroup label="🔥 Sedang promo">${active.map(v => opt(v, promoTimeLeftLabel(v.promo_until))).join('')}</optgroup>` : '')
+    + (pending.length ? `<optgroup label="⏳ Mengajukan promo (belum disetujui)">${pending.map(v => opt(v, v.region || '')).join('')}</optgroup>` : '')
+    + `<optgroup label="Semua pedagang (A–Z)">${rest.map(v => opt(v, v.region || '')).join('')}</optgroup>`;
+}
+
 const BANNER_WA_DEFAULT_MSG = 'Halo admin JajanDekat, saya pedagang dan mau pasang promo/iklan di JajanDekat.';
 const BANNER_WA_CHANNEL = 'https://whatsapp.com/channel/0029Vb8okwd4inorfK4UCQ3Z';
 const BANNER_DEST_APP_PAGES = { peta: '🗺️ Peta', cari: '🔍 Cari', favorit: '❤️ Favorit', terdekat: '📍 Pedagang terdekat', artikel: '📰 Daftar artikel' };
@@ -4962,8 +5112,16 @@ window.__bnDestChange = async function () {
   } else if (kind === 'promo') {
     html = note('Pedagang dibawa ke halaman pedagang dan kartu "Promosi Lokal Harian" disorot. Kalau belum masuk akun, mereka melihat halaman masuk/daftar.');
   } else if (kind === 'vendor') {
-    const opts = [...vendors].sort((a, b) => a.name.localeCompare(b.name, 'id')).map(v => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)}${v.region ? ' — ' + escapeHtml(v.region) : ''}</option>`).join('');
-    html = `<select id="bn-dest-vendor" onchange="window.__bnDestUpdate()" style="${fld}"><option value="">— pilih pedagang —</option>${opts}</select>`;
+    html = `<select id="bn-dest-vendor" onchange="window.__bnDestUpdate()" style="${fld}">${bnVendorOptionsHtml()}</select>`;
+    // Muat permintaan promo yang pending, lalu segarkan daftar tanpa mengubah pilihan admin
+    bnLoadPendingPromo().then(() => {
+      const sel = document.getElementById('bn-dest-vendor');
+      if (!sel || document.getElementById('bn-dest')?.value !== 'vendor') return;
+      const cur = sel.value;
+      sel.innerHTML = bnVendorOptionsHtml();
+      sel.value = cur;
+      window.__bnDestUpdate();
+    });
   } else if (kind === 'artikel') {
     extra.innerHTML = note('Memuat daftar artikel...');
     try {
@@ -5534,9 +5692,178 @@ window.__adminCancelPromo = async function (id) {
   if (!confirm('Cabut status Promo pedagang ini?')) return;
   try {
     await callAdminAction('cancel_promo', id);
+    // Banner otomatis dari promo ini ikut dinonaktifkan supaya tidak menayangkan promo yang sudah dicabut
+    try {
+      const { banners } = await callAdminBanners('list_banners');
+      const mine = (banners || []).filter(b => b.active && b.link === `?vendor=${id}` && /^Promo: /.test(b.title || ''));
+      for (const b of mine) await callAdminBanners('set_banner_active', { id: b.id, active: false });
+      if (mine.length) refreshBanners(true);
+    } catch (e) { /* tidak kritis; banner tetap berakhir sendiri di waktu promo_until */ }
     renderAdminDashboard();
   } catch (e) {
     alert('Gagal mencabut promo: ' + e.message);
+  }
+};
+
+// ---------- ADMIN: PROMO PEDAGANG -> BANNER SLIDER (gambar 8:3 dibuat otomatis) ----------
+// Foto pedagang (atau gradien + emoji kalau belum punya foto) + nama + teks promo + batas waktu.
+// Tautan banner = halaman pedagang, jadwal berakhir = promo_until, audiens = pembeli.
+function bnLoadImageCors(url) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // supaya canvas tidak "tainted" dan bisa diekspor; gagal = pakai latar gradien
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function bnWrapText(ctx, text, maxW, maxLines) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    const t = cur ? cur + ' ' + w : w;
+    if (!cur || ctx.measureText(t).width <= maxW) cur = t; else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  if (lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  let last = kept[maxLines - 1];
+  while (last.length > 1 && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+  kept[maxLines - 1] = last.trimEnd() + '…';
+  return kept;
+}
+
+async function promoBannerCanvas(v) {
+  const W = ANN_BANNER_W, H = ANN_BANNER_H;
+  try { await Promise.all([document.fonts.load('800 46px Poppins'), document.fonts.load('700 34px Inter')]); } catch (e) {}
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const img = await bnLoadImageCors(v.photo_url);
+  if (img) {
+    const c = annBannerCrop(img, 0.5);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, c.sx, c.sy, c.cw, c.ch, 0, 0, W, H);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#FF8A3D'); g.addColorStop(1, '#FF6B4A');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.font = '160px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(v.emoji || '🍜', W - 70, H / 2);
+  }
+  // Bayangan gelap di sisi kiri supaya teks terbaca di atas foto apa pun
+  const shade = ctx.createLinearGradient(0, 0, W * 0.8, 0);
+  shade.addColorStop(0, 'rgba(20,12,4,.9)'); shade.addColorStop(0.6, 'rgba(20,12,4,.65)'); shade.addColorStop(1, 'rgba(20,12,4,0)');
+  ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+
+  const padX = 56, maxW = W * 0.66;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+
+  // Lencana
+  ctx.font = '700 24px Inter, sans-serif';
+  const tag = '🔥 PROMO HARI INI';
+  const tagW = ctx.measureText(tag).width + 32;
+  ctx.fillStyle = '#F5A623';
+  roundRect(ctx, padX, 36, tagW, 42, 21); ctx.fill(); // helper roundRect bawaan (lebih kompatibel daripada ctx.roundRect)
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(tag, padX + 16, 58);
+
+  // Nama pedagang (1 baris)
+  ctx.textBaseline = 'top'; ctx.fillStyle = '#fff'; ctx.font = '800 46px Poppins, sans-serif';
+  let name = v.name || '';
+  while (name.length > 1 && ctx.measureText(name).width > maxW) name = name.slice(0, -1);
+  if (name !== v.name) name = name.trimEnd() + '…';
+  ctx.fillText(name, padX, 98);
+
+  // Teks promo (maks 2 baris)
+  ctx.fillStyle = '#FFD84D'; ctx.font = '700 34px Inter, sans-serif';
+  const lines = bnWrapText(ctx, v.promo_text || 'Ada promo spesial hari ini!', maxW, 2);
+  lines.forEach((ln, i) => ctx.fillText(ln, padX, 170 + i * 44));
+
+  // Batas waktu
+  ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.font = '600 22px Inter, sans-serif';
+  const until = new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  ctx.fillText(`Berlaku sampai ${until} · Cek di JajanDekat`, padX, H - 56);
+  return canvas;
+}
+
+window.__adminPromoToBanner = async function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId) || (typeof adminVendorData !== 'undefined' ? adminVendorData.find(x => x.id === vendorId) : null);
+  if (!v) return;
+  if (!isPromoActive(v)) { alert('Promo pedagang ini sudah tidak aktif.'); return; }
+  if (!v.promo_text && !confirm('Pedagang ini belum punya teks promo yang disetujui, gambar akan memakai kalimat umum. Lanjut?')) return;
+  let canvas;
+  try { canvas = await promoBannerCanvas(v); }
+  catch (e) { alert('Gagal membuat gambar banner: ' + e.message); return; }
+  window.__promoBannerDraft = { vendorId, canvas };
+  document.getElementById('promo-banner-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'promo-banner-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:16px;padding:14px;width:100%;max-width:460px;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:14px;margin-bottom:8px;">🖼️ Pratinjau banner promo</div>
+      <img src="${canvas.toDataURL('image/jpeg', 0.9)}" alt="Pratinjau banner" style="width:100%;border-radius:10px;display:block;" />
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">Tautan ke halaman pedagang · audiens pembeli · tayang sampai promo berakhir. Kalau promo dicabut, banner ikut dinonaktifkan.</div>
+      <div id="promo-banner-error" style="color:#f87171;font-size:11.5px;margin-top:6px;"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="follow-btn" style="flex:1;padding:10px;" onclick="document.getElementById('promo-banner-overlay')?.remove()">Batal</button>
+        <button id="promo-banner-go" style="flex:2;padding:10px;" onclick="window.__confirmPromoBanner()">Pasang ke slider</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.__confirmPromoBanner = async function () {
+  const d = window.__promoBannerDraft;
+  const errEl = document.getElementById('promo-banner-error');
+  const btn = document.getElementById('promo-banner-go');
+  if (!d || !errEl || !btn) return;
+  const v = vendors.find(x => x.id === d.vendorId) || (typeof adminVendorData !== 'undefined' ? adminVendorData.find(x => x.id === d.vendorId) : null);
+  if (!v) return;
+  btn.disabled = true;
+  errEl.textContent = 'Memeriksa slider...';
+  let uploadedPath = null;
+  try {
+    const { banners } = await callAdminBanners('list_banners');
+    const list = banners || [];
+    const now = Date.now();
+    const live = (b) => b.active && (!b.end_at || new Date(b.end_at).getTime() > now);
+    if (list.some(b => live(b) && b.link === `?vendor=${v.id}` && /^Promo: /.test(b.title || ''))
+        && !confirm('Sudah ada banner promo aktif untuk pedagang ini. Tetap buat satu lagi?')) { errEl.textContent = ''; btn.disabled = false; return; }
+    const liveSame = list.filter(b => live(b) && ['semua', 'pembeli'].includes(b.audience)).length;
+    if (liveSame >= ANN_SLIDER_MAX
+        && !confirm(`Sudah ada ${liveSame} banner aktif/terjadwal untuk pembeli (slider hanya menampilkan ${ANN_SLIDER_MAX} pertama).\n\nBanner baru masuk di urutan terakhir, jadi belum tampil sampai Anda menaikkan urutannya (▲) atau menonaktifkan banner lain.\n\nLanjut?`)) {
+      errEl.textContent = ''; btn.disabled = false; return;
+    }
+    errEl.textContent = 'Mengunggah gambar...';
+    const blob = await new Promise((res, rej) => d.canvas.toBlob(b => b ? res(b) : rej(new Error('Gagal memproses gambar.')), 'image/jpeg', 0.85));
+    const path = `banners/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const { error } = await sb.storage.from('vendor-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw error;
+    uploadedPath = path;
+    const { data: pub } = sb.storage.from('vendor-photos').getPublicUrl(path);
+    await callAdminBanners('save_banner', { banner: {
+      title: `Promo: ${v.name}`.slice(0, 80),
+      image_url: pub.publicUrl,
+      link: `?vendor=${v.id}`,
+      audience: 'pembeli',
+      region_id: v.region_id || null,
+      start_at: null,
+      end_at: v.promo_until,
+      active: true,
+    } });
+    document.getElementById('promo-banner-overlay')?.remove();
+    window.__promoBannerDraft = null;
+    showToast('Banner promo ditambahkan ke slider! 🖼️');
+    await loadAdminBanners();
+    refreshBanners(true);
+  } catch (e) {
+    errEl.textContent = 'Gagal: ' + e.message;
+    btn.disabled = false;
+    if (uploadedPath) { try { await sb.storage.from('vendor-photos').remove([uploadedPath]); } catch (x) {} } // jangan tinggalkan file yatim
   }
 };
 
