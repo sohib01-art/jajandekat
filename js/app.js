@@ -1885,7 +1885,7 @@ function renderVendorCardHtml(v, opts = {}) {
         ${vendorClosedTodayNote(v) ? `<div class="vp-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
-          ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
+          ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" onclick="window.__trackEv('${v.id}','wa')" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
         </div>
       </div>
     </div>
@@ -2071,6 +2071,7 @@ window.__closeVendorSheet = function () {
 window.__openVendorSheet = function (vendorId, opts = {}) {
   const v = vendors.find(x => x.id === vendorId);
   if (!v) return;
+  if (!opts.still) trackVendorEvent(v.id, 'view'); // still = segarkan tombol Ikuti, bukan pembukaan baru
   document.getElementById('vendor-sheet-overlay')?.remove();
 
   const following = followedIds.has(v.id);
@@ -2120,10 +2121,10 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
         ${v.location_note ? `<div class="vs-line vs-muted">📍 ${escapeHtml(v.location_note)}</div>` : ''}
         ${!canMap ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
         ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
-        ${routeUrl ? `<a class="vs-route" href="${routeUrl}" target="_blank" rel="noopener">🧭 Rute ke lokasi${distanceLabel ? ' · ' + distanceLabel : ''}</a>` : ''}
+        ${routeUrl ? `<a class="vs-route" href="${routeUrl}" target="_blank" rel="noopener" onclick="window.__trackEv('${v.id}','route')">🧭 Rute ke lokasi${distanceLabel ? ' · ' + distanceLabel : ''}</a>` : ''}
         <div class="vs-actions">
           ${vendorChatEnabled(v) ? `<button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>` : ''}
-          ${canWa ? `<a class="vs-btn wa${vendorChatEnabled(v) ? '' : ' wide'}" href="${waUrl}" target="_blank" rel="noopener"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
+          ${canWa ? `<a class="vs-btn wa${vendorChatEnabled(v) ? '' : ' wide'}" href="${waUrl}" target="_blank" rel="noopener" onclick="window.__trackEv('${v.id}','wa')"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
           <button class="vs-btn" onclick="window.__vsAct('menu','${v.id}')"><span class="vs-emoji">🍽️</span>Lihat menu</button>
           ${canMap ? `<button class="vs-btn" onclick="window.__vsAct('map','${v.id}')"><img class="vs-ic" src="icons/icon_map.png" alt="">Lihat di peta</button>` : ''}
           <button class="vs-btn ${following ? 'on' : ''}" onclick="window.__vsAct('follow','${v.id}')">${following ? '<img class="vs-ic" src="icons/icon_check.png" alt="">Mengikuti' : '<span class="vs-emoji">➕</span>Ikuti'}</button>
@@ -2145,7 +2146,7 @@ window.__vsAct = async function (kind, id) {
     return;
   }
   window.__closeVendorSheet();
-  if (kind === 'chat') window.__openChatModal(id, v.name);
+  if (kind === 'chat') { trackVendorEvent(id, 'chat'); window.__openChatModal(id, v.name); }
   else if (kind === 'menu') window.__openProductCatalog(id, v.name);
   else if (kind === 'review') window.__openReviewModal(id, v.name);
   else if (kind === 'map') window.__goToVendorOnMap(id);
@@ -3291,7 +3292,14 @@ function renderPedagang() {
 
     ${renderBannerSlider(getRelevantBannersForVendor(v))}
 
+    <div class="pd-sec"><h2>Aktivitas pembeli <span class="pd-sec-note">7 hari terakhir</span></h2></div>
     <div class="pd-stats">
+      <div class="pd-stat"><div class="pd-stat-ic">👁️</div><div class="pd-stat-num" id="pd-ev-view">…</div><div class="pd-stat-lbl">Dilihat</div></div>
+      <div class="pd-stat"><div class="pd-stat-ic">💬</div><div class="pd-stat-num" id="pd-ev-ask">…</div><div class="pd-stat-lbl">Ditanya</div></div>
+      <div class="pd-stat"><div class="pd-stat-ic">🧭</div><div class="pd-stat-num" id="pd-ev-route">…</div><div class="pd-stat-lbl">Rute dibuka</div></div>
+    </div>
+    <div class="pd-caption">Dilihat: tokomu dibuka pembeli. Ditanya: pembeli mengetuk WhatsApp/chat. Rute: pembeli mengetuk Rute. Dihitung per pembeli, bukan per ketukan.</div>
+    <div class="pd-stats pd-stats-2">
       <div class="pd-stat"><div class="pd-stat-ic">👥</div><div class="pd-stat-num" id="pd-stat-follow">…</div><div class="pd-stat-lbl">Pengikut</div></div>
       <div class="pd-stat"><div class="pd-stat-ic">⭐</div><div class="pd-stat-num">${ratingNum}</div><div class="pd-stat-lbl">${ratingLbl}</div></div>
       <div class="pd-stat"><div class="pd-stat-ic">🔗</div><div class="pd-stat-num" id="pd-stat-ref">…</div><div class="pd-stat-lbl">Dari link kamu</div></div>
@@ -3458,9 +3466,37 @@ function renderPedagang() {
     put('premium-follow-count', error ? '–' : ((row && row.total) ?? 0));
   });
 
+  // Aktivitas pembeli 7 hari terakhir. Server hanya menjawab untuk pemilik toko (perangkat yang tertaut);
+  // kalau tidak dikenali/gagal, tampil "–" (bukan 0) supaya tidak menyesatkan.
+  sb.rpc('jd_vendor_event_stats', { p_vendor_id: v.id, p_days: 7 }).then(({ data, error }) => {
+    const row = !error && data && data[0];
+    pdPut('pd-ev-view', row ? row.views : '–');
+    pdPut('pd-ev-ask', row ? (Number(row.wa) + Number(row.chat)) : '–');
+    pdPut('pd-ev-route', row ? row.route : '–');
+  });
+
   loadCampaignProgress(v.id);
   loadVendorChatInbox(v.id);
 }
+
+// ---------- PELACAKAN EVENT RINGAN (statistik untuk pedagang) ----------
+// Mencatat 4 jenis ketukan pembeli: view (toko dibuka), wa, chat, route. Tanpa lokasi, tanpa isi pesan.
+// Server (jd_track_vendor_event) membatasi lagi: view maks 1x/30 menit, aksi lain 1x/2 menit per perangkat per toko,
+// dan tidak menghitung pemilik toko sendiri. Sengaja "diam-diam": gagal = tidak mengganggu pembeli.
+const _trackSeen = {};
+function trackVendorEvent(vendorId, kind) {
+  try {
+    if (!sb || !vendorId || vendorId === myVendorId) return;
+    const key = vendorId + ':' + kind;
+    const now = Date.now();
+    if (_trackSeen[key] && now - _trackSeen[key] < (kind === 'view' ? 30 : 2) * 60000) return;
+    _trackSeen[key] = now;
+    Promise.resolve(sb.rpc('jd_track_vendor_event', { p_vendor_id: vendorId, p_kind: kind })).catch(() => {});
+  } catch (e) { /* abaikan */ }
+}
+window.__trackEv = trackVendorEvent; // dipakai atribut onclick pada tautan WhatsApp / Rute
+
+function pdPut(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
 // ---------- DASBOR PEDAGANG: aksi ubin & sheet Bagikan Toko ----------
 // QR & tombol bagikan dulu satu kartu besar di dasbor; sekarang dipindah ke sheet supaya dasbor ringkas.
