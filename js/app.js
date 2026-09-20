@@ -2887,10 +2887,24 @@ async function loadCampaignProgress(vendorId) {
   `;
 }
 
+let reviewAlertShown = false; // toast peringatan ulasan rendah cukup sekali per sesi app
+
 async function loadMyReviews(vendorId) {
   const el = document.getElementById('my-reviews-list');
   if (!el) return;
-  el.innerHTML = `<button class="follow-btn" style="width:100%;padding:10px;" onclick="window.__revealMyReviews('${vendorId}')">🔒 Tap untuk lihat ulasan (perlu PIN)</button>`;
+  const revealBtn = (label, urgent) => `<button class="follow-btn" style="width:100%;padding:10px;${urgent ? 'background:#f87171;color:#fff;border-color:#f87171;' : ''}" onclick="window.__revealMyReviews('${vendorId}')">${label}</button>`;
+  el.innerHTML = revealBtn('🔒 Tap untuk lihat ulasan (perlu PIN)', false);
+  // PIN baru diketahui kalau pedagang sudah login/mengisi PIN di sesi ini; kalau belum, penanda muncul setelah PIN dimasukkan.
+  if (myVendorPin === null) return;
+  try {
+    const { data: n, error } = await sb.rpc('count_pending_reviews', { p_vendor_id: vendorId, p_pin: myVendorPin });
+    if (error || !n) return;
+    el.innerHTML = revealBtn(`⚠️ ${n} ulasan rendah perlu ditindaklanjuti — tap untuk lihat`, true);
+    if (!reviewAlertShown) {
+      reviewAlertShown = true;
+      showToast(`Ada ${n} ulasan rendah yang perlu Anda tindaklanjuti.`);
+    }
+  } catch (e) { console.error('Gagal menghitung ulasan rendah:', e); }
 }
 
 window.__revealMyReviews = async function (vendorId) {
@@ -2907,17 +2921,33 @@ window.__revealMyReviews = async function (vendorId) {
   if (error) { el.innerHTML = `<span style="color:#f87171;">PIN salah atau gagal memuat.</span>`; return; }
   myVendorPin = pin;
   if (!data || data.length === 0) { el.innerHTML = 'Belum ada ulasan masuk.'; return; }
-  el.innerHTML = data.map(r => `
+  // Yang perlu ditindaklanjuti ditaruh paling atas
+  const rows = [...data].sort((a, b) => (b.status === 'pending_review') - (a.status === 'pending_review'));
+  const pendingN = rows.filter(r => r.status === 'pending_review').length;
+  const summary = pendingN > 0
+    ? `<div style="font-size:11px;background:#fef2f2;color:#b91c1c;border-radius:10px;padding:8px 10px;margin-bottom:6px;line-height:1.5;">⚠️ <b>${pendingN} ulasan rendah</b> belum ditindaklanjuti. Ulasan 1–2★ tidak tampil publik dan tidak dihitung ke rating toko. Baca masukannya, perbaiki layanan Anda, lalu tandai selesai.</div>`
+    : '';
+  el.innerHTML = summary + rows.map(r => `
     <div style="padding:8px 0;border-bottom:1px solid var(--stroke);">
       <div style="display:flex;align-items:center;gap:6px;">
         <span style="color:#F5A623;font-size:13px;">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
-        ${r.status === 'pending_review' ? '<span style="font-size:9.5px;font-weight:700;color:#fff;background:#f87171;padding:2px 7px;border-radius:999px;">⚠️ Menunggu Anda balas</span>' : ''}
+        ${r.status === 'pending_review' ? '<span style="font-size:9.5px;font-weight:700;color:#fff;background:#f87171;padding:2px 7px;border-radius:999px;">⚠️ ' + (CHAT_DALAM_APP_AKTIF ? 'Menunggu Anda balas' : 'Perlu ditindaklanjuti') + '</span>' : ''}
         ${r.status === 'resolved' ? '<span style="font-size:9.5px;font-weight:700;color:var(--aktif);background:var(--aktif-dim);padding:2px 7px;border-radius:999px;">✓ Sudah ditindaklanjuti</span>' : ''}
       </div>
-      ${r.comment ? `<div style="font-size:12px;color:var(--text);margin-top:3px;">${r.comment}</div>` : ''}
+      ${r.comment ? `<div style="font-size:12px;color:var(--text);margin-top:3px;">${escapeHtml(r.comment)}</div>` : ''}
       <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+      ${r.status === 'pending_review' ? `<button class="follow-btn" style="margin-top:6px;padding:6px 10px;font-size:11px;" onclick="window.__resolveReview('${vendorId}','${r.id}')">✓ Tandai sudah ditindaklanjuti</button>` : ''}
     </div>
   `).join('');
+};
+
+// Pengganti alur lama "balas lewat chat": pedagang menandai ulasan rendah sebagai sudah ditindaklanjuti (butuh PIN, dicek di server).
+window.__resolveReview = async function (vendorId, reviewId) {
+  if (myVendorPin === null) { showToast('Buka daftar ulasan lagi dan masukkan PIN dulu.'); return; }
+  const { error } = await sb.rpc('resolve_review', { p_vendor_id: vendorId, p_pin: myVendorPin, p_review_id: reviewId });
+  if (error) { showToast('Gagal menandai ulasan. Coba lagi.'); return; }
+  showToast('Ulasan ditandai sudah ditindaklanjuti ✓');
+  window.__revealMyReviews(vendorId);
 };
 
 function followLinkFor(vendorId) {
@@ -3661,7 +3691,7 @@ window.__setReviewRating = function (n) {
   if (note) {
     note.innerHTML = n >= 3
       ? `Rating ${n}★ akan tampil publik di kartu pedagang.`
-      : (CHAT_DALAM_APP_AKTIF ? `Rating ${n}★ tidak langsung publik — dikirim dulu sebagai masukan ke pedagang lewat chat.` : `Rating ${n}★ tidak langsung tampil publik — dicatat sebagai masukan.`);
+      : (CHAT_DALAM_APP_AKTIF ? `Rating ${n}★ tidak langsung publik — dikirim dulu sebagai masukan ke pedagang lewat chat.` : `Rating ${n}★ tidak tampil publik — masukanmu dikirim privat ke pedagang lewat dashboard-nya.`);
   }
 };
 
@@ -3681,7 +3711,7 @@ window.__submitReview = async function (vendorId) {
           .insert({ thread_id: threadId, sender: 'buyer', message: noticeText })
           .select('*').single();
         await sb.from('chat_threads').update({ last_message_at: new Date().toISOString(), last_message_preview: noticeText.slice(0, 80) }).eq('id', threadId);
-        if (reviewId) await sb.from('reviews').update({ thread_id: threadId }).eq('id', reviewId);
+        if (reviewId) await sb.rpc('link_review_thread', { p_review_id: reviewId, p_device_id: deviceId, p_thread_id: threadId });
       } catch (e2) {
         console.error('Gagal meneruskan rating rendah ke chat:', e2); // ulasan tetap tersimpan meski ini gagal
       }
