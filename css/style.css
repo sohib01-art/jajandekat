@@ -18,6 +18,8 @@
   --hero-from: #FF8A3D;   /* oranye terang: awal gradien header & tombol aktif */
   --sun: #FFD84D;         /* kuning logo "Dekat" */
   --shadow: 0 8px 24px -10px rgba(32,26,19,.12);
+  --text-soft: #6B6154;   /* teks bantuan: kontras cukup di atas putih */
+  --field-line: #E4DACB;  /* garis kolom isian */
 }
 
 *{ box-sizing: border-box; }
@@ -523,25 +525,6 @@ main{ flex:1; padding:0 18px; }
 
 input[type="checkbox"]{ accent-color:var(--brand); }
 
-/* Jam operasional — dipakai di step pendaftaran & Edit Profil Toko (panel penjual) */
-.jam-op-toggle{
-  display:flex; align-items:center; gap:8px; cursor:pointer;
-  font-family:'Inter'; font-size:12.5px; font-weight:700; color:var(--text);
-  background:var(--bg); border:1px solid var(--stroke); border-radius:12px; padding:12px;
-  transition:border-color .15s ease, background .15s ease;
-}
-.jam-op-toggle:has(input:checked){ border-color:var(--brand); background:var(--brand-dim); }
-.jam-op-toggle input{ width:17px; height:17px; flex-shrink:0; }
-.jam-op-row{ display:flex; gap:8px; margin-top:8px; }
-.jam-op-col{ flex:1; min-width:0; }
-.jam-op-col-label{ font-size:10px; color:var(--text-faint); margin-bottom:3px; text-align:left; }
-.jam-op-col input[type="time"]{
-  background:var(--bg); border:1px solid var(--stroke); border-radius:10px;
-  padding:10px 12px; color:var(--text); font-family:'Inter'; font-size:13px;
-  width:100%; box-sizing:border-box;
-}
-.jam-op-hint{ font-size:10px; color:var(--text-faint); margin-top:4px; text-align:left; }
-
 /* Wizard pendaftaran — geser horizontal antar langkah */
 .reg-dots{ display:flex; justify-content:center; gap:6px; margin:14px 0 0; }
 .reg-dot{ width:7px; height:7px; border-radius:50%; background:var(--stroke); transition:all .25s ease; }
@@ -551,23 +534,95 @@ input[type="checkbox"]{ accent-color:var(--brand); }
 .reg-wizard-track{ display:flex; transition:transform .35s cubic-bezier(.4,0,.2,1); }
 .reg-step{
   width:100%; flex-shrink:0; box-sizing:border-box; padding:2px 1px;
-  display:flex; flex-direction:column; gap:10px; text-align:left;
+  display:flex; flex-direction:column; gap:12px; text-align:left;
 }
-.reg-step input, .reg-step select{
-  background:var(--bg); border:1px solid var(--stroke); border-radius:10px;
-  padding:10px 12px; color:var(--text); font-family:'Inter'; font-size:13px; width:100%; box-sizing:border-box;
+/* Kolom isian seragam: tinggi 48px (nyaman diketuk), putih, garis jelas, fokus berwarna brand */
+.reg-step input, .reg-step select,
+.jd-form input:not(.jd-switch), .jd-form select{
+  width:100%; height:48px; padding:0 14px; box-sizing:border-box;
+  background:#fff; border:1.5px solid var(--field-line); border-radius:12px;
+  color:var(--text); font-family:'Inter', sans-serif; font-size:15px; font-weight:500;
+  transition:border-color .15s ease, box-shadow .15s ease;
 }
-.reg-step-title{ font-family:'Poppins'; font-weight:700; font-size:15px; color:var(--text); }
-.reg-step-sub{ font-size:11.5px; color:var(--text-faint); margin-top:-6px; }
-.reg-nav-row{ display:flex; gap:8px; margin-top:4px; }
+.reg-step input::placeholder, .jd-form input::placeholder{ color:#9C917F; font-weight:400; }
+.reg-step input:focus-visible, .reg-step select:focus-visible,
+.jd-form input:not(.jd-switch):focus-visible, .jd-form select:focus-visible{
+  outline:none; border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-dim);
+}
+.reg-step select, .jd-form select{
+  -webkit-appearance:none; appearance:none; padding-right:42px; cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A8072' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 14px center; background-size:18px;
+}
+.reg-step-title{ font-family:'Poppins', sans-serif; font-weight:700; font-size:18px; line-height:1.3; color:var(--text); letter-spacing:-.01em; }
+.reg-step-sub{ font-size:13px; line-height:1.5; color:var(--text-soft); margin-top:-6px; }
+.reg-nav-row{ display:flex; gap:10px; margin-top:8px; }
 .reg-nav-row button{
-  flex:1; background:var(--brand); border:none; border-radius:10px; padding:11px;
-  font-family:'Inter'; font-weight:700; color:#fff; cursor:pointer;
+  flex:2; height:48px; padding:0; border:none; border-radius:12px;
+  background:var(--brand); color:#fff; font-family:'Inter', sans-serif; font-size:15px; font-weight:700; cursor:pointer;
+  box-shadow:0 8px 16px -10px rgba(255,107,74,.9);
 }
-.reg-nav-row button.reg-nav-back{ background:var(--surface-2); color:var(--text); }
-.reg-step [data-reg-submit]{
-  background:var(--brand); border:none; border-radius:10px; padding:12px;
-  font-family:'Inter'; font-weight:700; color:#fff; cursor:pointer; width:100%; margin-top:2px;
+.reg-nav-row button.reg-nav-back{
+  flex:1; background:#fff; color:var(--text); border:1.5px solid var(--field-line); box-shadow:none;
+}
+.reg-nav-row button:focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
+.reg-nav-row button:disabled{ opacity:.6; cursor:default; }
+
+/* Bagian form jadwal & lokasi — dipakai di langkah 5 pendaftaran dan Edit Profil Toko */
+.jd-form{ display:flex; flex-direction:column; text-align:left; }
+.jd-form-edit{ margin-top:8px; }
+.jd-form-edit .jd-sec:first-child{ border-top:1px solid var(--stroke); padding-top:20px; }
+.jd-sec{ display:flex; flex-direction:column; gap:12px; padding:20px 0; }
+.jd-sec:first-child{ padding-top:6px; }
+.jd-sec + .jd-sec{ border-top:1px solid var(--stroke); }
+.jd-sec-head{ display:flex; align-items:flex-start; gap:12px; }
+.jd-sec-ico{
+  flex:none; width:36px; height:36px; border-radius:11px;
+  background:var(--brand-dim); color:#C8401F; display:grid; place-items:center;
+}
+.jd-sec-ico svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.jd-sec-title{ font-family:'Poppins', sans-serif; font-weight:600; font-size:15px; line-height:1.35; color:var(--text); }
+.jd-sec-help{ font-size:12.5px; line-height:1.5; color:var(--text-soft); margin-top:2px; }
+.jd-field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.jd-label{ font-size:13px; font-weight:600; color:var(--text); }
+
+.jd-loc{
+  display:flex; flex-direction:column; gap:12px; padding:14px 16px;
+  border:1.5px dashed var(--field-line); border-radius:14px; background:#FDFBF8;
+}
+.jd-loc.is-set{ border-style:solid; border-color:#BFE6CD; background:var(--aktif-dim); }
+.jd-loc-status{ display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; color:var(--text); }
+.jd-loc-status::before{ content:""; flex:none; width:9px; height:9px; border-radius:50%; background:var(--nonaktif); }
+.jd-loc.is-set .jd-loc-status::before{ background:var(--aktif); }
+.jd-btn-outline{
+  height:46px; padding:0 14px; border-radius:12px; border:1.5px solid var(--brand); background:#fff;
+  color:#C8401F; font-family:'Inter', sans-serif; font-size:14px; font-weight:600; cursor:pointer;
+}
+.jd-btn-outline:focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
+
+.jd-switch-row{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:14px 16px; border:1.5px solid var(--field-line); border-radius:14px; background:#fff; cursor:pointer;
+  transition:border-color .15s ease, background .15s ease;
+}
+.jd-switch-row:has(.jd-switch:checked){ border-color:var(--brand); background:#FFF6F2; }
+.jd-switch-text b{ display:block; font-size:14.5px; font-weight:600; color:var(--text); }
+.jd-switch-text small{ display:block; font-size:12.5px; color:var(--text-soft); margin-top:2px; }
+.jd-switch-row .jd-switch{
+  -webkit-appearance:none; appearance:none; flex:none; position:relative;
+  width:48px; height:28px; min-height:0; margin:0; padding:0; border:0; border-radius:999px;
+  background:#D5CBBB; box-shadow:none; cursor:pointer; transition:background .2s ease;
+}
+.jd-switch-row .jd-switch::after{
+  content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 3px rgba(32,26,19,.35); transition:transform .2s ease;
+}
+.jd-switch-row .jd-switch:checked{ background:var(--brand); }
+.jd-switch-row .jd-switch:checked::after{ transform:translateX(20px); }
+.jd-switch-row .jd-switch:focus-visible{ outline:2px solid var(--navy); outline-offset:3px; }
+.jd-time-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (prefers-reduced-motion:reduce){
+  .jd-switch-row, .jd-switch-row .jd-switch, .jd-switch-row .jd-switch::after{ transition:none; }
 }
 
 .emoji-grid{ display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; margin-top:2px; }
