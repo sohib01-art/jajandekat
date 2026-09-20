@@ -741,7 +741,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -1509,6 +1509,16 @@ function vendorIsShowable(v) {
   return !!vendorDisplayLatLng(v);
 }
 
+// Label jam operasional siap-tampil: 24 jam > jam_buka/jam_tutup terstruktur >
+// schedule_text lama (bebas teks, dijaga tetap tampil untuk toko yang belum isi ulang).
+function vendorScheduleLabel(v) {
+  const jam = v.buka_24jam
+    ? 'Buka 24 Jam'
+    : (v.jam_buka && v.jam_tutup ? `${v.jam_buka.slice(0, 5)} – ${v.jam_tutup.slice(0, 5)}` : null);
+  if (jam && v.schedule_text) return `${jam} · ${v.schedule_text}`;
+  return jam || v.schedule_text || null;
+}
+
 // ---------- JARAK PEMBELI <-> PEDAGANG ----------
 let buyerLoc = null; // { lat, lng } — diisi kalau pembeli izinkan lokasi
 function haversineMeters(lat1, lng1, lat2, lng2) {
@@ -1587,7 +1597,7 @@ function renderVendorCardHtml(v, opts = {}) {
           ${catLabel ? `<span class="vp-cat">${catLabel}</span>` : ''}
         </div>
         ${isPromoActive(v) && v.promo_text ? `<div class="vp-promo-text">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
-        ${v.schedule_text ? `<div class="vp-schedule" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(v.schedule_text)}</div>` : ''}
+        ${vendorScheduleLabel(v) ? `<div class="vp-schedule" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
           ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
@@ -1771,7 +1781,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
         <div class="vs-status ${canMap ? 'on' : ''}">
           <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : (canMap ? 'Sedang buka' : 'Belum buka')}
         </div>
-        ${v.schedule_text ? `<div class="vs-line">🕐 <span>${escapeHtml(v.schedule_text)}</span></div>` : ''}
+        ${vendorScheduleLabel(v) ? `<div class="vs-line">🕐 <span>${escapeHtml(vendorScheduleLabel(v))}</span></div>` : ''}
         ${distanceLabel ? `<div class="vs-line">${VP_ICON_PIN}<span>${distanceLabel} dari kamu</span></div>` : ''}
         ${v.region ? `<div class="vs-line">${VP_ICON_PIN}<span>${escapeHtml(v.region)}</span></div>` : ''}
         ${v.location_note ? `<div class="vs-line vs-muted">📍 ${escapeHtml(v.location_note)}</div>` : ''}
@@ -2006,6 +2016,9 @@ let regScheduleValue = '';
 let regLocationNoteValue = '';
 let regFixedLat = null;
 let regFixedLng = null;
+let regJamBukaValue = '08:00';
+let regJamTutupValue = '21:00';
+let regBuka24Value = false;
 let catPickerQuery = '';
 let regStep = 0;
 let knownTagSuggestions = [];
@@ -2058,6 +2071,18 @@ window.__updateRegField = function (field, value) {
   if (field === 'tags') regTagsValue = value;
   if (field === 'schedule') regScheduleValue = value;
   if (field === 'locationNote') regLocationNoteValue = value;
+  if (field === 'jamBuka') regJamBukaValue = value;
+  if (field === 'jamTutup') regJamTutupValue = value;
+};
+
+// Toggle "Buka 24 Jam" di form pendaftaran — langsung ubah tampilan (sembunyikan kotak
+// jam) tanpa render ulang seluruh wizard, biar transisi geser antar step tetap mulus.
+window.__toggleRegBuka24 = function (checked) {
+  regBuka24Value = checked;
+  const wrap = document.getElementById('reg-jam-wrap');
+  if (wrap) wrap.style.display = checked ? 'none' : 'flex';
+  const hint = document.getElementById('reg-jam-hint');
+  if (hint) hint.textContent = checked ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.';
 };
 
 // Simpan "lokasi mangkal" saat daftar — dipakai buat toko menetap MAUPUN keliling yang
@@ -2321,8 +2346,25 @@ function renderEditProfile(vendorId) {
         <button type="button" onclick="window.__captureEditLocation()" style="width:100%;margin-top:6px;padding:10px;background:var(--surface-2);color:var(--text);border-radius:12px;border:1px solid var(--stroke);font-weight:600;">📍 ${editFixedLat ? 'Perbarui' : 'Simpan'} lokasi mangkal dari sini</button>
         <div id="edit-location-status" style="font-size:11px;color:var(--text-faint);margin-top:4px;">${editFixedLat ? '✅ Sudah ada lokasi tersimpan.' : 'Belum diisi.'}</div>
 
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">🕐 Jadwal buka (opsional)</div>
-        <input id="edit-schedule" type="text" value="${(v.schedule_text || '').replace(/"/g, '&quot;')}" placeholder="mis. Tiap malam 19.00 sampai habis, atau 24 jam" />
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">🕐 Jam Operasional (opsional)</div>
+        <label class="jam-op-toggle">
+          <input id="edit-buka24" type="checkbox" ${v.buka_24jam ? 'checked' : ''} onchange="window.__toggleEditBuka24(this.checked)" />
+          🌙 Buka 24 Jam
+        </label>
+        <div id="edit-jam-wrap" class="jam-op-row" style="display:${v.buka_24jam ? 'none' : 'flex'};">
+          <div class="jam-op-col">
+            <div class="jam-op-col-label">Jam buka</div>
+            <input id="edit-jam-buka" type="time" value="${v.jam_buka ? v.jam_buka.slice(0, 5) : ''}" />
+          </div>
+          <div class="jam-op-col">
+            <div class="jam-op-col-label">Jam tutup</div>
+            <input id="edit-jam-tutup" type="time" value="${v.jam_tutup ? v.jam_tutup.slice(0, 5) : ''}" />
+          </div>
+        </div>
+        <div id="edit-jam-hint" class="jam-op-hint">${v.buka_24jam ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.'}</div>
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan jadwal tambahan (opsional)</div>
+        <input id="edit-schedule" type="text" value="${(v.schedule_text || '').replace(/"/g, '&quot;')}" placeholder="mis. Kadang libur Jumat" />
 
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan lokasi (opsional)</div>
         <input id="edit-location-note" type="text" value="${(v.location_note || '').replace(/"/g, '&quot;')}" placeholder="mis. Depan gerbang sekolah, dekat pos satpam" />
@@ -2369,6 +2411,13 @@ window.__editToggleCategory = function (label) {
 window.__editPickModeIcon = function (icon) {
   editModeIcon = icon;
   renderEditProfile(myVendorId);
+};
+
+window.__toggleEditBuka24 = function (checked) {
+  const wrap = document.getElementById('edit-jam-wrap');
+  if (wrap) wrap.style.display = checked ? 'none' : 'flex';
+  const hint = document.getElementById('edit-jam-hint');
+  if (hint) hint.textContent = checked ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.';
 };
 
 // Tombol cepat di dashboard buat "Tutup Sementara"/"Buka Lagi" tanpa perlu buka Edit
@@ -2421,6 +2470,9 @@ window.__saveEditProfile = async function (vendorId) {
     const locationNote = document.getElementById('edit-location-note')?.value.trim() || null;
     const defaultOpenEl = document.getElementById('edit-default-open');
     const defaultOpen = defaultOpenEl ? defaultOpenEl.checked : true;
+    const buka24jam = document.getElementById('edit-buka24')?.checked || false;
+    const jamBuka = buka24jam ? null : (document.getElementById('edit-jam-buka')?.value || null);
+    const jamTutup = buka24jam ? null : (document.getElementById('edit-jam-tutup')?.value || null);
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
       p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
@@ -2433,6 +2485,7 @@ window.__saveEditProfile = async function (vendorId) {
       reminder_time: reminderTime || null, show_whatsapp: showWhatsapp, custom_tags: customTags,
       fixed_lat: editFixedLat, fixed_lng: editFixedLng, schedule_text: scheduleText,
       location_note: locationNote, default_open: defaultOpen,
+      jam_buka: jamBuka, jam_tutup: jamTutup, buka_24jam: buka24jam,
     }).eq('id', vendorId);
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur simpan
 
@@ -2442,6 +2495,7 @@ window.__saveEditProfile = async function (vendorId) {
     v.show_whatsapp = showWhatsapp; v.custom_tags = customTags;
     v.fixed_lat = editFixedLat; v.fixed_lng = editFixedLng; v.schedule_text = scheduleText;
     v.location_note = locationNote; v.default_open = defaultOpen;
+    v.jam_buka = jamBuka; v.jam_tutup = jamTutup; v.buka_24jam = buka24jam;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -2535,8 +2589,25 @@ function renderPedagang() {
               <button type="button" onclick="window.__captureRegLocation()" style="width:100%;margin-top:6px;padding:10px;background:var(--surface-2);color:var(--text);border-radius:12px;border:1px solid var(--stroke);font-weight:600;">📍 Simpan lokasi mangkal dari sini</button>
               <div id="reg-location-status" style="font-size:11px;color:var(--text-faint);margin-top:4px;">${regFixedLat ? '✅ Lokasi tersimpan dari posisi sekarang.' : 'Belum diisi.'}</div>
 
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:12px;">🕐 Jadwal buka (opsional) — bebas, sesuaikan kebiasaan sendiri</div>
-              <input id="reg-schedule" type="text" value="${regScheduleValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('schedule', this.value)" placeholder="mis. Tiap malam 19.00 sampai habis, atau 24 jam" />
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:12px;">🕐 Jam Operasional (opsional)</div>
+              <label class="jam-op-toggle">
+                <input id="reg-buka24" type="checkbox" ${regBuka24Value ? 'checked' : ''} onchange="window.__toggleRegBuka24(this.checked)" />
+                🌙 Buka 24 Jam
+              </label>
+              <div id="reg-jam-wrap" class="jam-op-row" style="display:${regBuka24Value ? 'none' : 'flex'};">
+                <div class="jam-op-col">
+                  <div class="jam-op-col-label">Jam buka</div>
+                  <input id="reg-jam-buka" type="time" value="${regJamBukaValue}" oninput="window.__updateRegField('jamBuka', this.value)" />
+                </div>
+                <div class="jam-op-col">
+                  <div class="jam-op-col-label">Jam tutup</div>
+                  <input id="reg-jam-tutup" type="time" value="${regJamTutupValue}" oninput="window.__updateRegField('jamTutup', this.value)" />
+                </div>
+              </div>
+              <div id="reg-jam-hint" class="jam-op-hint">${regBuka24Value ? 'Tokomu akan tampil "Buka 24 Jam" ke pembeli.' : 'Isi kalau jam bukamu biasanya sama tiap hari.'}</div>
+
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:12px;">📝 Catatan jadwal tambahan (opsional)</div>
+              <input id="reg-schedule" type="text" value="${regScheduleValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('schedule', this.value)" placeholder="mis. Kadang libur Jumat" />
 
               <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan lokasi (opsional)</div>
               <input id="reg-location-note" type="text" value="${regLocationNoteValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('locationNote', this.value)" placeholder="mis. Depan gerbang sekolah, dekat pos satpam" />
@@ -2597,7 +2668,7 @@ function renderPedagang() {
             <div>
               <div style="font-size:12.5px;font-weight:700;">📍 Lokasi mangkal tetap: ${v.default_open !== false ? '<span style="color:#3DDC97;">Buka</span>' : '<span style="color:#f87171;">Tutup sementara</span>'}</div>
               <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">${v.default_open !== false ? 'Tokomu kelihatan di peta/daftar pembeli walau belum nyalain status di bawah.' : 'Tokomu disembunyikan dari peta/daftar sampai kamu buka lagi.'}</div>
-              ${v.schedule_text ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(v.schedule_text)}</div>` : ''}
+              ${vendorScheduleLabel(v) ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
             </div>
             <button type="button" onclick="window.__toggleDefaultOpen('${v.id}')" style="flex-shrink:0;padding:8px 12px;border-radius:10px;border:none;font-weight:700;font-size:11.5px;${v.default_open !== false ? 'background:var(--surface-2);color:var(--text);' : 'background:#3DDC97;color:#fff;'}">${v.default_open !== false ? 'Tutup Sementara' : 'Buka Lagi'}</button>
           </div>
@@ -3445,8 +3516,8 @@ window.__registerVendor = async function () {
 
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open')
+      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null, buka_24jam: regBuka24Value, jam_buka: regBuka24Value ? null : (regJamBukaValue || null), jam_tutup: regBuka24Value ? null : (regJamTutupValue || null) })
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam')
       .single();
 
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur pendaftaran
@@ -3468,6 +3539,7 @@ window.__registerVendor = async function () {
     selectedCategories = [];
     regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
     regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
+    regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
