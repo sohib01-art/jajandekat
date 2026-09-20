@@ -747,16 +747,16 @@ async function fetchVendors() {
 }
 
 async function fetchFollows() {
-  const { data, error } = await withTimeout(sb.from('follows').select('vendor_id').eq('device_id', deviceId), 10000, 'Ambil data pengikut');
+  const { data, error } = await withTimeout(sb.rpc('jd_get_my_follows', { p_device_id: deviceId }), 10000, 'Ambil data pengikut');
   if (error) { console.error(error); throw error; }
   return data.map(f => f.vendor_id);
 }
 
 async function toggleFollowDb(vendorId, isFollowing, viaReferral = false) {
   if (isFollowing) {
-    await sb.from('follows').delete().eq('device_id', deviceId).eq('vendor_id', vendorId);
+    await sb.rpc('jd_unfollow_vendor', { p_device_id: deviceId, p_vendor_id: vendorId });
   } else {
-    await sb.from('follows').insert({ device_id: deviceId, vendor_id: vendorId, via_referral: viaReferral });
+    await sb.rpc('jd_follow_vendor', { p_device_id: deviceId, p_vendor_id: vendorId, p_via_referral: viaReferral });
   }
 }
 
@@ -2814,9 +2814,9 @@ function renderPedagang() {
   loadMyReviews(v.id);
 
   if (v.is_premium) {
-    sb.from('follows').select('id', { count: 'exact', head: true }).eq('vendor_id', v.id).then(({ count }) => {
+    sb.rpc('jd_count_followers', { p_vendor_id: v.id }).then(({ data }) => {
       const el = document.getElementById('premium-follow-count');
-      if (el) el.textContent = count ?? 0;
+      if (el) el.textContent = (data && data[0] && data[0].total) ?? 0;
     });
   }
 
@@ -2858,13 +2858,14 @@ async function loadCampaignProgress(vendorId) {
   const el = document.getElementById('campaign-progress');
   if (!el) return;
 
-  const [{ data: recruitedVendors }, { count: referredBuyers }] = await Promise.all([
+  const [{ data: recruitedVendors }, { data: followerCounts }] = await Promise.all([
     sb.from('vendors').select('id,name,activation_count').eq('referred_by_vendor_id', vendorId),
-    sb.from('follows').select('id', { count: 'exact', head: true }).eq('vendor_id', vendorId).eq('via_referral', true),
+    sb.rpc('jd_count_followers', { p_vendor_id: vendorId }),
   ]);
 
   const validVendorRecruit = (recruitedVendors || []).find(r => r.activation_count >= 3);
   const vendorDone = !!validVendorRecruit;
+  const referredBuyers = (followerCounts && followerCounts[0] && followerCounts[0].via_referral_count) ?? 0;
   const buyerCount = Math.min(referredBuyers ?? 0, 10);
   const buyerDone = buyerCount >= 10;
   const allDone = vendorDone && buyerDone;
@@ -3943,9 +3944,9 @@ async function renderAdminDashboard() {
 
   if (error) { listEl.innerHTML = `<div style="color:#f87171;font-size:12.5px;">Gagal memuat: ${error.message}</div>`; return; }
 
-  const { count: totalFollows } = await sb.from('follows').select('id', { count: 'exact', head: true });
-  const { data: allFollowDevices } = await sb.from('follows').select('device_id');
-  const uniqueBuyers = new Set((allFollowDevices || []).map(f => f.device_id)).size;
+  const { data: followStats } = await sb.rpc('jd_admin_follow_stats');
+  const totalFollows = (followStats && followStats[0] && followStats[0].total_follows) ?? 0;
+  const uniqueBuyers = (followStats && followStats[0] && followStats[0].unique_buyers) ?? 0;
   const { count: totalReferred } = await sb.from('vendors').select('id', { count: 'exact', head: true }).not('referred_by_vendor_id', 'is', null);
   const totalPedagang = data.length;
   const aktifSekarang = data.filter(v => v.active).length;
