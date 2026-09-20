@@ -2037,7 +2037,7 @@ window.__regWizardGo = function (delta) {
       const wa = (document.getElementById('reg-whatsapp')?.value || '').trim();
       const pin = (document.getElementById('reg-pin')?.value || '').trim();
       if (!wa) { if (stepErr) stepErr.textContent = 'Nomor WhatsApp wajib diisi.'; return; }
-      if (!/^\d{4}$/.test(pin)) { if (stepErr) stepErr.textContent = 'PIN wajib 4 angka.'; return; }
+      if (!/^\d{6}$/.test(pin)) { if (stepErr) stepErr.textContent = 'PIN wajib 6 angka.'; return; }
     }
   }
   regStep = Math.max(0, Math.min(4, regStep + delta));
@@ -2080,24 +2080,20 @@ window.__captureRegLocation = function () {
 
 async function loadKnownTagSuggestions() {
   try {
-    const { data, error } = await sb.from('tag_suggestions').select('tag_display').order('count', { ascending: false }).limit(60);
+    // Tabel tag_suggestions dikunci RLS (tidak ada policy publik) — baca lewat RPC.
+    const { data, error } = await sb.rpc('jd_get_tag_suggestions');
     if (error) throw error;
     knownTagSuggestions = (data || []).map(r => r.tag_display);
   } catch (e) { /* diamkan, autocomplete opsional */ }
 }
 
-// Simpan tag baru ke tabel tag_suggestions (dedupe by lowercase, tambah count kalau sudah ada)
+// Simpan tag baru lewat RPC jd_log_tag_suggestion (dedupe+count sudah ditangani di server;
+// tabel tag_suggestions sendiri tidak lagi bisa ditulis langsung dari client).
 async function logTagSuggestions(rawTagsString) {
   const tags = (rawTagsString || '').split(',').map(t => t.trim()).filter(Boolean);
   for (const tag of tags) {
-    const key = tag.toLowerCase();
     try {
-      const { data: existing } = await sb.from('tag_suggestions').select('id,count').eq('tag_key', key).maybeSingle();
-      if (existing) {
-        await sb.from('tag_suggestions').update({ count: existing.count + 1, last_seen: new Date().toISOString() }).eq('id', existing.id);
-      } else {
-        await sb.from('tag_suggestions').insert({ tag_key: key, tag_display: tag, count: 1 });
-      }
+      await sb.rpc('jd_log_tag_suggestion', { p_tag: tag });
     } catch (e) { /* jangan blokir alur pendaftaran/edit kalau ini gagal */ }
   }
 }
@@ -2462,7 +2458,7 @@ function renderPedagang() {
           <div class="setup-form">
             <input id="pick-whatsapp" type="tel" value="${pickWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updatePickWhatsapp(this.value)" placeholder="Nomor WhatsApp terdaftar, misal: 81234567890" />
             <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:-6px;">Boleh diawali 0 atau langsung 8 — otomatis diubah jadi +62. Contoh: 081234567890 atau 81234567890.</div>
-            <input id="pick-pin" type="tel" inputmode="numeric" maxlength="4" placeholder="Masukkan PIN akun ini" />
+            <input id="pick-pin" type="tel" inputmode="numeric" maxlength="6" placeholder="Masukkan PIN akun ini" />
             <button onclick="window.__pickVendor()">Masuk sebagai pedagang ini</button>
             <a href="#" onclick="window.__forgotPin(); return false;" style="text-align:center;font-size:11.5px;color:var(--text-faint);text-decoration:underline;">
               Lupa PIN? Hubungi admin
@@ -2526,7 +2522,7 @@ function renderPedagang() {
               <div class="reg-step-title">4. Nomor & Keamanan Akun</div>
               <div class="reg-step-sub">Nomor WA jadi penanda akun, PIN buat masuk lagi nanti</div>
               <input id="reg-whatsapp" type="tel" value="${regWhatsappValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('whatsapp', this.value)" placeholder="Nomor WhatsApp — wajib (contoh: 6281234567890)" />
-              <input id="reg-pin" type="tel" inputmode="numeric" maxlength="4" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 4 digit (untuk keamanan akun)" />
+              <input id="reg-pin" type="tel" inputmode="numeric" maxlength="6" value="${regPinValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('pin', this.value)" placeholder="Buat PIN 6 digit (untuk keamanan akun)" />
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut ▶</button></div>
             </div>
 
@@ -3414,7 +3410,7 @@ window.__registerVendor = async function () {
   if (categories.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
   if (!modeIcon) { errEl.textContent = 'Pilih mode jualan Anda.'; return; }
   if (!whatsapp) { errEl.textContent = 'Nomor WhatsApp wajib diisi (jadi penanda akun Anda).'; return; }
-  if (!/^\d{4}$/.test(pin)) { errEl.textContent = 'PIN wajib 4 angka.'; return; }
+  if (!/^\d{6}$/.test(pin)) { errEl.textContent = 'PIN wajib 6 angka.'; return; }
 
   // Cegah satu nomor WA didaftarkan dua kali
   const dupe = vendors.find(v => v.whatsapp === whatsapp);
@@ -3819,7 +3815,9 @@ window.__requestPremium = async function (vendorId) {
   const v = vendors.find(x => x.id === vendorId);
   if (!v) return;
   try {
-    await sb.from('vendor_requests').insert({ vendor_id: vendorId, type: 'premium' });
+    // vendor_requests (tabel lama) sudah dikunci total — request sekarang lewat upgrade_requests,
+    // ditulis via edge function admin-action (action ini tidak butuh password admin).
+    await sb.functions.invoke('admin-action', { body: { action: 'create_upgrade_request', vendor_id: vendorId, request_type: 'premium' } });
   } catch (e) { /* tetap lanjut buka WA walau insert gagal */ }
   const msg = 'Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau upgrade ke Premium JajanDekat.';
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -3829,7 +3827,7 @@ window.__requestPromo = async function (vendorId) {
   const v = vendors.find(x => x.id === vendorId);
   if (!v) return;
   try {
-    await sb.from('vendor_requests').insert({ vendor_id: vendorId, type: 'promo' });
+    await sb.functions.invoke('admin-action', { body: { action: 'create_upgrade_request', vendor_id: vendorId, request_type: 'promo' } });
   } catch (e) { /* tetap lanjut buka WA walau insert gagal */ }
   const msg = 'Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau pasang Promosi Lokal di JajanDekat.';
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -4134,17 +4132,17 @@ async function loadAdminRequests() {
   const el = document.getElementById('admin-requests');
   if (!el) return;
   try {
-    const { data, error } = await sb
-      .from('vendor_requests')
-      .select('id,type,status,created_at,vendors(id,name,whatsapp,category)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    // vendor_requests (tabel lama) sudah dikunci total — data sekarang di upgrade_requests,
+    // dibaca lewat edge function admin-action (pakai service role + password admin).
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_upgrade_requests' } });
     if (error) throw error;
-    if (!data || data.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada permintaan masuk. 👍</div>'; return; }
-    el.innerHTML = data.map(r => {
+    if (data && data.error) throw new Error(data.error);
+    const rows = (data.requests || []).filter(r => r.status === 'pending');
+    if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada permintaan masuk. 👍</div>'; return; }
+    el.innerHTML = rows.map(r => {
       const v = r.vendors;
       if (!v) return '';
-      const label = r.type === 'premium' ? '⭐ Upgrade Premium' : '🔥 Pasang Promo Lokal';
+      const label = r.request_type === 'premium' ? '⭐ Upgrade Premium' : '🔥 Pasang Promo Lokal';
       return `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -4154,7 +4152,7 @@ async function loadAdminRequests() {
         <div style="font-size:11px;color:var(--text-dim);" class="mono">WA: ${v.whatsapp || '-'} · ${v.category || '-'}</div>
         <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-          ${r.type === 'premium' ? `
+          ${r.request_type === 'premium' ? `
             <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',1)">1 Bln</button>
             <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',3)">3 Bln</button>
             <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',6)">6 Bln</button>
@@ -4178,7 +4176,7 @@ window.__adminHandleRequest = async function (requestId, vendorId, type, amount)
   try {
     if (type === 'premium') await window.__adminSetPremium(vendorId, amount, true);
     else await window.__adminSetPromo(vendorId, amount, true);
-    await sb.from('vendor_requests').update({ status: 'selesai' }).eq('id', requestId);
+    await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'update_upgrade_request_status', request_id: requestId, status: 'selesai' } });
     renderAdminDashboard();
   } catch (e) {
     alert('Gagal memproses permintaan: ' + e.message);
@@ -4187,7 +4185,7 @@ window.__adminHandleRequest = async function (requestId, vendorId, type, amount)
 
 window.__dismissVendorRequest = async function (requestId) {
   try {
-    await sb.from('vendor_requests').update({ status: 'selesai' }).eq('id', requestId);
+    await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'update_upgrade_request_status', request_id: requestId, status: 'selesai' } });
     loadAdminRequests();
   } catch (e) {
     alert('Gagal menutup permintaan: ' + e.message);
@@ -4601,9 +4599,11 @@ async function loadAdminTagSuggestions() {
   const el = document.getElementById('admin-tags');
   if (!el) return;
   try {
-    const { data, error } = await sb.from('tag_suggestions').select('*').order('count', { ascending: false }).order('last_seen', { ascending: false });
+    // tag_suggestions dikunci RLS total — dibaca lewat edge function admin-action.
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_tag_suggestions' } });
     if (error) throw error;
-    const rows = data || [];
+    if (data && data.error) throw new Error(data.error);
+    const rows = data.tags || [];
     if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada tag baru yang diketik pedagang. 👍</div>'; return; }
     el.innerHTML = rows.map(t => `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${t.reviewed ? 'opacity:.55;' : ''}">
@@ -4622,7 +4622,7 @@ async function loadAdminTagSuggestions() {
 
 window.__toggleTagReviewed = async function (id, reviewed) {
   try {
-    await sb.from('tag_suggestions').update({ reviewed }).eq('id', id);
+    await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'update_tag_suggestion_reviewed', tag_id: id, reviewed } });
     loadAdminTagSuggestions();
   } catch (e) {
     alert('Gagal update status: ' + e.message);
