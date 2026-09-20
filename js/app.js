@@ -737,7 +737,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -1458,11 +1458,26 @@ async function markThreadRead(threadId, asVendor) {
 function sortVendorsForDisplay(list) {
   return [...list].sort((a, b) => {
     // Aktif jualan selalu di atas; di antara yang aktif, premium/promo diprioritaskan.
-    if (!!b.active !== !!a.active) return (b.active ? 1 : 0) - (a.active ? 1 : 0);
+    if (!!vendorIsShowable(b) !== !!vendorIsShowable(a)) return (vendorIsShowable(b) ? 1 : 0) - (vendorIsShowable(a) ? 1 : 0);
     const scoreA = (a.is_premium ? 2 : 0) + (isPromoActive(a) ? 1 : 0);
     const scoreB = (b.is_premium ? 2 : 0) + (isPromoActive(b) ? 1 : 0);
     return scoreB - scoreA;
   });
+}
+
+// ---------- LOKASI EFEKTIF PEDAGANG (live GPS vs lokasi mangkal tetap) ----------
+// Sebelumnya "kelihatan di peta/daftar" = HARUS v.active (toggle "mulai jualan" nyala +
+// GPS live). Sekarang toko yang sudah simpan lokasi mangkal tetap (fixed_lat/fixed_lng)
+// tetap kelihatan walau lagi tidak live, SELAMA belum ditutup sendiri (default_open
+// false). Semua tempat yang dulu ngecek "v.active && v.lat && v.lng" ganti pakai ini,
+// biar satu sumber kebenaran.
+function vendorDisplayLatLng(v) {
+  if (v.active && v.lat && v.lng) return { lat: v.lat, lng: v.lng, live: true };
+  if (v.default_open !== false && v.fixed_lat && v.fixed_lng) return { lat: v.fixed_lat, lng: v.fixed_lng, live: false };
+  return null;
+}
+function vendorIsShowable(v) {
+  return !!vendorDisplayLatLng(v);
 }
 
 // ---------- JARAK PEMBELI <-> PEDAGANG ----------
@@ -1508,9 +1523,8 @@ function vendorPhotoStyle(v) {
   return '';
 }
 function vendorDistanceLabel(v) {
-  return (buyerLoc && v.lat && v.lng)
-    ? formatDistance(haversineMeters(buyerLoc.lat, buyerLoc.lng, v.lat, v.lng))
-    : null;
+  const p = vendorDisplayLatLng(v);
+  return (buyerLoc && p) ? formatDistance(haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng)) : null;
 }
 
 // Kartu pedagang: foto + lencana, nama, rating · kategori, jarak + tombol Chat.
@@ -1520,6 +1534,7 @@ function renderVendorCardHtml(v, opts = {}) {
   const following = followedIds.has(v.id);
   const hasPhoto = !!v.photo_url;
   const distanceLabel = vendorDistanceLabel(v);
+  const showable = vendorIsShowable(v);
   const cats = v.categories || [];
   const catLabel = cats.length ? escapeHtml(cats[0]) + (cats.length > 1 ? ` +${cats.length - 1}` : '') : '';
   const locLabel = distanceLabel || (v.region ? escapeHtml(v.region) : '');
@@ -1527,14 +1542,14 @@ function renderVendorCardHtml(v, opts = {}) {
   return `
     <div class="vp-card ${compact ? 'vp-card-compact' : ''} ${isPromoActive(v) ? 'vp-card-promo' : ''}" onclick="if(!event.target.closest('button,a')) window.__openVendorSheet('${v.id}')">
       <div class="vp-photo-wrap">
-        <div class="vp-photo ${!v.active ? 'inactive' : ''}" style="${vendorPhotoStyle(v)}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
+        <div class="vp-photo ${!showable ? 'inactive' : ''}" style="${vendorPhotoStyle(v)}">${hasPhoto || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
         <div class="vp-badges-top">
           ${v.is_premium ? `<span class="vp-pill vp-pill-premium">${VP_ICON_CROWN}Unggulan</span>` : ''}
           ${isPromoActive(v) ? '<span class="vp-pill vp-pill-promo">🔥 Promo</span>' : ''}
           ${v.verification_status === 'verified' ? '<span class="vp-verified" title="Toko Terverifikasi">✓</span>' : ''}
         </div>
         <button class="vp-heart ${following ? 'on' : ''}" aria-label="${following ? 'Berhenti mengikuti' : 'Ikuti'} ${escapeHtml(v.name)}" aria-pressed="${following}" onclick="window.__toggleFollow('${v.id}')">${VP_ICON_HEART}</button>
-        <div class="vp-status-pill ${v.active ? 'on' : 'off'}">${v.active ? '<span class="vp-status-dot"></span>Sedang buka' : 'Belum buka'}</div>
+        <div class="vp-status-pill ${showable ? 'on' : 'off'}">${showable ? '<span class="vp-status-dot"></span>Sedang buka' : 'Belum buka'}</div>
       </div>
       <div class="vp-body">
         <div class="vp-name">${escapeHtml(v.name)}</div>
@@ -1543,6 +1558,7 @@ function renderVendorCardHtml(v, opts = {}) {
           ${catLabel ? `<span class="vp-cat">${catLabel}</span>` : ''}
         </div>
         ${isPromoActive(v) && v.promo_text ? `<div class="vp-promo-text">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
+        ${v.schedule_text ? `<div class="vp-schedule" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(v.schedule_text)}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
           <button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>
@@ -1579,8 +1595,8 @@ const NEARBY_MAX_M = 10000; // hanya pedagang aktif dalam radius 10 km yang dian
 function nearbyVendors(list) {
   if (!buyerLoc) return [];
   return list
-    .filter(v => v.active && v.lat && v.lng)
-    .map(v => ({ v, d: haversineMeters(buyerLoc.lat, buyerLoc.lng, v.lat, v.lng) }))
+    .filter(vendorIsShowable)
+    .map(v => { const p = vendorDisplayLatLng(v); return { v, d: haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) }; })
     .filter(x => x.d <= NEARBY_MAX_M)
     .sort((a, b) => a.d - b.d)
     .map(x => x.v);
@@ -1698,7 +1714,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
     : null;
   const distanceLabel = vendorDistanceLabel(v);
   const cats = (v.categories || []).map(escapeHtml).join(' · ');
-  const canMap = v.active && v.lat && v.lng;
+  const canMap = vendorIsShowable(v);
   const canWa = v.show_whatsapp !== false && v.whatsapp;
   const waUrl = canWa ? `https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}` : '';
 
@@ -1709,7 +1725,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
   overlay.innerHTML = `
     <div class="vs-sheet ${opts.still ? 'still' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(v.name)}">
       <div class="vs-photo-wrap">
-        <div class="vs-photo ${!v.active ? 'inactive' : ''}" style="${vendorPhotoStyle(v)}">${v.photo_url || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
+        <div class="vs-photo ${!canMap ? 'inactive' : ''}" style="${vendorPhotoStyle(v)}">${v.photo_url || v.mode_icon ? '' : (v.emoji || '🍜')}</div>
         <button class="vs-close" aria-label="Tutup" onclick="window.__closeVendorSheet()">✕</button>
         <div class="vp-badges-top">
           ${v.is_premium ? `<span class="vp-pill vp-pill-premium">${VP_ICON_CROWN}Unggulan</span>` : ''}
@@ -1723,12 +1739,14 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
           ${v.rating_count > 0 ? `<span class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count} ulasan)</span></span>` : '<span class="vs-muted">Belum ada ulasan</span>'}
           ${cats ? `<span class="vs-muted">${cats}</span>` : ''}
         </div>
-        <div class="vs-status ${v.active ? 'on' : ''}">
-          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : 'Belum buka'}
+        <div class="vs-status ${canMap ? 'on' : ''}">
+          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : (canMap ? 'Sedang buka' : 'Belum buka')}
         </div>
+        ${v.schedule_text ? `<div class="vs-line">🕐 <span>${escapeHtml(v.schedule_text)}</span></div>` : ''}
         ${distanceLabel ? `<div class="vs-line">${VP_ICON_PIN}<span>${distanceLabel} dari kamu</span></div>` : ''}
         ${v.region ? `<div class="vs-line">${VP_ICON_PIN}<span>${escapeHtml(v.region)}</span></div>` : ''}
-        ${v.active && !v.lat ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
+        ${v.location_note ? `<div class="vs-line vs-muted">📍 ${escapeHtml(v.location_note)}</div>` : ''}
+        ${!canMap ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
         ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
         <div class="vs-actions">
           <button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>
@@ -1756,10 +1774,12 @@ window.__vsAct = async function (kind, id) {
   if (kind === 'chat') window.__openChatModal(id, v.name);
   else if (kind === 'menu') window.__openProductCatalog(id, v.name);
   else if (kind === 'review') window.__openReviewModal(id, v.name);
-  else if (kind === 'map') window.__goToVendorOnMap(id, v.lat, v.lng);
+  else if (kind === 'map') window.__goToVendorOnMap(id);
 };
 
-window.__goToVendorOnMap = function (id, lat, lng) {
+window.__goToVendorOnMap = function (id) {
+  const v = vendors.find(x => x.id === id);
+  const p = v && vendorDisplayLatLng(v);
   bottomView = 'peta';
   setNavActive('peta');
   if (mode !== 'pembeli') {
@@ -1768,8 +1788,8 @@ window.__goToVendorOnMap = function (id, lat, lng) {
   }
   renderPembeli();
   setTimeout(() => {
-    if (map && lat && lng) {
-      map.setView([lat, lng], 16);
+    if (map && p) {
+      map.setView([p.lat, p.lng], 16);
       if (markers[id]) markers[id].openPopup();
     }
   }, 200);
@@ -1817,7 +1837,7 @@ window.__openInternalLink = function (link) { openInternalLink(link); };
 
 // ---------- PETA VIEW (tab "Peta") ----------
 function renderPetaView() {
-  const activeVendors = vendors.filter(v => v.active && v.lat && v.lng);
+  const activeVendors = vendors.filter(vendorIsShowable);
   main.innerHTML = `
     <div class="section-label">Peta pedagang yang sedang jualan</div>
     <div id="map" style="height:calc(100vh - 300px); min-height:300px;"></div>
@@ -1892,7 +1912,8 @@ function renderMap() {
   }
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
-  vendors.filter(v => v.active && v.lat && v.lng).forEach(v => {
+  vendors.filter(vendorIsShowable).forEach(v => {
+    const p = vendorDisplayLatLng(v);
     const iconHtml = v.photo_url
       ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${v.photo_url}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
       : v.mode_icon
@@ -1920,7 +1941,7 @@ function renderMap() {
       ` : ''}
       <div style="font-size:9px;color:#999;margin-top:5px;">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
     `;
-    markers[v.id] = L.marker([v.lat, v.lng], { icon }).addTo(map).bindPopup(popupHtml);
+    markers[v.id] = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml);
   });
 
   // Peta dulu selalu diam di lokasi/zoom default (kadang jauh dari pedagang/pembeli),
@@ -1952,6 +1973,10 @@ let announcements = [];
 let regPinValue = '';
 let regReminderValue = '';
 let regTagsValue = '';
+let regScheduleValue = '';
+let regLocationNoteValue = '';
+let regFixedLat = null;
+let regFixedLng = null;
 let catPickerQuery = '';
 let regStep = 0;
 let knownTagSuggestions = [];
@@ -2002,6 +2027,26 @@ window.__updateRegField = function (field, value) {
   if (field === 'pin') regPinValue = value;
   if (field === 'reminder') regReminderValue = value;
   if (field === 'tags') regTagsValue = value;
+  if (field === 'schedule') regScheduleValue = value;
+  if (field === 'locationNote') regLocationNoteValue = value;
+};
+
+// Simpan "lokasi mangkal" saat daftar — dipakai buat toko menetap MAUPUN keliling yang
+// biasanya tetap mangkal di 1 titik. Sengaja ambil dari GPS device (bukan bikin picker
+// peta baru), konsisten dengan cara ambil lokasi live di alur "mulai jualan".
+window.__captureRegLocation = function () {
+  const statusEl = document.getElementById('reg-location-status');
+  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
+  if (statusEl) statusEl.textContent = 'Mengambil lokasi...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      regFixedLat = pos.coords.latitude;
+      regFixedLng = pos.coords.longitude;
+      if (statusEl) statusEl.textContent = '✅ Lokasi tersimpan dari posisi sekarang.';
+    },
+    () => { if (statusEl) statusEl.textContent = 'Gagal ambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
 };
 
 async function loadKnownTagSuggestions() {
@@ -2170,6 +2215,8 @@ window.__pickModeIcon = function (icon) {
 let editCategories = [];
 let editModeIcon = null;
 let editCatPickerQuery = '';
+let editFixedLat = null;
+let editFixedLng = null;
 
 window.__openEditProfile = function (vendorId) {
   const v = vendors.find(v => v.id === vendorId);
@@ -2177,7 +2224,25 @@ window.__openEditProfile = function (vendorId) {
   editCategories = [...(v.categories || [])];
   editModeIcon = v.mode_icon || null;
   editCatPickerQuery = '';
+  editFixedLat = v.fixed_lat || null;
+  editFixedLng = v.fixed_lng || null;
   renderEditProfile(vendorId);
+};
+
+// Sama seperti di form daftar: ambil dari GPS device, bukan bikin picker peta baru.
+window.__captureEditLocation = function () {
+  const statusEl = document.getElementById('edit-location-status');
+  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
+  if (statusEl) statusEl.textContent = 'Mengambil lokasi...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      editFixedLat = pos.coords.latitude;
+      editFixedLng = pos.coords.longitude;
+      if (statusEl) statusEl.textContent = '✅ Lokasi diperbarui dari posisi sekarang (tekan Simpan Perubahan untuk menyimpan).';
+    },
+    () => { if (statusEl) statusEl.textContent = 'Gagal ambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
 };
 
 window.__updateEditCatPickerQuery = function (vendorId, value) {
@@ -2227,6 +2292,23 @@ function renderEditProfile(vendorId) {
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
         <input id="edit-reminder" type="time" value="${v.reminder_time ? v.reminder_time.slice(0, 5) : ''}" />
 
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:14px;">📍 Lokasi mangkal tetap (opsional) — tokomu tetap kelihatan di peta/daftar walau lupa nyalain "mulai jualan"</div>
+        <button type="button" onclick="window.__captureEditLocation()" style="width:100%;margin-top:6px;padding:10px;background:var(--surface-2);color:var(--text);border-radius:12px;border:1px solid var(--stroke);font-weight:600;">📍 ${editFixedLat ? 'Perbarui' : 'Simpan'} lokasi mangkal dari sini</button>
+        <div id="edit-location-status" style="font-size:11px;color:var(--text-faint);margin-top:4px;">${editFixedLat ? '✅ Sudah ada lokasi tersimpan.' : 'Belum diisi.'}</div>
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">🕐 Jadwal buka (opsional)</div>
+        <input id="edit-schedule" type="text" value="${(v.schedule_text || '').replace(/"/g, '&quot;')}" placeholder="mis. Tiap malam 19.00 sampai habis, atau 24 jam" />
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan lokasi (opsional)</div>
+        <input id="edit-location-note" type="text" value="${(v.location_note || '').replace(/"/g, '&quot;')}" placeholder="mis. Depan gerbang sekolah, dekat pos satpam" />
+
+        ${editFixedLat ? `
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;margin-top:10px;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;">
+            <input id="edit-default-open" type="checkbox" ${v.default_open !== false ? 'checked' : ''} style="width:17px;height:17px;" />
+            🟢 Tampilkan sebagai "Buka" di lokasi mangkal (kalau lagi tidak jualan sama sekali, misal cuti, matikan dulu)
+          </label>
+        ` : ''}
+
         <div style="text-align:left;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:10px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;font-weight:700;">
             <input id="edit-show-whatsapp" type="checkbox" ${v.show_whatsapp !== false ? 'checked' : ''} style="width:17px;height:17px;" />
@@ -2262,6 +2344,30 @@ window.__editPickModeIcon = function (icon) {
   renderEditProfile(myVendorId);
 };
 
+// Tombol cepat di dashboard buat "Tutup Sementara"/"Buka Lagi" tanpa perlu buka Edit
+// Profil — dipakai pas cuti, kehabisan stok, atau memang lagi nggak jualan sama sekali,
+// biar toko dengan lokasi mangkal tetap nggak nyangkut "Buka" terus padahal tutup.
+window.__toggleDefaultOpen = async function (vendorId) {
+  const v = vendors.find(v => v.id === vendorId);
+  if (!v) return;
+  const newValue = v.default_open === false ? true : false;
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return;
+    const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: enteredPin.trim() });
+    if (!ok) { alert('PIN salah.'); return; }
+    myVendorPin = enteredPin.trim();
+  }
+  try {
+    await sb.from('vendors').update({ default_open: newValue }).eq('id', vendorId);
+    v.default_open = newValue;
+    showToast(newValue ? 'Toko ditandai Buka lagi ✅' : 'Toko ditandai Tutup Sementara');
+    renderPedagang();
+  } catch (e) {
+    alert('Gagal mengubah status: ' + (e.message || 'terjadi kesalahan.'));
+  }
+};
+
 window.__saveEditProfile = async function (vendorId) {
   const errEl = document.getElementById('edit-error');
   const name = document.getElementById('edit-name').value.trim();
@@ -2284,20 +2390,31 @@ window.__saveEditProfile = async function (vendorId) {
     const reminderTime = document.getElementById('edit-reminder').value.trim();
     const showWhatsapp = document.getElementById('edit-show-whatsapp').checked;
     const customTags = parseTagsInput(document.getElementById('edit-tags')?.value);
+    const scheduleText = document.getElementById('edit-schedule')?.value.trim() || null;
+    const locationNote = document.getElementById('edit-location-note')?.value.trim() || null;
+    const defaultOpenEl = document.getElementById('edit-default-open');
+    const defaultOpen = defaultOpenEl ? defaultOpenEl.checked : true;
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
       p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
     });
     if (error) throw error;
 
-    // Kolom reminder_time, show_whatsapp & custom_tags diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
-    await sb.from('vendors').update({ reminder_time: reminderTime || null, show_whatsapp: showWhatsapp, custom_tags: customTags }).eq('id', vendorId);
+    // Kolom reminder_time, show_whatsapp, custom_tags, lokasi mangkal, jadwal & status
+    // buka diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
+    await sb.from('vendors').update({
+      reminder_time: reminderTime || null, show_whatsapp: showWhatsapp, custom_tags: customTags,
+      fixed_lat: editFixedLat, fixed_lng: editFixedLng, schedule_text: scheduleText,
+      location_note: locationNote, default_open: defaultOpen,
+    }).eq('id', vendorId);
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur simpan
 
     const v = vendors.find(v => v.id === vendorId);
     v.name = name; v.categories = editCategories; v.category = editCategories[0] || null;
     v.mode_icon = editModeIcon; v.whatsapp = whatsapp; v.reminder_time = reminderTime || null;
     v.show_whatsapp = showWhatsapp; v.custom_tags = customTags;
+    v.fixed_lat = editFixedLat; v.fixed_lng = editFixedLng; v.schedule_text = scheduleText;
+    v.location_note = locationNote; v.default_open = defaultOpen;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -2386,6 +2503,17 @@ function renderPedagang() {
               <div class="reg-step-title">5. Terakhir!</div>
               <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:2px;">🔔 Ingin diingatkan buka lapak jam berapa? (opsional)</div>
               <input id="reg-reminder" type="time" value="${regReminderValue}" oninput="window.__updateRegField('reminder', this.value)" />
+
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:14px;">📍 Punya tempat mangkal yang konsisten? (opsional — cocok buat toko menetap ATAU keliling yang biasanya mangkal di titik yang sama). Kalau diisi, tokomu tetap kelihatan di peta/daftar pembeli walau lupa nyalain "mulai jualan".</div>
+              <button type="button" onclick="window.__captureRegLocation()" style="width:100%;margin-top:6px;padding:10px;background:var(--surface-2);color:var(--text);border-radius:12px;border:1px solid var(--stroke);font-weight:600;">📍 Simpan lokasi mangkal dari sini</button>
+              <div id="reg-location-status" style="font-size:11px;color:var(--text-faint);margin-top:4px;">${regFixedLat ? '✅ Lokasi tersimpan dari posisi sekarang.' : 'Belum diisi.'}</div>
+
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:12px;">🕐 Jadwal buka (opsional) — bebas, sesuaikan kebiasaan sendiri</div>
+              <input id="reg-schedule" type="text" value="${regScheduleValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('schedule', this.value)" placeholder="mis. Tiap malam 19.00 sampai habis, atau 24 jam" />
+
+              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">📝 Catatan lokasi (opsional)</div>
+              <input id="reg-location-note" type="text" value="${regLocationNoteValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('locationNote', this.value)" placeholder="mis. Depan gerbang sekolah, dekat pos satpam" />
+
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">◀ Kembali</button></div>
               <button data-reg-submit onclick="window.__registerVendor()">🟢 Daftar Sekarang</button>
             </div>
@@ -2435,6 +2563,19 @@ function renderPedagang() {
           `}
         </div>
       </div>
+
+      ${v.fixed_lat ? `
+        <div style="text-align:left;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <div>
+              <div style="font-size:12.5px;font-weight:700;">📍 Lokasi mangkal tetap: ${v.default_open !== false ? '<span style="color:#3DDC97;">Buka</span>' : '<span style="color:#f87171;">Tutup sementara</span>'}</div>
+              <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">${v.default_open !== false ? 'Tokomu kelihatan di peta/daftar pembeli walau belum nyalain status di bawah.' : 'Tokomu disembunyikan dari peta/daftar sampai kamu buka lagi.'}</div>
+              ${v.schedule_text ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(v.schedule_text)}</div>` : ''}
+            </div>
+            <button type="button" onclick="window.__toggleDefaultOpen('${v.id}')" style="flex-shrink:0;padding:8px 12px;border-radius:10px;border:none;font-weight:700;font-size:11.5px;${v.default_open !== false ? 'background:var(--surface-2);color:var(--text);' : 'background:#3DDC97;color:#fff;'}">${v.default_open !== false ? 'Tutup Sementara' : 'Buka Lagi'}</button>
+          </div>
+        </div>
+      ` : ''}
 
       ${!v.active ? `
         <div style="margin-top:16px;">
@@ -3199,8 +3340,8 @@ window.__registerVendor = async function () {
 
     const { data, error } = await sb
       .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags')
+      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null })
+      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open')
       .single();
 
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur pendaftaran
@@ -3221,6 +3362,7 @@ window.__registerVendor = async function () {
     selectedModeIcon = null;
     selectedCategories = [];
     regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
+    regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
