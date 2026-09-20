@@ -725,3 +725,25 @@ nav.bottom{
 .pr-loc{ display:flex; align-items:center; gap:3px; margin:0 10px; min-height:15px; font-size:11px; font-weight:600; color:var(--text-dim); }
 .pr-loc svg{ width:11px; height:11px; color:var(--brand); flex-shrink:0; }
 .pr-card:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+
+/* ===== Kotak Notifikasi (ikon lonceng di header) ===== */
+.nb-overlay{ position:fixed; inset:0; z-index:240; display:flex; align-items:flex-end; justify-content:center; background:rgba(32,26,19,.5); }
+.nb-sheet{
+  width:100%; max-width:520px; max-height:82vh; display:flex; flex-direction:column; background:var(--bg);
+  border-radius:22px 22px 0 0; box-shadow:0 -10px 40px -12px rgba(0,0,0,.35); padding-bottom:env(safe-area-inset-bottom);
+}
+.nb-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px 10px; }
+.nb-head h2{ margin:0; font-family:'Poppins', sans-serif; font-size:17px; font-weight:700; color:var(--text); }
+.nb-close{ background:none; border:none; font-size:18px; color:var(--text-dim); cursor:pointer; padding:6px 10px; }
+.nb-body{ overflow-y:auto; padding:0 16px 18px; display:flex; flex-direction:column; gap:10px; }
+.nb-perm{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px; border-radius:14px; background:var(--surface-2); font-size:12px; line-height:1.45; }
+.nb-perm-off{ display:block; color:var(--text-dim); }
+.nb-item{ position:relative; background:var(--surface); border:1px solid var(--stroke); border-radius:14px; padding:12px 14px; box-shadow:var(--shadow); }
+.nb-item.unread{ border-color:#3DDC97; }
+.nb-item.unread::after{ content:''; position:absolute; top:12px; right:12px; width:8px; height:8px; border-radius:50%; background:#E5251B; }
+.nb-time{ font-size:10.5px; color:var(--text-faint); margin-bottom:6px; }
+.nb-img{ width:100%; max-height:min(220px,34vh); object-fit:cover; border-radius:10px; margin-bottom:8px; display:block; }
+.nb-msg{ font-size:12.5px; line-height:1.5; white-space:pre-wrap; color:var(--text); }
+.nb-link{ display:inline-block; margin-top:6px; font-size:11.5px; font-weight:700; color:var(--brand); }
+.nb-empty{ text-align:center; padding:28px 8px; font-size:13px; color:var(--text-faint); }
