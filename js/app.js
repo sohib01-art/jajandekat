@@ -3220,49 +3220,40 @@ function renderPedagang() {
     : null;
   const durations = v.is_premium ? [30, 60, 120, 240, 480] : [30, 60, 120, 240];
 
+  const untilTxt = untilStr ? ` · tutup otomatis jam ${untilStr}` : '';
+  const jamLabel = v.buka_24jam ? 'Buka 24 jam' : ((v.jam_buka && v.jam_tutup) ? `${String(v.jam_buka).slice(0, 5)}–${String(v.jam_tutup).slice(0, 5)}` : 'Belum diatur');
+  const verifLabel = ({ verified: 'Terverifikasi ✓', pending: 'Sedang ditinjau', rejected: 'Ajukan ulang' })[v.verification_status] || 'Belum diajukan';
+  const ratingNum = v.rating_count > 0 ? `${v.rating_avg}` : '–';
+  const ratingLbl = v.rating_count > 0 ? `${v.rating_count} ulasan` : 'Belum ada ulasan';
+
   main.innerHTML = `
-    ${renderBannerSlider(getRelevantBannersForVendor(v))}
-    <div class="vendor-hero">
-      <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
-      <div class="vendor-hero-name">${v.name}</div>
-      <div class="status-banner ${v.active ? 'active' : 'inactive'}">
+    <button type="button" class="pd-greet" onclick="window.__openEditProfile('${v.id}')" aria-label="Edit profil toko">
+      <div class="pd-avatar" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
+      <div class="pd-greet-text">
+        <div class="pd-greet-name">Halo, ${escapeHtml(v.name)}</div>
+        <div class="pd-greet-sub">Terus semangat jualannya!</div>
+        ${(v.is_premium || v.verification_status === 'verified') ? `<div class="pd-badges">${v.is_premium ? '<span class="pd-badge prem">⭐ Premium</span>' : ''}${v.verification_status === 'verified' ? '<span class="pd-badge ver">✓ Terverifikasi</span>' : ''}</div>` : ''}
+      </div>
+      <span class="pd-chev" aria-hidden="true">›</span>
+    </button>
+
+    <div class="pd-status ${v.active ? 'on' : ''}">
+      <div class="pd-status-top">
+        <div class="pd-status-ic" aria-hidden="true">${v.active ? '🟢' : '🕐'}</div>
         <div>
-          <div class="status-banner-title">${v.active ? 'Sedang Jualan' : 'Belum Jualan Hari Ini'}</div>
-          <div class="status-banner-sub">${v.active ? 'Lokasi & status kamu kelihatan sama pembeli · tutup otomatis jam ' + untilStr : 'Tekan tombol di bawah buat mulai jualan sekarang'}</div>
-        </div>
-        <div class="status-banner-icon">
-          ${v.active ? `
-            <svg width="52" height="52" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="10" y="24" width="34" height="20" rx="3" stroke="white" stroke-width="2.5"/>
-              <path d="M10 30h34" stroke="white" stroke-width="2"/>
-              <circle cx="18" cy="48" r="4" stroke="white" stroke-width="2.5"/>
-              <circle cx="38" cy="48" r="4" stroke="white" stroke-width="2.5"/>
-              <path d="M44 28h6l4 8v8h-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 18h6l3 6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-            </svg>
-          ` : `
-            <svg width="52" height="52" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M40 12c-11 0-20 9-20 20s9 20 20 20c6 0 11.4-2.7 15-7-3 1.3-6.3 2-9.8 2-11 0-20-9-20-20 0-8.2 5-15.3 12-18.3-2.3-.5-4.7-.7-7.2-.7z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
-              <circle cx="46" cy="20" r="1.6" fill="white"/>
-              <circle cx="50" cy="28" r="1.2" fill="white"/>
-            </svg>
-          `}
+          <div class="pd-status-title">${v.active ? 'Sedang Jualan' : 'Belum Jualan Hari Ini'}</div>
+          <div class="pd-status-sub">${v.active ? 'Kelihatan oleh pembeli' + untilTxt : 'Toko kamu belum aktif berjualan.'}</div>
         </div>
       </div>
-
-      ${v.fixed_lat ? `
-        <div style="text-align:left;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-            <div>
-              <div style="font-size:12.5px;font-weight:700;">📍 Lokasi mangkal tetap: ${v.default_open !== false ? '<span style="color:#3DDC97;">Buka</span>' : '<span style="color:#f87171;">Tutup sementara</span>'}</div>
-              <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">${v.default_open !== false ? 'Tokomu kelihatan di peta/daftar pembeli walau belum nyalain status di bawah.' : 'Tokomu disembunyikan dari peta/daftar sampai kamu buka lagi.'}</div>
-              ${vendorScheduleLabel(v) ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
-            </div>
-            <button type="button" onclick="window.__toggleDefaultOpen('${v.id}')" style="flex-shrink:0;padding:8px 12px;border-radius:10px;border:none;font-weight:700;font-size:11.5px;${v.default_open !== false ? 'background:var(--surface-2);color:var(--text);' : 'background:#3DDC97;color:#fff;'}">${v.default_open !== false ? 'Tutup Sementara' : 'Buka Lagi'}</button>
-          </div>
+      <button type="button" class="pd-start ${v.active ? 'stop' : ''}" onclick="window.__toggleStatus()">${v.active ? '⏹ SELESAI JUALAN' : '▶ MULAI JUALAN'}</button>
+      ${!v.active ? `
+        <div class="pd-chip-label">Berapa lama jualan?</div>
+        <div class="pd-chips" role="group" aria-label="Durasi jualan">
+          ${durations.map(m => `<button type="button" class="pd-chip ${pickedDuration === m ? 'picked' : ''}" aria-pressed="${pickedDuration === m}" onclick="window.__setDuration(${m})">${m < 60 ? m + ' mnt' : (m / 60) + ' jam'}</button>`).join('')}
+          ${v.is_premium ? '' : `<button type="button" class="pd-chip locked" onclick="showToast('Durasi 8 jam khusus akun Premium ⭐')">🔒 8 jam</button>`}
         </div>
       ` : ''}
-
+      <div class="pd-photo">
       ${!v.active ? `
         <div style="margin-top:16px;">
           <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="window.__onPhotoSelected(event)" />
@@ -3279,37 +3270,80 @@ function renderPedagang() {
         </div>
       ` : ''}
 
-      <button class="big-toggle ${v.active ? 'on' : 'off'}" onclick="window.__toggleStatus()">
-        ${v.active
-          ? '🔴 SELESAI JUALAN <small>Tekan untuk berhenti</small>'
-          : '🟢 SAYA JUALAN <small>Lokasi & status akan aktif</small>'}
-      </button>
+      </div>
+    </div>
 
-      ${!v.active ? `
-        <div style="font-size:11px;color:var(--text-faint);margin-top:14px;text-align:left;">Berapa lama Anda jualan?</div>
-        <div class="duration-row">
-          ${durations.map(m => `
-            <button class="${pickedDuration === m ? 'picked' : ''}" onclick="window.__setDuration(${m})">
-              ${m < 60 ? m + ' mnt' : (m / 60) + ' jam'}
-            </button>
-          `).join('')}
+    <div class="pd-mangkal">
+      ${v.fixed_lat ? `
+        <div style="text-align:left;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <div>
+              <div style="font-size:12.5px;font-weight:700;">📍 Lokasi mangkal tetap: ${v.default_open !== false ? '<span style="color:#3DDC97;">Buka</span>' : '<span style="color:#f87171;">Tutup sementara</span>'}</div>
+              <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">${v.default_open !== false ? 'Tokomu kelihatan di peta/daftar pembeli walau belum nyalain status di bawah.' : 'Tokomu disembunyikan dari peta/daftar sampai kamu buka lagi.'}</div>
+              ${vendorScheduleLabel(v) ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
+            </div>
+            <button type="button" onclick="window.__toggleDefaultOpen('${v.id}')" style="flex-shrink:0;padding:8px 12px;border-radius:10px;border:none;font-weight:700;font-size:11.5px;${v.default_open !== false ? 'background:var(--surface-2);color:var(--text);' : 'background:#3DDC97;color:#fff;'}">${v.default_open !== false ? 'Tutup Sementara' : 'Buka Lagi'}</button>
+          </div>
         </div>
       ` : ''}
+
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">📱</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">QR Code & Link Pengikut Baru</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Siapa saja yang scan atau klik ini langsung otomatis mengikuti Anda</div>
-        </div>
-      </div>
-      <div id="vendor-qr-box" style="display:flex;justify-content:center;background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;"></div>
-      <button class="follow-btn" style="width:100%;padding:11px;background:#25D366;color:#fff;" onclick="window.__shareStatusImage('${v.id}','${v.name.replace(/'/g, "\\'")}')">
-        🖼️ Bagikan
-      </button>
+    ${renderBannerSlider(getRelevantBannersForVendor(v))}
+
+    <div class="pd-stats">
+      <div class="pd-stat"><div class="pd-stat-ic">👥</div><div class="pd-stat-num" id="pd-stat-follow">…</div><div class="pd-stat-lbl">Pengikut</div></div>
+      <div class="pd-stat"><div class="pd-stat-ic">⭐</div><div class="pd-stat-num">${ratingNum}</div><div class="pd-stat-lbl">${ratingLbl}</div></div>
+      <div class="pd-stat"><div class="pd-stat-ic">🔗</div><div class="pd-stat-num" id="pd-stat-ref">…</div><div class="pd-stat-lbl">Dari link kamu</div></div>
     </div>
+    <button type="button" class="pd-share" onclick="window.__openShareShop('${v.id}')">
+      <span class="pd-share-ic" aria-hidden="true">📱</span>
+      <span class="pd-share-text"><b>Bagikan Toko</b><small>QR &amp; link supaya pembeli otomatis mengikuti kamu</small></span>
+      <span class="pd-chev" aria-hidden="true">›</span>
+    </button>
+
+    <div class="pd-sec"><h2>Kelola Toko</h2></div>
+    <div class="pd-tiles">
+      <button type="button" class="pd-tile" onclick="window.__openProductManager('${v.id}')"><span class="pd-tile-ic">📦</span><span class="pd-tile-lbl">Produk</span><span class="pd-tile-sub">Menu &amp; harga</span></button>
+      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">🏪</span><span class="pd-tile-lbl">Profil Toko</span><span class="pd-tile-sub">Nama &amp; kategori</span></button>
+      <button type="button" class="pd-tile" onclick="window.__pdOpenJam('${v.id}')"><span class="pd-tile-ic">🕐</span><span class="pd-tile-lbl">Jam Operasional</span><span class="pd-tile-sub">${jamLabel}</span></button>
+      <button type="button" class="pd-tile ${v.verification_status === 'verified' ? 'ok' : ''}" onclick="window.__pdVerifikasi('${v.id}')"><span class="pd-tile-ic">🛡️</span><span class="pd-tile-lbl">Verifikasi</span><span class="pd-tile-sub">${verifLabel}</span></button>
+    </div>
+
+    <div class="vendor-hero" id="vendor-promo-card" style="margin-top:14px; text-align:left;">
+      ${isPromoActive(v) ? `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:20px;">🔥</span>
+          <div>
+            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promo Lokal Aktif</div>
+            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} — kartu Anda disorot & tampil lebih atas</div>
+          </div>
+        </div>
+      ` : `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="font-size:20px;">🔥</span>
+          <div>
+            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promosi Lokal Harian</div>
+            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sorot kartu Anda ke posisi atas mulai Rp10rb/hari — cocok buat hari ramai/dagangan baru</div>
+          </div>
+        </div>
+        <button onclick="window.__requestPromo('${v.id}')"
+           class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:#F5A623;color:#fff;border:none;">
+          💬 Pasang Promosi via WhatsApp
+        </button>
+      `}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke);">
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;">Tulisan promo (tampil di kartu Anda saat promo aktif) — contoh: "Diskon 20% khusus hari ini!"</div>
+        <div style="display:flex;gap:6px;">
+          <input id="promo-text-input" type="text" maxlength="80" oninput="window.__promoTextCount(this)" value="${(v.promo_text_pending || v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Tulis promo Anda di sini..." style="flex:1;" />
+          <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;">💾</button>
+        </div>
+        <div id="promo-text-count" style="font-size:11px;margin-top:4px;color:${promoTextCountInfo((v.promo_text_pending || v.promo_text || '').length).color};">${promoTextCountInfo((v.promo_text_pending || v.promo_text || '').length).text}</div>
+        <div id="promo-text-status">${promoTextStatusHtml(v)}</div>
+        <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
+      </div>
+    </div>
+
 
     ${CHAT_DALAM_APP_AKTIF ? `
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
@@ -3324,19 +3358,18 @@ function renderPedagang() {
     </div>
     ` : ''}
 
+
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">🎯</span>
+        <span style="font-size:20px;">💬</span>
         <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kampanye: Rekrut & Dapat Premium Gratis</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Ajak 1 pedagang lain (yang benar-benar aktif jualan) + 10 pembeli baru lewat link Anda → 1 bulan Premium GRATIS</div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ulasan dari Pembeli (Privat)</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Cuma Anda & admin yang bisa lihat ini — jadikan masukan buat perbaikan</div>
         </div>
       </div>
-      <div id="campaign-progress" style="margin-bottom:4px;">Memuat progres...</div>
-      <div style="font-size:11px;color:var(--text-faint);text-align:center;padding-top:6px;border-top:1px solid var(--stroke);margin-top:6px;">
-        💡 Pakai tombol <b style="color:var(--brand);">"Bagikan"</b> di atas untuk kejar target ini
-      </div>
+      <div id="my-reviews-list" style="font-size:12px;color:var(--text-faint);">Memuat ulasan...</div>
     </div>
+
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       ${v.is_premium ? `
@@ -3387,105 +3420,110 @@ function renderPedagang() {
       `}
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">📦</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kelola Produk</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Tambahkan menu/dagangan Anda supaya pembeli bisa lihat sebelum datang</div>
-        </div>
-      </div>
-      <button onclick="window.__openProductManager('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;border:none;">
-        📦 Kelola Produk Saya
-      </button>
-    </div>
 
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;color:var(--navy);">✓</span>
+        <span style="font-size:20px;">🎯</span>
         <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Verifikasi Toko</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge navy dan lebih dipercaya pembeli</div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kampanye: Rekrut & Dapat Premium Gratis</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Ajak 1 pedagang lain (yang benar-benar aktif jualan) + 10 pembeli baru lewat link Anda → 1 bulan Premium GRATIS</div>
         </div>
       </div>
-      ${v.verification_status === 'verified' ? `
-        <div style="background:var(--navy-dim);border:1px solid #B9C4DA;border-radius:12px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:700;">✓ Toko Anda sudah terverifikasi</div>
-      ` : v.verification_status === 'pending' ? `
-        <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;font-size:12px;color:#8A6D00;">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
-      ` : `
-        ${v.verification_status === 'rejected' ? `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:12px;padding:10px 12px;font-size:11.5px;color:#991B1B;margin-bottom:10px;">Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.</div>` : ''}
-        <button onclick="window.__openVerificationForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
-          ✅ Ajukan Verifikasi Toko
-        </button>
-      `}
-    </div>
-
-    <div class="vendor-hero" id="vendor-promo-card" style="margin-top:14px; text-align:left;">
-      ${isPromoActive(v) ? `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:20px;">🔥</span>
-          <div>
-            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promo Lokal Aktif</div>
-            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} — kartu Anda disorot & tampil lebih atas</div>
-          </div>
-        </div>
-      ` : `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="font-size:20px;">🔥</span>
-          <div>
-            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promosi Lokal Harian</div>
-            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sorot kartu Anda ke posisi atas mulai Rp10rb/hari — cocok buat hari ramai/dagangan baru</div>
-          </div>
-        </div>
-        <button onclick="window.__requestPromo('${v.id}')"
-           class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:#F5A623;color:#fff;border:none;">
-          💬 Pasang Promosi via WhatsApp
-        </button>
-      `}
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke);">
-        <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;">Tulisan promo (tampil di kartu Anda saat promo aktif) — contoh: "Diskon 20% khusus hari ini!"</div>
-        <div style="display:flex;gap:6px;">
-          <input id="promo-text-input" type="text" maxlength="80" oninput="window.__promoTextCount(this)" value="${(v.promo_text_pending || v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Tulis promo Anda di sini..." style="flex:1;" />
-          <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;">💾</button>
-        </div>
-        <div id="promo-text-count" style="font-size:11px;margin-top:4px;color:${promoTextCountInfo((v.promo_text_pending || v.promo_text || '').length).color};">${promoTextCountInfo((v.promo_text_pending || v.promo_text || '').length).text}</div>
-        <div id="promo-text-status">${promoTextStatusHtml(v)}</div>
-        <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
+      <div id="campaign-progress" style="margin-bottom:4px;">Memuat progres...</div>
+      <div style="font-size:11px;color:var(--text-faint);text-align:center;padding-top:6px;border-top:1px solid var(--stroke);margin-top:6px;">
+        💡 Pakai <b style="color:var(--brand);">"Bagikan Toko"</b> di atas untuk kejar target ini
       </div>
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">💬</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ulasan dari Pembeli (Privat)</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Cuma Anda & admin yang bisa lihat ini — jadikan masukan buat perbaikan</div>
-        </div>
-      </div>
-      <div id="my-reviews-list" style="font-size:12px;color:var(--text-faint);">Memuat ulasan...</div>
-    </div>
 
-    <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
-    <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openFaqModal()">❓ Bantuan & FAQ</button>
+    <button type="button" class="pd-help" onclick="window.__openFaqModal()">
+      <span class="pd-help-ic" aria-hidden="true">?</span>
+      <span class="pd-share-text"><b>Butuh Bantuan?</b><small>Lihat FAQ atau hubungi kami</small></span>
+      <span class="pd-chev" aria-hidden="true">›</span>
+    </button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
   `;
 
   initAnnSlider();
-  renderVendorQr(v.id);
   loadMyReviews(v.id);
 
-  if (v.is_premium) {
-    sb.rpc('jd_count_followers', { p_vendor_id: v.id }).then(({ data }) => {
-      const el = document.getElementById('premium-follow-count');
-      if (el) el.textContent = (data && data[0] && data[0].total) ?? 0;
-    });
-  }
+  // Angka pengikut & yang datang lewat link/QR — dipakai kartu ringkasan (dan kartu Premium kalau ada).
+  sb.rpc('jd_count_followers', { p_vendor_id: v.id }).then(({ data, error }) => {
+    const row = data && data[0];
+    const put = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    put('pd-stat-follow', error ? '–' : ((row && row.total) ?? 0));
+    put('pd-stat-ref', error ? '–' : ((row && row.via_referral_count) ?? 0));
+    put('premium-follow-count', error ? '–' : ((row && row.total) ?? 0));
+  });
 
   loadCampaignProgress(v.id);
   loadVendorChatInbox(v.id);
 }
+
+// ---------- DASBOR PEDAGANG: aksi ubin & sheet Bagikan Toko ----------
+// QR & tombol bagikan dulu satu kartu besar di dasbor; sekarang dipindah ke sheet supaya dasbor ringkas.
+window.__openShareShop = function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  document.getElementById('vendor-sheet-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'vendor-sheet-overlay';
+  overlay.className = 'vs-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) window.__closeVendorSheet(); };
+  overlay.innerHTML = `
+    <div class="vs-sheet" role="dialog" aria-modal="true" aria-label="Bagikan toko">
+      <div class="vs-body">
+        <div class="pd-sheet-head">
+          <div class="vs-title">Bagikan Toko</div>
+          <button type="button" class="pd-sheet-x" aria-label="Tutup" onclick="window.__closeVendorSheet()">✕</button>
+        </div>
+        <div class="vs-line vs-muted" style="margin-top:6px;">Siapa saja yang scan atau klik link ini otomatis mengikuti tokomu.</div>
+        <div id="vendor-qr-box" class="pd-qr-box"></div>
+        <div class="vs-actions">
+          <button type="button" class="vs-btn wa wide" onclick="window.__pdShareImage('${v.id}')">🖼️ Bagikan dengan gambar</button>
+          <button type="button" class="vs-btn wide" onclick="window.__copyShopLink('${v.id}')">🔗 Salin link toko</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  renderVendorQr(v.id);
+};
+
+// Nama toko diambil dari data (bukan dilempar lewat atribut onclick) supaya tanda kutip di nama tidak merusak.
+window.__pdShareImage = function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (v) window.__shareStatusImage(vendorId, v.name);
+};
+
+window.__copyShopLink = async function (vendorId) {
+  const link = followLinkFor(vendorId);
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast('Link toko disalin ✓');
+  } catch (e) {
+    window.prompt('Salin link toko:', link);
+  }
+};
+
+window.__pdOpenJam = function (vendorId) {
+  window.__openEditProfile(vendorId);
+  setTimeout(() => {
+    const el = document.getElementById('edit-hari-label');
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 250);
+};
+
+window.__pdVerifikasi = function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  if (v.verification_status === 'verified') { showToast('Toko kamu sudah terverifikasi ✓'); return; }
+  if (v.verification_status === 'pending') { showToast('Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja).'); return; }
+  if (v.verification_status === 'rejected') showToast('Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.');
+  window.__openVerificationForm(vendorId);
+};
 
 async function loadVendorChatInbox(vendorId) {
   const el = document.getElementById('vendor-chat-inbox');
