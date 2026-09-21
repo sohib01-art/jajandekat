@@ -35,6 +35,8 @@ let referralCodeFromLink = null;
 // Saklar fitur chat dalam app. false = disembunyikan dari tampilan (fokus ke chat WhatsApp).
 // Ubah ke true untuk menghidupkannya lagi. Di server (RLS Supabase) chat tetap dibatasi khusus pedagang Premium.
 const CHAT_DALAM_APP_AKTIF = false;
+// Versi Ketentuan Layanan & Kebijakan Privasi yang disetujui pedagang (samakan dengan angka "Versi" di terms.html/privacy.html).
+const LEGAL_VERSION = '2';
 
 // ---------- WEB PUSH: minta izin & simpan langganan ----------
 function urlBase64ToUint8Array(base64String) {
@@ -381,6 +383,7 @@ window.__openFaqModal = async function () {
     <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:80vh;overflow-y:auto;box-sizing:border-box;">
       <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:14px;">❓ Bantuan & FAQ</div>
       <div id="faq-list">${'<div style="color:var(--text-faint);font-size:12.5px;">Memuat FAQ...</div>'}</div>
+      <div style="text-align:center;font-size:11.5px;margin-top:12px;"><a href="privacy.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline;">Kebijakan Privasi</a> &nbsp;·&nbsp; <a href="terms.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline;">Ketentuan Layanan</a></div>
       <button onclick="document.getElementById('faq-modal-overlay').remove()" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:13px;">Tutup</button>
     </div>
   `;
@@ -720,12 +723,15 @@ window.__submitVerification = async function (vendorId) {
 
   errEl.textContent = 'Mengunggah & mengirim pengajuan...';
   try {
+    // Aturan penyimpanan KTP hanya mengizinkan unggahan dari perangkat pemilik toko: pastikan tertaut dulu.
+    try { await sb.rpc('link_owner_device', { p_vendor_id: vendorId, p_pin: myVendorPin || '', p_device_id: deviceId }); } catch (e) {}
     const ktpUrl = await uploadKtpImage(vendorId, pendingKtpFile);
     const { error } = await sb.rpc('submit_vendor_verification', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '',
       p_business_name: businessName, p_business_nib: nib, p_ktp_photo_url: ktpUrl,
     });
     if (error) throw error;
+    Promise.resolve(sb.rpc('record_vendor_consent', { p_vendor_id: vendorId, p_pin: myVendorPin || '', p_kind: 'ktp', p_version: LEGAL_VERSION })).catch(() => {});
 
     const v = vendors.find(v => v.id === vendorId);
     if (v) v.verification_status = 'pending';
@@ -762,7 +768,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,promo_text_pending,promo_text_note,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp:wa_public,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,promo_text_pending,promo_text_note,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -888,7 +894,7 @@ async function uploadKtpImage(vendorId, file) {
   const blob = await compressImage(file, 1200, 0.75, false);
   const path = `${vendorId}/${Date.now()}-ktp.jpg`;
   const { error } = await sb.storage.from('vendor-verifications').upload(path, blob, {
-    contentType: 'image/jpeg', upsert: true
+    contentType: 'image/jpeg', upsert: false // nama berkas unik (timestamp), tidak perlu menimpa
   });
   if (error) throw error;
   const { data } = sb.storage.from('vendor-verifications').getPublicUrl(path);
@@ -938,6 +944,7 @@ function subscribeRealtime() {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vendors' }, (payload) => {
       const updated = normalizeExpiry(payload.new);
       delete updated.pin; // lapisan pertahanan tambahan — jangan sampai PIN ikut tersebar lewat realtime
+      if ('wa_public' in updated) { updated.whatsapp = updated.wa_public; delete updated.wa_public; } // nomor WA hanya jika ditampilkan pedagang
       const idx = vendors.findIndex(v => v.id === updated.id);
       if (idx > -1) {
         const wasActive = vendors[idx].active;
@@ -2922,9 +2929,25 @@ let editCatPickerQuery = '';
 let editFixedLat = null;
 let editFixedLng = null;
 
-window.__openEditProfile = function (vendorId) {
+// Nomor WA yang disembunyikan tidak ada di daftar publik; pemilik toko mengambilnya sendiri lewat PIN.
+async function fetchMyWhatsapp(vendorId) {
+  try {
+    if (myVendorPin === null) {
+      const entered = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+      if (entered === null) return null;
+      const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: entered.trim() });
+      if (!ok) { alert('PIN salah.'); return null; }
+      myVendorPin = entered.trim();
+    }
+    const { data } = await sb.rpc('get_my_whatsapp', { p_vendor_id: vendorId, p_pin: myVendorPin });
+    return data || null;
+  } catch (e) { return null; }
+}
+
+window.__openEditProfile = async function (vendorId) {
   const v = vendors.find(v => v.id === vendorId);
   if (!v) return;
+  if (!v.whatsapp) { const wa = await fetchMyWhatsapp(vendorId); if (wa) v.whatsapp = wa; }
   editCategories = [...(v.categories || [])];
   editModeIcon = v.mode_icon || null;
   editCatPickerQuery = '';
@@ -3077,6 +3100,7 @@ window.__saveEditProfile = async function (vendorId) {
   const whatsapp = normalizeWhatsapp(document.getElementById('edit-whatsapp').value.trim());
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
+  if (!whatsapp) { errEl.textContent = 'Nomor WhatsApp wajib diisi (jadi penanda akun Anda).'; return; }
   if (editCategories.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
 
   // Sesi baru belum punya PIN di memori -> minta sekali (sama seperti alur toggle status)
@@ -4178,9 +4202,10 @@ window.__registerVendor = async function () {
   if (!/^\d{6}$/.test(pin)) { errEl.textContent = 'PIN wajib 6 angka.'; return; }
 
   // Cegah satu nomor WA didaftarkan dua kali
-  const dupe = vendors.find(v => v.whatsapp === whatsapp);
-  if (dupe) {
-    errEl.textContent = `Nomor ini sudah terdaftar sebagai "${dupe.name}". Masuk pakai PIN di bawah, atau hubungi admin kalau lupa PIN.`;
+  const { data: dupeId } = await sb.rpc('jd_find_vendor_by_wa', { p_wa: whatsapp });
+  if (dupeId) {
+    const dupe = vendors.find(v => v.id === dupeId);
+    errEl.textContent = `Nomor ini sudah terdaftar${dupe ? ` sebagai "${dupe.name}"` : ''}. Masuk pakai PIN di bawah, atau hubungi admin kalau lupa PIN.`;
     return;
   }
 
@@ -4243,6 +4268,7 @@ window.__registerVendor = async function () {
     regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
     regHariBukaValue = [0, 1, 2, 3, 4, 5, 6]; regTutupLiburValue = false;
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
+    Promise.resolve(sb.rpc('record_vendor_consent', { p_vendor_id: data.id, p_pin: pin, p_kind: 'daftar', p_version: LEGAL_VERSION })).catch(() => {});
     ensurePushSubscription();
     renderPedagang();
   } catch (e) {
@@ -4276,8 +4302,10 @@ window.__pickVendor = async function () {
   const whatsapp = normalizeWhatsapp((whatsappInput ? whatsappInput.value : pickWhatsappValue).trim());
   if (!whatsapp) { errEl.textContent = 'Isi nomor WhatsApp yang terdaftar.'; return; }
 
-  const vendor = vendors.find(v => v.whatsapp === whatsapp);
-  if (!vendor) { errEl.textContent = 'Nomor ini belum terdaftar. Cek lagi atau daftar baru di bawah.'; return; }
+  const { data: foundId, error: findErr } = await sb.rpc('jd_find_vendor_by_wa', { p_wa: whatsapp });
+  if (findErr) { errEl.textContent = 'Gagal memeriksa nomor: ' + findErr.message; return; }
+  if (!foundId) { errEl.textContent = 'Nomor ini belum terdaftar. Cek lagi atau daftar baru di bawah.'; return; }
+  const vendor = vendors.find(v => v.id === foundId) || { id: foundId };
 
   const enteredPin = pinInput ? pinInput.value.trim() : '';
   errEl.textContent = 'Memeriksa...';
@@ -4791,7 +4819,11 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at').order('created_at', { ascending: false });
+  if (!error && data) {
+    const priv = await adminFetchPrivateVendors();
+    data.forEach(v => { const p = priv[v.id]; if (p) { v.whatsapp = p.whatsapp; v.location_error_message = p.location_error_message; v.location_error_at = p.location_error_at; } });
+  }
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -5033,8 +5065,9 @@ async function loadAdminRequests() {
     if (error) throw error;
     if (data && data.error) throw new Error(data.error);
     const rows = (data.requests || []).filter(r => r.status === 'pending');
-    const { data: pendTexts } = await sb.from('vendors').select('id,name,whatsapp,category,promo_text,promo_text_pending,promo_until').not('promo_text_pending', 'is', null).order('name');
+    const { data: pendTexts } = await sb.from('vendors').select('id,name,category,promo_text,promo_text_pending,promo_until').not('promo_text_pending', 'is', null).order('name');
     const textRows = pendTexts || [];
+    if (textRows.length) { const priv = await adminFetchPrivateVendors(); textRows.forEach(t => { if (priv[t.id]) t.whatsapp = priv[t.id].whatsapp; }); }
     if (rows.length === 0 && textRows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada permintaan masuk. 👍</div>'; return; }
     el.innerHTML = textRows.map(renderPromoReviewCardHtml).join('') + rows.map(r => {
       const v = r.vendors;
@@ -5976,6 +6009,16 @@ window.__updateReportStatus = async function (reportId, status) {
     alert('Gagal update status: ' + e.message);
   }
 };
+
+// Data privat pedagang untuk admin (nomor WA asli, galat lokasi) — hanya lewat edge function + password admin.
+async function adminFetchPrivateVendors() {
+  try {
+    const { data } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_vendor_private' } });
+    const map = {};
+    ((data && data.vendors) || []).forEach(r => { map[r.id] = r; });
+    return map;
+  } catch (e) { return {}; }
+}
 
 async function callAdminAction(action, vendorId, extra = {}) {
   const { data, error } = await sb.functions.invoke('admin-action', {
