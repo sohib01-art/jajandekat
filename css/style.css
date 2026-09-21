@@ -880,9 +880,3 @@ nav.bottom{
 /* --- Persetujuan saat mendaftar --- */
 .reg-consent{ font-size:12px; line-height:1.5; color:var(--text-soft); margin:12px 0 4px; }
 .reg-consent a{ color:var(--brand); font-weight:600; }
-
-/* --- Checkbox persetujuan eksplisit (registrasi & verifikasi KTP) --- */
-.reg-consent-check{ display:flex; align-items:flex-start; gap:8px; font-size:12px; line-height:1.5; color:var(--text-soft); margin:12px 0 4px; cursor:pointer; }
-.reg-consent-check input[type="checkbox"]{ width:17px; height:17px; flex-shrink:0; margin-top:1px; accent-color:var(--brand); }
-.reg-consent-check a{ color:var(--brand); font-weight:600; }
-[data-reg-submit]:disabled, [data-verify-submit]:disabled{ opacity:.5; cursor:not-allowed; }
