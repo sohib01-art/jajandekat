@@ -3651,7 +3651,8 @@ function setPedagangDot(n) {
 async function checkMyPendingReviews() {
   if (!sb || !myVendorId) { lastPendingNotified = 0; setPedagangDot(0); return 0; }
   try {
-    const { data: n, error } = await sb.rpc('count_my_pending_reviews');
+    // Per toko yang sedang dibuka (bukan gabungan semua toko di perangkat ini) supaya angkanya sama dengan daftar ulasannya.
+    const { data: n, error } = await sb.rpc('jd_count_my_pending_reviews', { p_vendor_id: myVendorId });
     if (error) return 0;
     const cnt = n || 0;
     setPedagangDot(cnt);
