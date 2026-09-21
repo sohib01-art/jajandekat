@@ -2929,6 +2929,64 @@ let editCatPickerQuery = '';
 let editFixedLat = null;
 let editFixedLng = null;
 
+// ---------- PERSETUJUAN ULANG (pedagang yang belum menyetujui versi Ketentuan/Kebijakan terbaru) ----------
+let legalConsentCheckedFor = null;
+
+async function maybePromptLegalConsent() {
+  if (!myVendorId || legalConsentCheckedFor === myVendorId) return;
+  legalConsentCheckedFor = myVendorId;
+  try {
+    const { data: needs } = await sb.rpc('jd_vendor_needs_consent', { p_vendor_id: myVendorId, p_version: LEGAL_VERSION });
+    if (needs === true) showLegalConsentModal(myVendorId);
+  } catch (e) {}
+}
+
+function showLegalConsentModal(vendorId) {
+  document.getElementById('legal-consent-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'legal-consent-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:245;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:85vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">📄 Ketentuan &amp; Kebijakan Privasi diperbarui</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.5;">Kami memperbarui cara kami menjelaskan data yang dipakai dan aturan main JajanDekat. Mohon baca dan setujui untuk melanjutkan sebagai pedagang.</div>
+      <label class="reg-consent-check">
+        <input type="checkbox" id="legal-consent-checkbox" onchange="document.getElementById('legal-consent-btn').disabled = !this.checked" />
+        <span>Saya berusia 18 tahun ke atas dan menyetujui <a href="terms.html" target="_blank" rel="noopener">Ketentuan Layanan</a> serta <a href="privacy.html" target="_blank" rel="noopener">Kebijakan Privasi</a> JajanDekat.</span>
+      </label>
+      <div id="legal-consent-error" style="color:#f87171;font-size:12px;margin:8px 0;"></div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('legal-consent-overlay').remove(); window.__logoutVendor();" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Tidak setuju (keluar)</button>
+        <button id="legal-consent-btn" disabled onclick="window.__acceptLegalConsent('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Setuju &amp; lanjut</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+window.__acceptLegalConsent = async function (vendorId) {
+  const errEl = document.getElementById('legal-consent-error');
+  const btn = document.getElementById('legal-consent-btn');
+  if (!document.getElementById('legal-consent-checkbox').checked) return;
+  errEl.textContent = '';
+  try {
+    if (myVendorPin === null) {
+      const entered = prompt('Masukkan PIN akun Anda untuk konfirmasi persetujuan:');
+      if (entered === null) return;
+      const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: entered.trim() });
+      if (!ok) { errEl.textContent = 'PIN salah.'; return; }
+      myVendorPin = entered.trim();
+    }
+    btn.disabled = true;
+    const { error } = await sb.rpc('record_vendor_consent', { p_vendor_id: vendorId, p_pin: myVendorPin, p_kind: 'daftar', p_version: LEGAL_VERSION });
+    if (error) throw error;
+    document.getElementById('legal-consent-overlay')?.remove();
+  } catch (e) {
+    errEl.textContent = 'Gagal menyimpan persetujuan: ' + (e.message || e);
+    btn.disabled = false;
+  }
+};
+
 // Nomor WA yang disembunyikan tidak ada di daftar publik; pemilik toko mengambilnya sendiri lewat PIN.
 async function fetchMyWhatsapp(vendorId) {
   try {
@@ -3161,6 +3219,7 @@ window.__saveEditProfile = async function (vendorId) {
 
 function renderPedagang() {
   refreshBell();
+  maybePromptLegalConsent();
   if (!myVendorId) {
     main.innerHTML = `
       ${vendors.length ? `
@@ -4269,6 +4328,7 @@ window.__registerVendor = async function () {
     regHariBukaValue = [0, 1, 2, 3, 4, 5, 6]; regTutupLiburValue = false;
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
     Promise.resolve(sb.rpc('record_vendor_consent', { p_vendor_id: data.id, p_pin: pin, p_kind: 'daftar', p_version: LEGAL_VERSION })).catch(() => {});
+    legalConsentCheckedFor = data.id; // baru saja menyetujui lewat checkbox pendaftaran; jangan ditanya lagi
     ensurePushSubscription();
     renderPedagang();
   } catch (e) {
