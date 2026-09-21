@@ -666,13 +666,18 @@ window.__openVerificationForm = async function (vendorId) {
       <div id="verify-ktp-zone" onclick="document.getElementById('verify-ktp-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         📷 Ambil/unggah foto KTP
       </div>
-      <div style="font-size:10px;color:var(--text-faint);margin:-6px 0 10px;">Foto KTP hanya dilihat admin untuk verifikasi, tidak ditampilkan ke publik.</div>
+      <div style="font-size:10px;color:var(--text-faint);margin:-6px 0 10px;">Foto KTP hanya dilihat admin untuk verifikasi, disimpan privat, dan tidak ditampilkan ke publik. <a href="privacy.html#simpan" target="_blank" rel="noopener" style="color:var(--brand);">Baca Kebijakan Privasi</a>.</div>
+
+      <label class="reg-consent-check">
+        <input type="checkbox" id="verify-consent-checkbox" onchange="window.__updateVerifySubmitState()" />
+        <span>Saya setuju foto KTP dan data ini dipakai khusus untuk verifikasi toko, sesuai <a href="privacy.html#simpan" target="_blank" rel="noopener">Kebijakan Privasi</a>.</span>
+      </label>
 
       <div id="verify-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
 
       <div style="display:flex;gap:10px;">
         <button onclick="document.getElementById('verify-form-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
-        <button onclick="window.__submitVerification('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Ajukan Verifikasi</button>
+        <button data-verify-submit disabled onclick="window.__submitVerification('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Ajukan Verifikasi</button>
       </div>
     </div>
   `;
@@ -689,11 +694,20 @@ window.__onKtpPhotoSelected = function (event) {
   if (zone) zone.innerHTML = `<span style="color:var(--brand);">✅ Foto KTP terpilih — tap untuk ganti</span>`;
 };
 
+window.__updateVerifySubmitState = function () {
+  const box = document.getElementById('verify-consent-checkbox');
+  const btn = document.querySelector('[data-verify-submit]');
+  const checked = !!(box && box.checked);
+  if (btn) { btn.disabled = !checked; btn.style.opacity = checked ? '1' : '.5'; }
+};
+
 window.__submitVerification = async function (vendorId) {
   const errEl = document.getElementById('verify-error');
   const businessName = document.getElementById('verify-business-name').value.trim();
   const nib = document.getElementById('verify-nib').value.trim();
+  const consentBox = document.getElementById('verify-consent-checkbox');
 
+  if (!consentBox || !consentBox.checked) { errEl.textContent = 'Centang dulu persetujuan penggunaan foto KTP.'; return; }
   if (!pendingKtpFile) { errEl.textContent = 'Foto KTP wajib diunggah.'; return; }
 
   if (myVendorPin === null) {
@@ -2516,6 +2530,7 @@ let regJamTutupValue = '21:00';
 let regBuka24Value = false;
 let regHariBukaValue = [0, 1, 2, 3, 4, 5, 6];
 let regTutupLiburValue = false;
+let regConsentChecked = false;
 let catPickerQuery = '';
 let regStep = 0;
 let knownTagSuggestions = [];
@@ -3202,7 +3217,11 @@ function renderPedagang() {
               <div class="reg-step-title">5. Lokasi &amp; jam buka</div>
               <div class="reg-step-sub">Semua bagian ini opsional dan bisa diubah nanti di Edit Profil Toko.</div>
               ${renderJadwalFields({ p: 'reg', track: true, reminder: regReminderValue, hasLoc: !!regFixedLat, buka24: regBuka24Value, jamBuka: regJamBukaValue, jamTutup: regJamTutupValue, hari: regHariBukaValue, tutupLibur: regTutupLiburValue, schedule: regScheduleValue, locationNote: regLocationNoteValue, onToggle: 'window.__toggleRegBuka24', onCapture: 'window.__captureRegLocation' })}
-              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button data-reg-submit onclick="window.__registerVendor()">Daftar sekarang</button></div>
+              <label class="reg-consent-check">
+                <input type="checkbox" id="reg-consent-checkbox" onchange="window.__updateRegSubmitState()" ${regConsentChecked ? 'checked' : ''} />
+                <span>Saya berusia 18 tahun ke atas dan menyetujui <a href="terms.html" target="_blank" rel="noopener">Ketentuan Layanan</a> serta <a href="privacy.html" target="_blank" rel="noopener">Kebijakan Privasi</a> JajanDekat.</span>
+              </label>
+              <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button data-reg-submit ${regConsentChecked ? '' : 'disabled'} onclick="window.__registerVendor()">Daftar sekarang</button></div>
             </div>
 
           </div>
@@ -4130,8 +4149,17 @@ function normalizeWhatsapp(raw) {
   return n;
 }
 
+window.__updateRegSubmitState = function () {
+  const box = document.getElementById('reg-consent-checkbox');
+  regConsentChecked = !!(box && box.checked);
+  const btn = document.querySelector('[data-reg-submit]');
+  if (btn) btn.disabled = !regConsentChecked;
+};
+
 window.__registerVendor = async function () {
   if (isRegistering) return; // cegah klik ganda saat masih diproses
+  const errEl0 = document.getElementById('reg-error');
+  if (!regConsentChecked) { if (errEl0) errEl0.textContent = 'Centang dulu persetujuan Ketentuan Layanan & Kebijakan Privasi.'; return; }
   const name = (document.getElementById('reg-name')?.value || regNameValue).trim();
   const categories = selectedCategories;
   const category = categories[0] || null; // kolom lama, dijaga tetap terisi untuk kompatibilitas
@@ -4180,11 +4208,18 @@ window.__registerVendor = async function () {
 
     const region = await detectRegion(); // otomatis, tidak menghalangi kalau ditolak/gagal
 
-    const { data, error } = await sb
-      .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null, buka_24jam: regBuka24Value, jam_buka: regBuka24Value ? null : (regJamBukaValue || null), jam_tutup: regBuka24Value ? null : (regJamTutupValue || null), hari_buka: normalizeHariBuka(regHariBukaValue), tutup_libur_nasional: regTutupLiburValue })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional')
-      .single();
+    // Pendaftaran lewat RPC server-side supaya PIN di-hash sebelum disimpan (tidak pernah dikirim sebagai insert mentah lagi)
+    const { data: rpcRows, error } = await sb.rpc('register_vendor', {
+      p_name: name, p_category: category, p_categories: categories, p_emoji: emoji, p_mode_icon: modeIcon,
+      p_whatsapp: whatsapp, p_pin: pin, p_referred_by_vendor_id: referredByVendorId, p_region: region,
+      p_reminder_time: reminderTime || null, p_custom_tags: customTags,
+      p_fixed_lat: regFixedLat, p_fixed_lng: regFixedLng,
+      p_schedule_text: regScheduleValue.trim() || null, p_location_note: regLocationNoteValue.trim() || null,
+      p_buka_24jam: regBuka24Value, p_jam_buka: regBuka24Value ? null : (regJamBukaValue || null),
+      p_jam_tutup: regBuka24Value ? null : (regJamTutupValue || null),
+      p_hari_buka: normalizeHariBuka(regHariBukaValue), p_tutup_libur_nasional: regTutupLiburValue,
+    });
+    const data = rpcRows && rpcRows[0];
 
     if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur pendaftaran
 
@@ -4203,7 +4238,7 @@ window.__registerVendor = async function () {
     selectedEmoji = '🍜';
     selectedModeIcon = null;
     selectedCategories = [];
-    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
+    regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0; regConsentChecked = false;
     regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
     regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
     regHariBukaValue = [0, 1, 2, 3, 4, 5, 6]; regTutupLiburValue = false;
