@@ -1,15 +1,39 @@
 {
+  "id": "/",
   "name": "JajanDekat",
   "short_name": "JajanDekat",
   "description": "Cek dulu, baru jalan — cari pedagang keliling yang sedang jualan di sekitarmu.",
   "start_url": ".",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
   "orientation": "portrait",
+  "lang": "id",
+  "dir": "ltr",
   "background_color": "#FAF7F2",
   "theme_color": "#FF6B4A",
+  "categories": ["food", "lifestyle", "navigation"],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/home-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tampilan utama JajanDekat di HP"
+    },
+    {
+      "src": "screenshots/home-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Tampilan utama JajanDekat di desktop"
+    }
   ],
   "shortcuts": [
     {
@@ -39,5 +63,14 @@
       "text": "text",
       "url": "url"
     }
-  }
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "handle_links": "preferred",
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "prefer_related_applications": false,
+  "related_applications": []
 }
