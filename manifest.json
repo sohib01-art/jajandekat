@@ -22,14 +22,14 @@
   "screenshots": [
     {
       "src": "screenshots/home-mobile.png",
-      "sizes": "1080x1920",
+      "sizes": "1024x1536",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Tampilan utama JajanDekat di HP"
     },
     {
       "src": "screenshots/home-desktop.png",
-      "sizes": "1920x1080",
+      "sizes": "1672x941",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Tampilan utama JajanDekat di desktop"
