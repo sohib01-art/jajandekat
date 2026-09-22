@@ -1,12 +1,8 @@
-[
-  {
-    "relation": ["delegate_permission/common.handle_all_urls"],
-    "target": {
-      "namespace": "android_app",
-      "package_name": "GANTI_DENGAN_PACKAGE_NAME_ANDA",
-      "sha256_cert_fingerprints": [
-        "GANTI_DENGAN_SHA256_FINGERPRINT_DARI_PWABUILDER"
-      ]
-    }
-  }
-]
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "id.my.jajandekat.twa",
+        "sha256_cert_fingerprints": ["BE:5A:02:70:BC:14:D2:DD:E6:98:6A:6D:08:61:FC:BE:C9:F9:5B:85:7F:AB:F1:ED:CC:96:D8:03:FF:0C:39:6C"]
+      }
+    }]
