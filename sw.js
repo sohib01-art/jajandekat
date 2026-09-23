@@ -99,3 +99,54 @@ async function refreshPedagangTerdekat() {
     console.warn('Periodic sync gagal, akan dicoba lagi nanti:', err);
   }
 }
+
+
+// ---- Notifikasi Push ----
+// PENTING: tanpa blok ini, event 'push' dari server (send-broadcast-push, send-open-reminders,
+// send-vendor-push, dst.) diterima oleh Service Worker tapi TIDAK PERNAH ditampilkan sebagai
+// notifikasi — payload-nya cuma didiamkan. Ini penyebab utama "kirim pengumuman tidak muncul
+// notifnya" walau server melaporkan sukses terkirim.
+// Bonus: langganan push dibuat dengan userVisibleOnly:true, yang MEWAJIBKAN setiap event 'push'
+// menampilkan notifikasi. Kalau tidak (seperti sebelumnya), Chrome menganggap situsnya melanggar
+// aturan itu dan lama-lama BISA MENCABUT IZIN/LANGGANAN PUSH SENDIRI — jadi blok ini juga salah
+// satu penyebab "notifikasi ke pedagang mati sendiri".
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {
+    data = { title: 'JajanDekat', body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'JajanDekat';
+  const options = {
+    body: data.body || '',
+    icon: data.icon || 'icon-192.png',
+    badge: data.badge || 'icon-192.png',
+    image: data.image || undefined,
+    tag: data.tag || undefined,       // notif dgn tag sama saling menggantikan (tidak menumpuk)
+    renotify: !!data.tag,
+    data: { url: data.url || '/' },   // dibaca saat notifikasi diketuk
+    vibrate: [80, 40, 80],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Ketuk notifikasi -> fokuskan tab yang sudah terbuka (dan arahkan ke halaman terkait lewat URL),
+// atau buka tab baru kalau app-nya belum terbuka sama sekali.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  const fullUrl = new URL(targetUrl, self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ('focus' in c) {
+          c.postMessage({ type: 'PUSH_NOTIFICATION_CLICK', url: targetUrl });
+          return c.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(fullUrl);
+    })
+  );
+});
