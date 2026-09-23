@@ -85,6 +85,22 @@ header{ position:sticky; top:0; z-index:20; padding:0; background:transparent; }
 }
 
 main{ flex:1; padding:0 18px; }
+
+/* Search bar beranda: ketuk = buka tab Cari (logika pencarian tidak diduplikasi di sini) */
+.home-search-row{ display:flex; gap:10px; margin-top:4px; }
+.home-search-bar{
+  flex:1; min-width:0; display:flex; align-items:center; gap:9px; min-height:46px; padding:0 16px;
+  background:var(--surface); border:1px solid var(--stroke); border-radius:999px; box-shadow:var(--shadow);
+  color:var(--text-faint); font-family:'Inter', sans-serif; font-size:13px; cursor:pointer; text-align:left;
+}
+.home-search-bar svg{ flex-shrink:0; color:var(--text-dim); }
+.home-search-bar span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.home-search-filter{
+  flex-shrink:0; width:46px; height:46px; border:none; border-radius:50%;
+  background:var(--brand-dim); color:var(--brand); display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--shadow); cursor:pointer;
+}
+.home-search-bar:focus-visible, .home-search-filter:focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
 .loading{ text-align:center; color:var(--text-faint); font-size:13px; padding:40px 0; }
 
 .section-label{
