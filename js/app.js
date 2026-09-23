@@ -1755,7 +1755,8 @@ function tryLocateBuyer(onFail) {
       buyerLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       if (mode === 'pembeli') renderPembeli();
       const regionBefore = buyerRegionId;
-      getBuyerRegion().then(() => {
+      getBuyerRegion().then((info) => {
+        renderBuyerRegionLabel(info && info.names); // label "📍 <wilayah>" di header, sesuai lokasi terdeteksi
         ensurePushSubscription({ silent: true }); // kalau notifikasi sudah aktif, perbarui wilayah langganan
         if (buyerRegionId !== regionBefore && mode === 'pembeli') renderPembeli(); // filter pengumuman per zona
       }).catch(() => {});
@@ -1763,6 +1764,17 @@ function tryLocateBuyer(onFail) {
     (err) => { if (onFail) onFail(err); /* tanpa onFail: pembeli menolak/gagal lokasi — diamkan, jarak cukup disembunyikan */ },
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
   );
+}
+
+// Isi label "📍 <wilayah>" di header dengan nama wilayah pembeli yang sudah terdeteksi otomatis (tidak minta izin baru).
+function renderBuyerRegionLabel(names) {
+  const wrap = document.getElementById('buyer-region-label');
+  const text = document.getElementById('buyer-region-text');
+  if (!wrap || !text) return;
+  const name = names && names.length ? names[0] : null;
+  if (!name) { wrap.hidden = true; return; }
+  text.textContent = name;
+  wrap.hidden = false;
 }
 
 // Ikon kecil untuk kartu & sheet (inline SVG supaya ikut warna teks)
