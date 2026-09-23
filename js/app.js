@@ -945,7 +945,57 @@ let artikelDetailSlug = null;
 // Ikon "Semua" di baris kategori (mengikuti warna teks tile: putih di tile oranye, oranye di tile aktif)
 const CAT_ALL_ICON_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2.2"/><rect x="13" y="3" width="8" height="8" rx="2.2"/><rect x="3" y="13" width="8" height="8" rx="2.2"/><rect x="13" y="13" width="8" height="8" rx="2.2"/></svg>';
 
+const HM_SEARCH_HTML = `
+  <div class="home-search-row">
+    <button type="button" class="home-search-bar" onclick="window.__goView('cari')" aria-label="Cari makanan, minuman, toko, atau jasa">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <span>Cari makanan, minuman, toko, atau jasa...</span>
+    </button>
+    <button type="button" class="home-search-filter" onclick="window.__goView('cari')" aria-label="Filter pencarian">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M8 12h8M11 18h2"/></svg>
+    </button>
+  </div>`;
+// 12 kategori beranda -> dipetakan ke kategori pedagang yang sudah ada (per grup / label / kata kunci)
+const HM_CATS = [
+  { k:'makanan', l:'Makanan<br>& Minuman', e:'🍴', c:'#FF8A3D', g:['Makanan Siap Saji'] },
+  { k:'jajanan', l:'Jajanan<br>Pasar', e:'🍢', c:'#FF9A3D', x:['Gorengan','Jajanan'] },
+  { k:'warung', l:'Warung<br>& Toko', e:'🏪', c:'#FF7A45', g:['Barang & Perlengkapan'] },
+  { k:'sembako', l:'Sembako', e:'🧺', c:'#FFA030', g:['Kebutuhan Harian'] },
+  { k:'sayur', l:'Sayur<br>& Buah', e:'🥬', c:'#6DB33F', re:/sayur|buah/i },
+  { k:'daging', l:'Daging<br>& Ikan', e:'🐟', c:'#F26B50', re:/daging|ikan|seafood|ayam potong/i },
+  { k:'kue', l:'Kue<br>& Roti', e:'🍰', c:'#EF5A5A', x:['Roti & Kue'] },
+  { k:'minuman', l:'Minuman<br>Segar', e:'🥤', c:'#FF8A3D', g:['Minuman & Camilan'] },
+  { k:'pakaian', l:'Pakaian &<br>Aksesoris', e:'👕', c:'#FF9A3D', g:['Fashion & Aksesoris'] },
+  { k:'elektronik', l:'Elektronik', e:'📱', c:'#3C7BE8', re:/elektronik|\bhp\b|pulsa|gadget/i },
+  { k:'jasa', l:'Jasa Lokal', e:'🔧', c:'#F0704A', g:['Jasa & Layanan'] },
+  { k:'lainnya', l:'Lainnya', e:'⋯', c:'#F5A623', g:['Lainnya'] },
+];
+function hmMatch(cat, label) {
+  const opt = CATEGORY_OPTIONS.find(o => o.label === label);
+  return !!((cat.g && opt && cat.g.includes(opt.group)) || (cat.x && cat.x.includes(label)) || (cat.re && cat.re.test(label)));
+}
+function hmVendorPhoto(v) { const s = vendorPhotoStyle(v); return s ? `style="${s}"` : ''; }
+function hmVendorEmoji(v) { return (v.photo_url || v.mode_icon) ? '' : (v.emoji || '🍜'); }
+function hmRating(v) { return v.rating_count > 0 ? `<span style="color:#F5A800">★</span> ${v.rating_avg} <span style="color:var(--text-dim);font-weight:500">(${v.rating_count})</span>` : ''; }
+function renderHmNearCard(v) {
+  const d = vendorDistanceLabel(v);
+  return `<button class="hm-nc" onclick="window.__openVendorSheet('${v.id}')">
+    <span class="hm-nc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}</span>
+    <span class="hm-nc-b"><span class="hm-nc-top"><span class="hm-nc-name">${escapeHtml(v.name)}</span><span class="hm-pill ${v.active ? '' : 'off'}">${v.active ? (d || 'Buka') : 'Tutup'}</span></span>
+      <span class="hm-nc-cat">${escapeHtml((v.categories || [])[0] || '')}</span><span class="hm-nc-rt">${hmRating(v)}</span></span>
+  </button>`;
+}
+function renderHmRecCard(v) {
+  const d = vendorDistanceLabel(v);
+  return `<div class="hm-rc" role="button" tabindex="0" onclick="window.__openVendorSheet('${v.id}')">
+    <div class="hm-rc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}${d ? `<span class="hm-rc-km">${d}</span>` : ''}
+      <button class="hm-rc-heart ${followedIds.has(v.id) ? 'on' : ''}" aria-label="Ikuti ${escapeHtml(v.name)}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">${followedIds.has(v.id) ? '♥' : '♡'}</button></div>
+    <div class="hm-rc-name">${escapeHtml(v.name)}</div><div class="hm-rc-cat">${escapeHtml((v.categories || [])[0] || '')}</div><div class="hm-rc-rt">${hmRating(v)}</div>
+  </div>`;
+}
+
 function renderPembeli() {
+  { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = (bottomView === 'status') ? HM_SEARCH_HTML : ''; }
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
   if (bottomView === 'favorit') return renderFavoritView();
@@ -953,51 +1003,28 @@ function renderPembeli() {
   if (bottomView === 'terdekat') return renderTerdekatView();
   if (bottomView === 'artikel') return artikelDetailSlug ? renderArtikelDetailView(artikelDetailSlug) : renderArtikelListView();
 
-  const followed = vendors.filter(v => followedIds.has(v.id));
-
-  // Ketuk story = buka detail pedagang (dulu: berhenti mengikuti tanpa sengaja). Berhenti mengikuti lewat ♥ di kartu atau tombol Mengikuti di sheet.
-  const storyHtml = followed.map(v => `
-    <button class="story ${v.active ? 'on' : ''}" onclick="window.__openVendorSheet('${v.id}')">
-      <div class="story-avatar">
-        <div class="story-ring" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
-        ${v.active ? '<span class="story-dot"></span>' : ''}
-      </div>
-      <div class="story-name">${escapeHtml(v.name)}</div>
-      <div class="story-sub">${escapeHtml((v.categories || [])[0] || '')}</div>
-    </button>
-  `).join('');
-
-  const catList = ['semua', ...Array.from(new Set(vendors.flatMap(v => v.categories || []))).sort()];
-  const catRowHtml = catList.map(c => `
-    <button class="cat-chip ${activeCat === c ? 'active' : ''}" onclick="window.__setCat('${c.replace(/'/g, "\\'")}')">
-      <div class="cat-circle">${c === 'semua' ? CAT_ALL_ICON_SVG : categoryIconImgTag(c, CATEGORY_OPTIONS.find(x => x.label === c)?.icon || c, '')}</div>
-      <div class="cat-label">${c === 'semua' ? 'Semua' : c}</div>
-    </button>
-  `).join('');
-  const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => (v.categories || []).includes(activeCat));
+  const hmActive = HM_CATS.find(c => 'grp:' + c.k === activeCat);
+  const filteredVendors = hmActive ? vendors.filter(v => (v.categories || []).some(l => hmMatch(hmActive, l))) : vendors;
+  const catGridHtml = HM_CATS.map(c => `
+    <button class="hm-cat ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')">
+      <span class="hm-cat-ic" style="background:${c.c};color:#fff">${c.e}</span><span class="hm-cat-lb">${c.l}</span>
+    </button>`).join('');
+  const bn = getRelevantBannersForBuyer();
+  const bannerHtml = bn.length ? renderBannerSlider(bn) : `
+    <div class="hm-banner"><div><h2>Dukung Pedagang<br>Lokal di Sekitarmu</h2><p>Temukan kuliner, toko, dan jasa terdekat dengan mudah.</p><button onclick="window.__goView('cari')">Cari Sekarang →</button></div><div class="hm-banner-art">🧑‍🍳</div></div>`;
+  const near = buyerLoc ? nearbyVendors(filteredVendors).slice(0, 6) : [];
+  const recs = sortVendorsForDisplay(filteredVendors).slice(0, 8);
 
   main.innerHTML = `
-    <div class="home-search-row">
-      <button type="button" class="home-search-bar" onclick="window.__goView('cari')" aria-label="Cari makanan, minuman, toko, atau jasa">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <span>Cari makanan, minuman, toko, atau jasa...</span>
-      </button>
-      <button type="button" class="home-search-filter" onclick="window.__goView('cari')" aria-label="Filter pencarian">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M8 12h8M11 18h2"/></svg>
-      </button>
-    </div>
     ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
-    <div class="sec-head"><h2>Kategori</h2></div>
-    <div class="cat-row">${catRowHtml}</div>
-    ${renderBannerSlider(getRelevantBannersForBuyer())}
-    <div class="sec-head"><h2>Pedagang yang kamu ikuti</h2>${followed.length ? '<button onclick="window.__goView(\'favorit\')">Lihat semua ›</button>' : ''}</div>
-    <div class="stories">${storyHtml || '<div style="color:var(--text-faint);font-size:12px;padding:8px 0;">Belum ada yang diikuti.</div>'}</div>
-    <div class="sec-head"><h2><svg class="sec-star" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.400 6.100 20.500l1.200-6.500L2.500 9.400l6.600-.9L12 2.500Z" fill="#FFB400"/></svg>Pilihan JajanDekat</h2></div>
-    ${renderVendorCarouselHtml(filteredVendors)}
-    ${renderNearbyHtml(filteredVendors)}
-    <div class="sec-head"><h2>Semua pedagang</h2></div>
-    ${renderVendorGridHtml(filteredVendors)}
+    ${bannerHtml}
+    <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__setCat('semua')">Lihat Semua →</button></div>
+    <div class="hm-cats">${catGridHtml}</div>
+    <div class="sec-head"><h2>📍 Pedagang Terdekat</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
+    ${near.length ? `<div class="hm-near">${near.map(renderHmNearCard).join('')}</div>` : nearbyEmptyHtml()}
+    <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
+    ${recs.length ? `<div class="hm-rec">${recs.map(renderHmRecCard).join('')}</div>` : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>'}
   `;
   initAnnSlider();
 }
@@ -1772,6 +1799,7 @@ function renderBuyerRegionLabel(names) {
   const text = document.getElementById('buyer-region-text');
   if (!wrap || !text) return;
   const name = names && names.length ? names[0] : null;
+  const lp = document.getElementById('loc-pill-text'); if (lp) lp.textContent = name || 'Aktifkan';
   if (!name) { wrap.hidden = true; return; }
   text.textContent = name;
   wrap.hidden = false;
@@ -1913,7 +1941,7 @@ function renderTerdekatView() {
   main.innerHTML = `
     <div class="sec-head"><button class="sec-back" onclick="window.__goView('status')">‹ Beranda</button></div>
     <div class="sec-head"><h2>Pedagang terdekat</h2>${near.length ? `<span class="sec-count">${near.length} sedang buka</span>` : ''}</div>
-    ${near.length ? `<div class="vp-grid">${near.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>` : nearbyEmptyHtml()}
+    ${near.length ? `<div class="hm-near">${near.map(renderHmNearCard).join('')}</div>` : nearbyEmptyHtml()}
   `;
 }
 
@@ -1922,9 +1950,9 @@ function renderFavoritView() {
   const favs = sortVendorsForDisplay(vendors.filter(v => followedIds.has(v.id)));
   const openCount = favs.filter(v => v.active).length;
   main.innerHTML = `
-    <div class="sec-head"><h2>Favoritmu</h2>${favs.length ? `<span class="sec-count">${openCount} sedang buka</span>` : ''}</div>
+    <div class="sec-head"><h2>💛 Pedagang yang Kamu Ikuti</h2>${favs.length ? `<span class="sec-count">${openCount} sedang buka</span>` : ''}</div>
     ${favs.length
-      ? `<div class="vp-grid">${favs.map(v => renderVendorCardHtml(v, { compact: true })).join('')}</div>`
+      ? `<div class="hm-near">${favs.map(renderHmNearCard).join('')}</div>`
       : `<div class="empty-state">
            <div class="empty-title">Belum ada favorit</div>
            <div class="empty-text">Ketuk ♥ di kartu pedagang untuk mengikutinya. Kamu akan tahu saat mereka mulai jualan.</div>
@@ -2127,22 +2155,24 @@ window.__openInternalLink = function (link) { openInternalLink(link); };
 function renderPetaView() {
   const activeVendors = vendors.filter(vendorIsShowable);
   main.innerHTML = `
-    <div class="section-label">Peta pedagang yang sedang jualan</div>
-    <div id="map" style="height:calc(100vh - 300px); min-height:300px;"></div>
-    <div class="section-label">${activeVendors.length} pedagang aktif di peta</div>
-    <div class="vendor-list">${renderVendorListHtml(activeVendors)}</div>
+    <div class="sec-head"><h2>📍 Peta Pedagang</h2><span class="sec-count">${activeVendors.length} sedang buka</span></div>
+    <div id="map" style="height:calc(100vh - 340px); min-height:300px; border-radius:16px; overflow:hidden;"></div>
+    <div class="sec-head"><h2>Pedagang Aktif</h2></div>
+    ${activeVendors.length ? `<div class="hm-near">${activeVendors.map(renderHmNearCard).join('')}</div>` : '<div class="nb-empty">Belum ada pedagang yang sedang jualan.</div>'}
   `;
   renderMap();
 }
 
 // ---------- CARI VIEW (tab "Cari") ----------
+let cariCat = null;
 function renderCariView() {
   main.innerHTML = `
-    <div class="section-label">Cari pedagang</div>
-    <input id="search-input" type="text" placeholder="Ketik nama atau kategori, misal: bakso"
-      style="width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:12px;
-      padding:12px 14px;color:var(--text);font-family:inherit;font-size:14px;margin-bottom:6px;" />
-    <div id="search-results" class="vendor-list" style="margin-top:14px;"></div>
+    <div class="cari-bar">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
+    </div>
+    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${HM_CATS.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.l.replace('<br>', ' ')}</button>`).join('')}</div>
+    <div id="search-results" style="margin-top:8px;"></div>
 
     <div class="vendor-hero" style="margin-top:20px;text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -2165,11 +2195,22 @@ function renderCariView() {
 
   function runSearch() {
     const q = input.value.trim().toLowerCase();
-    const filtered = !q ? vendors : vendors.filter(v =>
-      v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))
+    const cat = HM_CATS.find(c => c.k === cariCat);
+    const filtered = vendors.filter(v =>
+      (!q || v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))) &&
+      (!cat || (v.categories || []).some(l => hmMatch(cat, l)))
     );
-    results.innerHTML = renderVendorListHtml(filtered);
+    results.innerHTML = filtered.length
+      ? `<div class="hm-near">${sortVendorsForDisplay(filtered).map(renderHmNearCard).join('')}</div>`
+      : '<div class="nb-empty">Tidak ada pedagang yang cocok.</div>';
   }
+  document.querySelectorAll('#cari-chips .map-chip').forEach(btn => {
+    btn.onclick = () => {
+      cariCat = cariCat === btn.dataset.k ? null : btn.dataset.k;
+      document.querySelectorAll('#cari-chips .map-chip').forEach(b => b.classList.toggle('active', b.dataset.k === cariCat));
+      runSearch();
+    };
+  });
   input.oninput = runSearch;
   input.focus();
   runSearch();
@@ -2875,6 +2916,7 @@ window.__saveEditProfile = async function (vendorId) {
 };
 
 function renderPedagang() {
+  { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = ''; }
   if (!myVendorId) {
     main.innerHTML = `
       ${vendors.length ? `
