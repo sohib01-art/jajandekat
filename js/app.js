@@ -3936,9 +3936,12 @@ window.__setDuration = function (mins) {
   renderPedagang();
 };
 
-async function sendPushToFollowers(vendorId, vendorName) {
+// reason: 'active' (default, "lagi jualan!") atau 'promo' ("lagi promo!") — dipakai saat promo
+// pedagang baru diaktifkan admin. Ini SATU-SATUNYA tempat promo diberitahukan ke pembeli:
+// lewat notifikasi push, BUKAN panel/kartu di beranda.
+async function sendPushToFollowers(vendorId, vendorName, reason) {
   try {
-    await sb.functions.invoke('send-vendor-push', { body: { vendor_id: vendorId, vendor_name: vendorName } });
+    await sb.functions.invoke('send-vendor-push', { body: { vendor_id: vendorId, vendor_name: vendorName, reason: reason || 'active' } });
   } catch (e) {
     console.error('Gagal kirim notifikasi push:', e); // tidak fatal, status tetap aktif walau notif gagal
   }
@@ -5531,6 +5534,7 @@ window.__adminCancelPremium = async function (id) {
 window.__adminSetPromo = async function (id, days, silent) {
   try {
     const result = await callAdminAction('set_promo_duration', id, { days });
+    sendPushToFollowers(id, null, 'promo'); // beritahu pengikut lewat notifikasi push saja, tanpa panel di beranda
     const untilStr = new Date(result.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     if (!silent) { alert(`🔥 Promo diaktifkan sampai ${untilStr}.`); renderAdminDashboard(); }
   } catch (e) {
