@@ -977,6 +977,15 @@ function renderPembeli() {
   const filteredVendors = activeCat === 'semua' ? vendors : vendors.filter(v => (v.categories || []).includes(activeCat));
 
   main.innerHTML = `
+    <div class="home-search-row">
+      <button type="button" class="home-search-bar" onclick="window.__goView('cari')" aria-label="Cari makanan, minuman, toko, atau jasa">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span>Cari makanan, minuman, toko, atau jasa...</span>
+      </button>
+      <button type="button" class="home-search-filter" onclick="window.__goView('cari')" aria-label="Filter pencarian">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M8 12h8M11 18h2"/></svg>
+      </button>
+    </div>
     ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     <div class="sec-head"><h2>Kategori</h2></div>
@@ -3936,12 +3945,9 @@ window.__setDuration = function (mins) {
   renderPedagang();
 };
 
-// reason: 'active' (default, "lagi jualan!") atau 'promo' ("lagi promo!") — dipakai saat promo
-// pedagang baru diaktifkan admin. Ini SATU-SATUNYA tempat promo diberitahukan ke pembeli:
-// lewat notifikasi push, BUKAN panel/kartu di beranda.
-async function sendPushToFollowers(vendorId, vendorName, reason) {
+async function sendPushToFollowers(vendorId, vendorName) {
   try {
-    await sb.functions.invoke('send-vendor-push', { body: { vendor_id: vendorId, vendor_name: vendorName, reason: reason || 'active' } });
+    await sb.functions.invoke('send-vendor-push', { body: { vendor_id: vendorId, vendor_name: vendorName } });
   } catch (e) {
     console.error('Gagal kirim notifikasi push:', e); // tidak fatal, status tetap aktif walau notif gagal
   }
@@ -5534,7 +5540,6 @@ window.__adminCancelPremium = async function (id) {
 window.__adminSetPromo = async function (id, days, silent) {
   try {
     const result = await callAdminAction('set_promo_duration', id, { days });
-    sendPushToFollowers(id, null, 'promo'); // beritahu pengikut lewat notifikasi push saja, tanpa panel di beranda
     const untilStr = new Date(result.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     if (!silent) { alert(`🔥 Promo diaktifkan sampai ${untilStr}.`); renderAdminDashboard(); }
   } catch (e) {
