@@ -29,7 +29,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="css/style.css?v=52">
+<link rel="stylesheet" href="css/style.css?v=54">
 </head>
 <body>
 <div id="app">
@@ -45,13 +45,17 @@
           </svg>
           <div class="brand-text">
             <div class="brand">Jajan<span>Dekat</span></div>
-            <div class="tagline">Cek dulu, baru jalan.</div>
+            <div class="tagline">Jajan Enak, Dekat di Sekitar Kamu</div>
             <div class="buyer-region-label" id="buyer-region-label" hidden>
               <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
               <span id="buyer-region-text"></span>
             </div>
           </div>
         </div>
+        <button type="button" class="loc-pill" id="loc-pill" aria-label="Lokasi saya" onclick="window.__enableLocation && window.__enableLocation()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+          <span class="loc-pill-txt"><small>Lokasi saya</small><b id="loc-pill-text">Aktifkan</b></span>
+        </button>
         <button id="btn-bell" class="bell-btn" aria-label="Notifikasi" hidden>
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/>
@@ -59,6 +63,7 @@
           <span class="bell-dot"></span>
         </button>
       </div>
+      <div id="hero-search"></div>
     </div>
     <div class="hero-sheet" id="mode-toggle-wrap">
       <div class="mode-toggle">
@@ -89,7 +94,7 @@
       <span class="nav-icon"><svg class="" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>Cari
     </button>
     <button type="button" class="nav-item" data-view="favorit">
-      <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-8.500-5.100-8.500-11A4.800 4.800 0 0 1 12 6.800a4.800 4.800 0 0 1 8.500 2.700c0 5.900-8.500 11-8.500 11Z"/></svg></span>Favorit
+      <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9.5 5 4h14l1.5 5.5M3.5 9.5a2.8 2.8 0 0 0 5.5 0 2.8 2.8 0 0 0 6 0 2.8 2.8 0 0 0 5.5 0M5 12.5V20h14v-7.5M10 20v-4.5h4V20"/></svg></span>Ikuti
     </button>
     <button type="button" class="nav-item" data-view="akun">
       <span class="nav-icon"><svg class="fillable" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.400 3.600-7 8-7s8 2.600 8 7Z"/></svg></span>Akun
@@ -104,7 +109,7 @@
 </div>
 
 <script src="js/config.js?v=43"></script>
-<script src="js/app.js?v=58"></script>
+<script src="js/app.js?v=60"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
