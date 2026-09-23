@@ -50,6 +50,8 @@ header{ position:sticky; top:0; z-index:20; padding:0; background:transparent; }
 .brand{ font-family:'Poppins', sans-serif; font-weight:800; font-size:26px; line-height:1.05; letter-spacing:-0.02em; color:#fff; }
 .brand span{ color:var(--sun); }
 .tagline{ font-size:12.5px; color:rgba(255,255,255,.92); margin-top:2px; }
+.buyer-region-label{ display:flex; align-items:center; gap:4px; margin-top:5px; font-size:11.5px; font-weight:600; color:rgba(255,255,255,.92); }
+.buyer-region-label[hidden]{ display:none; }
 
 .bell-btn{
   position:relative; width:42px; height:42px; border:none; border-radius:50%;
