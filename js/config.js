@@ -3,7 +3,7 @@
 // Lihat README.md bagian "Setup Supabase" untuk caranya.
 // ============================================
 const SUPABASE_URL = "https://lzcvykadtpqiqaebmmbh.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Vz1L0V8bFb__gnqMRosztQ_GMsZHrNo";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6Y3Z5a2FkdHBxaXFhZWJtbWJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwOTIzODMsImV4cCI6MjEwMzY2ODM4M30.uY4lkVvdYWW7bTR1gyvoQempvbMGNyHJQRYITKsKgtQ";
 
 // Lokasi tengah peta saat pertama dibuka (contoh: Sangatta, Kutai Timur)
 // Ganti dengan koordinat wilayah Anda.
