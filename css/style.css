@@ -1057,3 +1057,24 @@ header{ position:static; display:contents; }
 .food-sq .food-check{ font-style:normal; }
 .food-sq.picked .food-check{ display:flex; }
 .food-sub-lbl{ flex-basis:100%; margin:10px 0 4px; font-size:11px; font-weight:700; color:var(--text-dim); text-align:left; }
+
+/* --- Beranda ringkas: Terdekat di atas, kuliner geser, kategori lainnya padat, lokasi di bawah pencarian --- */
+.hm-locrow{ display:flex; align-items:center; gap:6px; margin:10px 2px 0; padding:0; background:none; border:none; color:#fff; font-family:'Inter',sans-serif; font-size:13px; font-weight:600; cursor:pointer; max-width:100%; }
+.hm-locrow span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hm-vrow{ display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; scrollbar-width:none; scroll-snap-type:x proximity; }
+.hm-vrow::-webkit-scrollbar, .fm-row::-webkit-scrollbar{ display:none; }
+.hm-vc{ flex:0 0 calc((100% - 16px) / 2.6); min-width:0; padding:0 0 8px; display:flex; flex-direction:column; gap:2px; overflow:hidden; text-align:left; background:var(--surface); border:1px solid var(--stroke); border-radius:14px; box-shadow:var(--shadow); cursor:pointer; color:var(--text); font-family:'Inter',sans-serif; scroll-snap-align:start; }
+.hm-vc-ph{ position:relative; aspect-ratio:1.25; background:var(--surface-2) center/cover; display:flex; align-items:center; justify-content:center; font-size:30px; }
+.hm-vc-st{ position:absolute; left:6px; bottom:6px; background:var(--aktif); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; }
+.hm-vc-st.off{ background:var(--nonaktif); color:#5b5346; }
+.hm-vc-name{ margin:6px 8px 0; min-height:30px; font-family:'Poppins',sans-serif; font-weight:600; font-size:12px; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.hm-vc-meta{ margin:0 8px; font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hm-vc-km{ margin:2px 8px 0; font-size:10.5px; color:var(--text-dim); min-height:13px; }
+.fm-row{ display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; scrollbar-width:none; scroll-snap-type:x mandatory; }
+.fm-row .fm-tile{ flex:0 0 44%; scroll-snap-align:start; }
+.fm-row .fm-tile.hero{ flex-basis:64%; }
+.fm-sqgrid.compact{ grid-template-columns:repeat(5,1fr); gap:10px 6px; }
+.fm-sqgrid.compact img{ border-radius:14px; }
+.fm-sqgrid.compact span{ font-size:9.5px; }
+.hm-filterpill{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0 0; padding:8px 12px; background:#FFF3EC; border:1px solid #F7C9BC; border-radius:12px; font-size:12px; color:var(--text); }
+.hm-filterpill button{ border:none; background:none; color:var(--brand); font-size:14px; font-weight:800; cursor:pointer; }
