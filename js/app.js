@@ -956,24 +956,136 @@ const HM_SEARCH_HTML = `
     </button>
   </div>`;
 // 12 kategori beranda -> dipetakan ke kategori pedagang yang sudah ada (per grup / label / kata kunci)
-const HM_CATS = [
-  { k:'makanan', l:'Makanan<br>& Minuman', i:'nasi', c:'#FF8A3D', g:['Makanan Siap Saji'] },
-  { k:'jajanan', l:'Jajanan<br>Pasar', i:'jajanan', c:'#FF9A3D', x:['Gorengan','Jajanan'] },
-  { k:'warung', l:'Warung<br>& Toko', i:'warung', c:'#FF7A45', x:['Warung','Toko Kelontong'] },
-  { k:'sembako', l:'Sembako', i:'sembako', c:'#FFA030', g:['Kebutuhan Harian'], x:['Sembako','Telur'] },
-  { k:'sayur', l:'Sayur<br>& Buah', i:'sayur', c:'#6DB33F', re:/sayur|buah/i },
-  { k:'daging', l:'Daging<br>& Ikan', i:'ikan_seafood', c:'#F26B50', re:/daging|ikan|seafood/i },
-  { k:'kue', l:'Kue<br>& Roti', i:'roti_kue', c:'#EF5A5A', x:['Roti & Kue'] },
-  { k:'minuman', l:'Minuman<br>Segar', i:'minuman', c:'#FF8A3D', x:['Minuman','Kopi','Snack & Camilan'] },
-  { k:'pakaian', l:'Pakaian &<br>Aksesoris', i:'pakaian', c:'#FF9A3D', g:['Fashion & Aksesoris'] },
-  { k:'elektronik', l:'Elektronik', i:'elektronik', c:'#3C7BE8', g:['Barang & Perlengkapan'] },
-  { k:'jasa', l:'Jasa Lokal', i:'jasa_keliling', c:'#F0704A', g:['Jasa & Layanan'] },
-  { k:'lainnya', l:'Lainnya', i:'lainnya', c:'#F5A623', g:['Lainnya'] },
+// ===== Kategori JajanDekat: 5 kategori makanan + Lain-lain =====
+const FOOD_MAIN = [
+  { k:'jajanan', label:'Jajanan & Cemilan', img:'icons/kat-jajanan.webp', e:'🍢', items:['Gorengan','Bakwan','Tempe Goreng','Tahu Isi','Pisang Goreng','Cireng','Cilok','Cimol','Cilor','Cirambay','Batagor','Siomay','Pempek','Otak-Otak','Telur Gulung','Sosis Bakar','Sosis Goreng','Bakso Bakar','Tempura','Sempol','Takoyaki','Corndog','Kebab Mini','Lumpia','Risol','Martabak Telur','Tahu Walik','Tahu Crispy','Kentang Goreng','Kerupuk','Keripik','Makaroni','Basreng','Usus Crispy','Ceker','Seblak Kering','Jagung Bakar','Jagung Manis','Kacang Rebus','Kue Tradisional'] },
+  { k:'berat', label:'Makanan Berat', img:'icons/kat-berat.webp', e:'🍛', items:['Nasi Goreng','Nasi Ayam','Nasi Bebek','Nasi Padang','Nasi Campur','Nasi Kuning','Nasi Uduk','Nasi Liwet','Nasi Pecel','Nasi Lalapan','Nasi Bakar','Nasi Kebuli','Ayam Geprek','Ayam Penyet','Ayam Bakar','Ayam Goreng','Bebek Goreng','Bebek Bakar','Bakso','Mie Ayam','Mie Goreng','Mie Rebus','Kwetiau','Bihun','Seblak','Soto','Rawon','Sop','Gudeg','Gado-Gado','Pecel','Ketoprak','Lontong Sayur','Lontong Balap','Sate','Ikan Bakar','Ikan Goreng','Seafood','Masakan Rumahan'] },
+  { k:'minuman', label:'Minuman', img:'icons/kat-minuman.webp', e:'🥤', items:['Es Teh','Teh Hangat','Teh Manis','Teh Tarik','Lemon Tea','Thai Tea','Milk Tea','Jus Alpukat','Jus Mangga','Jus Jeruk','Jus Melon','Jus Semangka','Jus Apel','Jus Nanas','Jus Buah Naga','Es Jeruk','Es Lemon','Es Cendol','Es Dawet','Es Campur','Es Teler','Es Doger','Es Selendang Mayang','Es Kelapa Muda','Es Buah','Kopi Hitam','Kopi Susu','Es Kopi Susu','Kopi Gula Aren','Cappuccino','Latte','Americano','Boba','Cheese Tea','Matcha','Cokelat','Milkshake','Smoothie','Yakult Drink','Soda','Mojito Non-Alkohol'] },
+  { k:'manis', label:'Manis & Dessert', img:'icons/kat-manis.webp', e:'🍰', items:['Martabak Manis','Terang Bulan','Pancake','Waffle','Crepes','Donat','Brownies','Bolu','Cake','Cupcake','Muffin','Puding','Agar-Agar','Es Krim','Gelato','Dessert Box','Salad Buah','Puding Buah','Pisang Cokelat','Pisang Keju','Pisang Nugget','Roti Bakar','Roti Kukus','Roti Maryam','Klepon','Onde-Onde','Dadar Gulung','Kue Lumpur','Kue Lapis','Putu','Serabi','Lupis','Cenil','Getuk','Tape','Kolak'] },
+  { k:'fast', label:'Fast Food & Modern', img:'icons/kat-fast.webp', e:'🍔', items:['Burger','Chicken Burger','Cheese Burger','Hot Dog','Pizza','Pizza Mini','Kebab','Shawarma','Sandwich','Toast','Chicken Wings','Fried Chicken','Chicken Strip','Popcorn Chicken','French Fries','Potato Wedges','Hash Brown','Mozzarella Stick','Nachos','Pasta','Spaghetti','Mac & Cheese','Rice Bowl','Chicken Rice Bowl','Beef Rice Bowl','Korean Chicken','Korean Street Food','Corndog','Toast Kekinian','Croffle','Donat Kekinian','Dessert Kekinian'] },
+  { k:'lain', label:'Lain-lain', img:'icons/kat-lain.webp', e:'✨', items:[] },
 ];
-const hmPlain = c => c.l.replace(/<br>/g, ' ');
-function hmMatch(cat, label) {
-  const opt = CATEGORY_OPTIONS.find(o => o.label === label);
-  return !!((cat.g && opt && cat.g.includes(opt.group)) || (cat.x && cat.x.includes(label)) || (cat.re && cat.re.test(label)));
+// label lama (data pedagang sebelum perubahan) -> kategori baru
+const FOOD_LEGACY = { 'nasi':'berat', 'ayam & daging':'berat', 'ikan & seafood':'berat', 'minuman':'minuman', 'kopi':'minuman', 'es':'minuman', 'roti & kue':'manis', 'jajanan':'jajanan', 'snack & camilan':'jajanan', 'kebab':'fast' };
+const foodNorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const FOOD_INDEX = {};
+FOOD_MAIN.forEach(m => m.items.forEach(i => { const n = foodNorm(i); const arr = (FOOD_INDEX[n] = FOOD_INDEX[n] || []); if (!arr.includes(m.k)) arr.push(m.k); }));
+FOOD_MAIN.forEach(m => { FOOD_INDEX[foodNorm(m.label)] = [m.k]; });
+Object.keys(FOOD_LEGACY).forEach(l => { if (!FOOD_INDEX[l]) FOOD_INDEX[l] = [FOOD_LEGACY[l]]; });
+let foodDbMains = {}; // jenis buatan pedagang (dari database) -> kategori utama
+function foodMainsOfLabel(l) { const n = foodNorm(l); return FOOD_INDEX[n] || (foodDbMains[n] ? [foodDbMains[n]] : null); }
+// Kategori utama pedagang: diturunkan dari jenis jualan (categories + custom_tags). Tidak ada yang cocok -> Lain-lain.
+function vendorMainCats(v) {
+  const set = new Set();
+  [...(v.categories || []), ...(v.custom_tags || [])].forEach(l => { const m = foodMainsOfLabel(l); if (m) m.forEach(x => set.add(x)); });
+  if (!set.size) set.add('lain');
+  return [...set];
+}
+function foodItems(k) {
+  if (k !== 'lain') return FOOD_MAIN.find(m => m.k === k).items;
+  return CATEGORY_OPTIONS.map(c => c.label).filter(l => !foodMainsOfLabel(l));
+}
+let homeType = null;
+// ----- Pemilih jenis jualan (pendaftaran) -----
+let foodMainSel = [];
+let foodQuery = '';
+const foodArg = l => `decodeURIComponent('${encodeURIComponent(l)}')`;
+let foodScope = 'reg';
+let editMainSel = [];
+let editTagsList = [];
+// Satu pemilih dipakai di Pendaftaran ('reg') dan Edit Profil ('edit'); state-nya dipilih lewat scope.
+const foodS = () => foodScope === 'edit'
+  ? { cats: () => editCategories, setCats: v => { editCategories = v; }, tags: () => editTagsList, setTags: t => { editTagsList = t; }, mains: () => editMainSel, setMains: v => { editMainSel = v; } }
+  : { cats: () => selectedCategories, setCats: v => { selectedCategories = v; }, tags: () => parseTagsInput(regTagsValue), setTags: t => { regTagsValue = t.join(', '); }, mains: () => foodMainSel, setMains: v => { foodMainSel = v; } };
+function foodTags() { return foodS().tags(); }
+function foodSelectedAll() { return [...foodS().cats(), ...foodTags()]; }
+function foodAllPool() {
+  const seen = new Set(), out = [];
+  const add = l => { const n = foodNorm(l); if (n && !seen.has(n)) { seen.add(n); out.push(l); } };
+  foodS().mains().forEach(k => foodItems(k).forEach(add));
+  FOOD_MAIN.forEach(m => foodItems(m.k).forEach(add));
+  (knownTagSuggestions || []).forEach(add);
+  return out;
+}
+function foodTidy(s) { return String(s).trim().replace(/\s+/g, ' ').slice(0, 40).replace(/(^|[\s\-\/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()); }
+function foodIsListed(n) { return !!FOOD_INDEX[n] || CATEGORY_OPTIONS.some(c => foodNorm(c.label) === n); }
+function foodMainsHtml() {
+  return FOOD_MAIN.map(m => `<button type="button" class="food-main ${foodS().mains().includes(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${foodS().mains().includes(m.k)}"><img src="${m.img}" alt="${m.label}" loading="lazy" /><span class="food-check">✓</span></button>`).join('');
+}
+function foodSelectedHtml() {
+  const all = foodSelectedAll();
+  if (!all.length) return '<div class="food-empty">Belum ada jenis jualan dipilih</div>';
+  return all.map(l => `<span class="selected-cat-pill">${escapeHtml(l)} <button type="button" aria-label="Hapus ${escapeHtml(l)}" onclick="window.__foodToggle(${foodArg(l)})">✕</button></span>`).join('');
+}
+function foodSuggestHtml() {
+  const q = foodNorm(foodQuery);
+  const sel = new Set(foodSelectedAll().map(foodNorm));
+  let list;
+  if (q) {
+    const pool = foodAllPool().filter(l => foodNorm(l).includes(q));
+    pool.sort((x, y) => (foodNorm(y).startsWith(q) - foodNorm(x).startsWith(q)));
+    list = pool.slice(0, 16);
+  } else if (foodS().mains().length) {
+    const seen = new Set(); list = [];
+    foodS().mains().forEach(k => foodItems(k).forEach(l => { if (!seen.has(foodNorm(l))) { seen.add(foodNorm(l)); list.push(l); } }));
+    list = list.slice(0, 30);
+  } else {
+    return '<div class="food-empty">Pilih kategori di atas, atau ketik jenis jualanmu.</div>';
+  }
+  const chips = list.map(l => `<button type="button" class="food-chip ${sel.has(foodNorm(l)) ? 'picked' : ''}" onclick="window.__foodToggle(${foodArg(l)})">${escapeHtml(l)}</button>`).join('');
+  const exact = q && foodAllPool().some(l => foodNorm(l) === q);
+  const add = (q && !exact) ? `<button type="button" class="food-chip add" onclick="window.__foodAdd()">＋ Tambah “${escapeHtml(foodTidy(foodQuery))}”</button>` : '';
+  return (chips || add) ? add + chips : '<div class="food-empty">Tidak ada yang cocok.</div>';
+}
+function foodRefresh() {
+  const set = (id, h) => { const el = document.getElementById(id); if (el) el.innerHTML = h; };
+  set('food-mains', foodMainsHtml()); set('food-selected', foodSelectedHtml()); set('food-suggest', foodSuggestHtml());
+}
+function foodPickerHtml(scope) {
+  if (scope) foodScope = scope;
+  return `<div id="food-picker">
+    <div class="food-lbl">1. Pilih kategori</div>
+    <div id="food-mains" class="food-mains">${foodMainsHtml()}</div>
+    <div class="food-lbl">2. Ketik atau pilih jenis jualanmu</div>
+    <div id="food-selected" class="food-selected">${foodSelectedHtml()}</div>
+    <div class="cari-bar food-search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="food-q" type="text" value="${escapeHtml(foodQuery)}" oninput="window.__foodQuery(this.value)" placeholder="Ketik jenis jualan, misal: cilok" autocomplete="off" enterkeyhint="done" /></div>
+    <div id="food-suggest" class="food-suggest">${foodSuggestHtml()}</div>
+    <div class="food-hint">Belum ada di daftar? Ketik namanya lalu tekan “＋ Tambah”, otomatis tersimpan.</div>
+  </div>`;
+}
+window.__foodMain = function (k) { const s = foodS(); s.setMains(s.mains().includes(k) ? s.mains().filter(x => x !== k) : [...s.mains(), k]); foodRefresh(); };
+window.__foodQuery = function (v) { foodQuery = v; const el = document.getElementById('food-suggest'); if (el) el.innerHTML = foodSuggestHtml(); };
+window.__foodToggle = function (label) {
+  const clean = foodTidy(label); if (!clean) return;
+  const s = foodS();
+  const n = foodNorm(clean);
+  const canon = foodAllPool().find(l => foodNorm(l) === n) || clean;
+  const cn = foodNorm(canon);
+  const listed = foodIsListed(cn);
+  const list = listed ? s.cats() : s.tags();
+  const has = list.some(x => foodNorm(x) === cn);
+  let next;
+  if (has) next = list.filter(x => foodNorm(x) !== cn);
+  else if (foodSelectedAll().length >= 8) { showToast('Maksimal 8 jenis jualan.'); return; }
+  else next = [...list, canon];
+  if (listed) s.setCats(next); else s.setTags(next);
+  foodQuery = ''; const q = document.getElementById('food-q'); if (q) q.value = '';
+  foodRefresh();
+};
+window.__foodAdd = function () {
+  const q = foodTidy(foodQuery); if (q.length < 2) return;
+  const n = foodNorm(q);
+  if (foodSelectedAll().some(x => foodNorm(x) === n)) { foodQuery = ''; const el = document.getElementById('food-q'); if (el) el.value = ''; foodRefresh(); return; }
+  window.__foodToggle(q);
+};
+function foodFinalCategories() {
+  const s = foodS();
+  const cats = [...s.cats()];
+  s.mains().forEach(k => {
+    if (!cats.some(l => (foodMainsOfLabel(l) || []).includes(k))) cats.push(FOOD_MAIN.find(m => m.k === k).label);
+  });
+  if (!cats.length && !s.tags().length) cats.push('Lain-lain');
+  return cats;
 }
 function hmVendorPhoto(v) { const s = vendorPhotoStyle(v); return s ? `style="${s}"` : ''; }
 function hmVendorEmoji(v) { return (v.photo_url || v.mode_icon) ? '' : (v.emoji || '🍜'); }
@@ -1006,12 +1118,14 @@ function renderPembeli() {
   if (bottomView === 'terdekat') return renderTerdekatView();
   if (bottomView === 'artikel') return artikelDetailSlug ? renderArtikelDetailView(artikelDetailSlug) : renderArtikelListView();
 
-  const hmActive = HM_CATS.find(c => 'grp:' + c.k === activeCat);
-  const filteredVendors = hmActive ? vendors.filter(v => (v.categories || []).some(l => hmMatch(hmActive, l))) : vendors;
-  const catGridHtml = HM_CATS.map(c => `
-    <button class="hm-cat ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')">
-      <span class="cat-circle hm-cat-ic" style="background:${c.c}">${categoryIconImgTag(hmPlain(c), c.i, '')}</span><span class="hm-cat-lb">${c.l}</span>
+  const hmActive = FOOD_MAIN.find(c => 'grp:' + c.k === activeCat);
+  let filteredVendors = hmActive ? vendors.filter(v => vendorMainCats(v).includes(hmActive.k)) : vendors;
+  if (hmActive && homeType) filteredVendors = filteredVendors.filter(v => [...(v.categories || []), ...(v.custom_tags || [])].some(l => foodNorm(l) === foodNorm(homeType)));
+  const catGridHtml = FOOD_MAIN.map(c => `
+    <button class="fm-tile ${c.k === 'jajanan' ? 'hero' : ''} ${c.k === 'lain' ? 'wide' : ''} ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')" aria-label="${c.label}" aria-pressed="${hmActive === c}">
+      <img src="${c.img}" alt="${c.label}" loading="lazy" />
     </button>`).join('');
+  const typeChipsHtml = hmActive && foodItems(hmActive.k).length ? `<div class="map-chip-row" style="margin-top:10px;">${foodItems(hmActive.k).slice(0, 16).map(l => `<button type="button" class="map-chip ${homeType && foodNorm(homeType) === foodNorm(l) ? 'active' : ''}" onclick="window.__setType(${foodArg(l)})">${escapeHtml(l)}</button>`).join('')}</div>` : '';
   const bn = getRelevantBannersForBuyer();
   const bannerHtml = bn.length ? renderBannerSlider(bn) : `
     <div class="hm-banner"><div><h2>Dukung Pedagang<br>Lokal di Sekitarmu</h2><p>Temukan kuliner, toko, dan jasa terdekat dengan mudah.</p><button onclick="window.__goView('cari')">Cari Sekarang →</button></div><div class="hm-banner-art">🧑‍🍳</div></div>`;
@@ -1023,7 +1137,7 @@ function renderPembeli() {
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     ${bannerHtml}
     <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__setCat('semua')">Lihat Semua →</button></div>
-    <div class="hm-cats">${catGridHtml}</div>
+    <div class="fm-grid">${catGridHtml}</div>${typeChipsHtml}
     <div class="sec-head"><h2>📍 Pedagang Terdekat</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
     ${near.length ? `<div class="hm-near">${near.map(renderHmNearCard).join('')}</div>` : nearbyEmptyHtml()}
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
@@ -2174,7 +2288,7 @@ function renderCariView() {
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
     </div>
-    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${HM_CATS.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${categoryIconImgTag(hmPlain(c), c.i, 'chip-ic')} ${hmPlain(c)}</button>`).join('')}</div>
+    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.label}</button>`).join('')}</div>
     <div id="search-results" style="margin-top:8px;"></div>
 
     <div class="vendor-hero" style="margin-top:20px;text-align:left;">
@@ -2198,10 +2312,10 @@ function renderCariView() {
 
   function runSearch() {
     const q = input.value.trim().toLowerCase();
-    const cat = HM_CATS.find(c => c.k === cariCat);
+    const cat = FOOD_MAIN.find(c => c.k === cariCat);
     const filtered = vendors.filter(v =>
       (!q || v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))) &&
-      (!cat || (v.categories || []).some(l => hmMatch(cat, l)))
+      (!cat || vendorMainCats(v).includes(cat.k))
     );
     results.innerHTML = filtered.length
       ? `<div class="hm-near">${sortVendorsForDisplay(filtered).map(renderHmNearCard).join('')}</div>`
@@ -2478,7 +2592,8 @@ window.__regWizardGo = function (delta) {
       const name = (document.getElementById('reg-name')?.value || '').trim();
       if (!name) { if (stepErr) stepErr.textContent = 'Nama usaha wajib diisi.'; return; }
     } else if (regStep === 1) {
-      if (selectedCategories.length === 0) { if (stepErr) stepErr.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
+      foodScope = 'reg';
+      if (foodSelectedAll().length === 0 && foodMainSel.length === 0) { if (stepErr) stepErr.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
     } else if (regStep === 2) {
       if (!selectedModeIcon) { if (stepErr) stepErr.textContent = 'Pilih mode jualan Anda.'; return; }
     } else if (regStep === 3) {
@@ -2546,17 +2661,22 @@ async function loadKnownTagSuggestions() {
     // Tabel tag_suggestions dikunci RLS (tidak ada policy publik) — baca lewat RPC.
     const { data, error } = await sb.rpc('jd_get_tag_suggestions');
     if (error) throw error;
-    knownTagSuggestions = (data || []).map(r => r.tag_display);
+    const rows = data || [];
+    // suggest=false: jenis baru yang belum dipakai >= 2 pedagang / belum disetujui — tidak jadi saran, tapi kategorinya tetap dipakai
+    knownTagSuggestions = rows.filter(r => r.suggest !== false).map(r => r.tag_display);
+    foodDbMains = {};
+    rows.forEach(r => { if (r.main_category) foodDbMains[foodNorm(r.tag_display)] = r.main_category; });
+    if (mode === 'pembeli' && bottomView === 'status') renderPembeli(); // segarkan kategori di beranda
   } catch (e) { /* diamkan, autocomplete opsional */ }
 }
 
 // Simpan tag baru lewat RPC jd_log_tag_suggestion (dedupe+count sudah ditangani di server;
 // tabel tag_suggestions sendiri tidak lagi bisa ditulis langsung dari client).
-async function logTagSuggestions(rawTagsString) {
+async function logTagSuggestions(rawTagsString, mainKey) {
   const tags = (rawTagsString || '').split(',').map(t => t.trim()).filter(Boolean);
   for (const tag of tags) {
     try {
-      await sb.rpc('jd_log_tag_suggestion', { p_tag: tag });
+      await sb.rpc('jd_log_tag_suggestion', { p_tag: tag, p_main: mainKey || null });
     } catch (e) { /* jangan blokir alur pendaftaran/edit kalau ini gagal */ }
   }
 }
@@ -2710,6 +2830,9 @@ window.__openEditProfile = function (vendorId) {
   const v = vendors.find(v => v.id === vendorId);
   if (!v) return;
   editCategories = [...(v.categories || [])];
+  editTagsList = [...(v.custom_tags || [])];
+  editMainSel = [...new Set([...(v.categories || []), ...(v.custom_tags || [])].flatMap(l => foodMainsOfLabel(l) || []))];
+  foodQuery = ''; foodScope = 'edit';
   editModeIcon = v.mode_icon || null;
   editCatPickerQuery = '';
   editFixedLat = v.fixed_lat || null;
@@ -2764,19 +2887,7 @@ function renderEditProfile(vendorId) {
         <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Mode jualan Anda (pilih 1)</div>
         <div class="cat-picker-grid">${modeHtml}</div>
 
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jual apa saja? (tap untuk pilih, tap lagi untuk batal)</div>
-        ${editCategories.length ? `
-          <div class="selected-cat-strip">
-            ${editCategories.map(label => `
-              <span class="selected-cat-pill">${label} <button type="button" onclick="window.__editToggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
-            `).join('')}
-          </div>
-        ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih</div>`}
-        <input id="edit-cat-search" type="text" value="${editCatPickerQuery.replace(/"/g, '&quot;')}" oninput="window.__updateEditCatPickerQuery('${vendorId}', this.value)" placeholder="🔍 Cari kategori, misal: rujak" style="margin-top:8px;" />
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jualan lain yang belum ada di daftar? Tulis di sini (pisahkan koma)</div>
-        <input id="edit-tags" type="text" list="tag-suggestions-list" value="${(v.custom_tags || []).join(', ').replace(/"/g, '&quot;')}" placeholder="misal: rujak serut, es duren" />
-        <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
-        ${renderCategoryPickerGrouped(editCategories, 'window.__editToggleCategory', editCatPickerQuery)}
+        ${foodPickerHtml('edit')}
 
         ${renderJadwalFields({ p: 'edit', track: false, reminder: v.reminder_time ? v.reminder_time.slice(0, 5) : '', hasLoc: !!editFixedLat, buka24: !!v.buka_24jam, jamBuka: v.jam_buka ? v.jam_buka.slice(0, 5) : '', jamTutup: v.jam_tutup ? v.jam_tutup.slice(0, 5) : '', hari: v.hari_buka, tutupLibur: !!v.tutup_libur_nasional, schedule: v.schedule_text || '', locationNote: v.location_note || '', onToggle: 'window.__toggleEditBuka24', onCapture: 'window.__captureEditLocation' })}
 
@@ -2861,7 +2972,8 @@ window.__saveEditProfile = async function (vendorId) {
   const whatsapp = normalizeWhatsapp(document.getElementById('edit-whatsapp').value.trim());
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
-  if (editCategories.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
+  foodScope = 'edit';
+  if (foodSelectedAll().length === 0 && editMainSel.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
 
   // Sesi baru belum punya PIN di memori -> minta sekali (sama seperti alur toggle status)
   if (myVendorPin === null) {
@@ -2876,7 +2988,8 @@ window.__saveEditProfile = async function (vendorId) {
   try {
     const reminderTime = document.getElementById('edit-reminder').value.trim();
     const showWhatsapp = document.getElementById('edit-show-whatsapp').checked;
-    const customTags = parseTagsInput(document.getElementById('edit-tags')?.value);
+    const customTags = [...editTagsList];
+    const finalCats = foodFinalCategories();
     const scheduleText = document.getElementById('edit-schedule')?.value.trim() || null;
     const locationNote = document.getElementById('edit-location-note')?.value.trim() || null;
     const defaultOpenEl = document.getElementById('edit-default-open');
@@ -2888,7 +3001,7 @@ window.__saveEditProfile = async function (vendorId) {
     const tutupLibur = document.getElementById('edit-libur')?.checked || false;
     const { error } = await sb.rpc('update_vendor_profile', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '', p_name: name,
-      p_categories: editCategories, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
+      p_categories: finalCats, p_mode_icon: editModeIcon, p_whatsapp: whatsapp,
     });
     if (error) throw error;
 
@@ -2902,10 +3015,10 @@ window.__saveEditProfile = async function (vendorId) {
       hari_buka: hariBuka, tutup_libur_nasional: tutupLibur,
     }).eq('id', vendorId);
     if (updateError) throw updateError; // dulu gagal diam-diam (mis. izin kolom belum diberikan)
-    if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur simpan
+    if (customTags.length) logTagSuggestions(customTags.join(', '), editMainSel[0]); // tidak ditunggu, jangan blokir alur simpan
 
     const v = vendors.find(v => v.id === vendorId);
-    v.name = name; v.categories = editCategories; v.category = editCategories[0] || null;
+    v.name = name; v.categories = finalCats; v.category = finalCats[0] || null;
     v.mode_icon = editModeIcon; v.whatsapp = whatsapp; v.reminder_time = reminderTime || null;
     v.show_whatsapp = showWhatsapp; v.custom_tags = customTags;
     v.fixed_lat = editFixedLat; v.fixed_lng = editFixedLng; v.schedule_text = scheduleText;
@@ -2922,6 +3035,7 @@ window.__saveEditProfile = async function (vendorId) {
 let regOpen = false;
 document.addEventListener('keydown', function (ev) {
   if (ev.key !== 'Enter' || !ev.target || !ev.target.id) return;
+  if (ev.target.id === 'food-q') { ev.preventDefault(); window.__foodAdd(); return; }
   if (ev.target.id === 'pick-whatsapp') { ev.preventDefault(); const p = document.getElementById('pick-pin'); if (p) p.focus(); }
   else if (ev.target.id === 'pick-pin') { ev.preventDefault(); ev.target.blur(); window.__pickVendor(); }
 });
@@ -2974,19 +3088,8 @@ function renderPedagang() {
 
             <div class="reg-step">
               <div class="reg-step-title">2. Jual Apa Saja?</div>
-              <div class="reg-step-sub">Tap untuk pilih, tap lagi untuk batal — boleh lebih dari satu</div>
-              ${selectedCategories.length ? `
-                <div class="selected-cat-strip">
-                  ${selectedCategories.map(label => `
-                    <span class="selected-cat-pill">${label} <button type="button" onclick="window.__toggleCategory('${label.replace(/'/g, "\\'")}')">✕</button></span>
-                  `).join('')}
-                </div>
-              ` : `<div style="font-size:11px;color:var(--text-faint);">Belum ada yang dipilih — cari atau tap ikon di bawah</div>`}
-              <input id="reg-cat-search" type="text" value="${catPickerQuery.replace(/"/g, '&quot;')}" oninput="window.__updateCatPickerQuery(this.value)" placeholder="🔍 Cari kategori, misal: rujak" style="margin-top:8px;" />
-              <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Jualan lain yang belum ada di daftar? Tulis di sini (pisahkan koma)</div>
-              <input id="reg-tags" type="text" list="tag-suggestions-list" value="${regTagsValue.replace(/"/g, '&quot;')}" oninput="window.__updateRegField('tags', this.value)" placeholder="misal: rujak serut, es duren" />
-              <datalist id="tag-suggestions-list">${knownTagSuggestions.map(t => `<option value="${t.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
-              ${renderCategoryPickerGrouped(selectedCategories, 'window.__toggleCategory', catPickerQuery)}
+              <div class="reg-step-sub">Pilih kategori, lalu ketik atau tap jenis jualanmu (maks. 8)</div>
+              ${foodPickerHtml('reg')}
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
 
@@ -3892,7 +3995,8 @@ function normalizeWhatsapp(raw) {
 window.__registerVendor = async function () {
   if (isRegistering) return; // cegah klik ganda saat masih diproses
   const name = (document.getElementById('reg-name')?.value || regNameValue).trim();
-  const categories = selectedCategories;
+  foodScope = 'reg';
+  const categories = foodFinalCategories();
   const category = categories[0] || null; // kolom lama, dijaga tetap terisi untuk kompatibilitas
   const emoji = selectedEmoji;
   const modeIcon = selectedModeIcon;
@@ -3945,7 +4049,7 @@ window.__registerVendor = async function () {
       .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional')
       .single();
 
-    if (customTags.length) logTagSuggestions(customTags.join(', ')); // tidak ditunggu, jangan blokir alur pendaftaran
+    if (customTags.length) logTagSuggestions(customTags.join(', '), foodMainSel[0]); // tidak ditunggu, jangan blokir alur pendaftaran
 
     if (error) {
       const friendly = error.message.includes('vendors_whatsapp_unique')
@@ -3961,7 +4065,7 @@ window.__registerVendor = async function () {
     localStorage.setItem('jd_my_vendor_id', myVendorId);
     selectedEmoji = '🍜';
     selectedModeIcon = null;
-    selectedCategories = [];
+    selectedCategories = []; foodMainSel = []; foodQuery = '';
     regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
     regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
     regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
@@ -4135,7 +4239,9 @@ window.__toggleStatus = async function () {
   renderPedagang();
 };
 
+window.__setType = function (l) { homeType = (homeType && foodNorm(homeType) === foodNorm(l)) ? null : l; renderPembeli(); };
 window.__setCat = function (c) {
+  homeType = null;
   activeCat = c;
   renderPembeli();
 };
@@ -4370,7 +4476,7 @@ async function renderAdminDashboard() {
       <button class="admin-tab" data-tab="articles" onclick="window.__adminSwitchTab('articles')">📝 Artikel</button>
       <button class="admin-tab" data-tab="requests" onclick="window.__adminSwitchTab('requests')">🔔 Permintaan</button>
       <button class="admin-tab" data-tab="reports" onclick="window.__adminSwitchTab('reports')">🚩 Laporan</button>
-      <button class="admin-tab" data-tab="tags" onclick="window.__adminSwitchTab('tags')">🏷️ Ikon</button>
+      <button class="admin-tab" data-tab="tags" onclick="window.__adminSwitchTab('tags')">🏷️ Jenis Jualan</button>
       <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
       <button class="admin-tab" data-tab="banners" onclick="window.__adminSwitchTab('banners')">🖼️ Banner Slider</button>
     </div>
@@ -4403,7 +4509,7 @@ async function renderAdminDashboard() {
     </div>
 
     <div class="admin-panel" data-panel="tags" style="display:none;">
-      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Kata kunci jualan yang diketik pedagang sendiri (belum ada kategorinya). Makin sering dipakai, makin layak dibuatkan ikon resmi.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Jenis jualan yang diketik pedagang sendiri. Tentukan kategorinya lalu setujui (jadi saran untuk semua pedagang) atau tolak (salah ketik, tidak pantas, atau duplikat).</div>
       <div id="admin-tags" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
     </div>
 
@@ -5543,38 +5649,62 @@ async function loadAdminReports() {
   }
 }
 
+async function adminTagsCall(body) {
+  const { data, error } = await sb.functions.invoke('admin-tags', { body: { password: adminPasswordCache, ...body } });
+  if (error) throw error;
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
 async function loadAdminTagSuggestions() {
   const el = document.getElementById('admin-tags');
   if (!el) return;
   try {
-    // tag_suggestions dikunci RLS total — dibaca lewat edge function admin-action.
-    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_tag_suggestions' } });
-    if (error) throw error;
-    if (data && data.error) throw new Error(data.error);
-    const rows = data.tags || [];
-    if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada tag baru yang diketik pedagang. 👍</div>'; return; }
-    el.innerHTML = rows.map(t => `
-      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${t.reviewed ? 'opacity:.55;' : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
+    // tag_suggestions dikunci RLS total -- dibaca & dimoderasi lewat edge function admin-tags.
+    const data = await adminTagsCall({ action: 'list' });
+    const order = { pending: 0, approved: 1, rejected: 2 };
+    const rows = (data.tags || []).slice().sort((x, y) => (order[x.status] - order[y.status]) || (y.count - x.count));
+    if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada jenis jualan baru yang diketik pedagang.</div>'; return; }
+    const pending = rows.filter(t => t.status === 'pending').length;
+    const statusLbl = { pending: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak' };
+    const statusCol = { pending: '#B7791F', approved: 'var(--aktif)', rejected: '#C53030' };
+    el.innerHTML = `<div style="font-size:11.5px;color:var(--text-dim);margin-bottom:8px;">${pending} menunggu peninjauan · ${rows.length} total. Jenis yang dipakai ≥ 2 pedagang atau disetujui akan muncul sebagai saran.</div>` + rows.map(t => `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;${t.status === 'rejected' ? 'opacity:.6;' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
           <span style="font-weight:700;font-size:13px;">${escapeHtml(t.tag_display)}</span>
-          <span style="font-size:10px;padding:3px 9px;border-radius:999px;background:var(--brand-dim);color:var(--brand);font-weight:700;">${t.count}× dipakai</span>
+          <span style="font-size:10px;padding:3px 9px;border-radius:999px;background:var(--brand-dim);color:var(--brand);font-weight:700;">${t.count}x dipakai</span>
         </div>
-        <div style="font-size:9.5px;color:var(--text-faint);">Pertama: ${new Date(t.first_seen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} · Terakhir: ${new Date(t.last_seen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-        <button class="follow-btn" onclick="window.__toggleTagReviewed('${t.id}', ${!t.reviewed})">${t.reviewed ? '↩️ Tandai Belum Dibuat' : '✅ Tandai Ikon Sudah Dibuat'}</button>
+        <div style="font-size:10px;color:var(--text-faint);">
+          <b style="color:${statusCol[t.status]};">${statusLbl[t.status]}</b> · Pertama: ${new Date(t.first_seen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </div>
+        <select onchange="window.__tagSetMain('${t.id}', this.value)" style="padding:8px;border-radius:10px;border:1px solid var(--stroke);font-size:12px;">
+          <option value="" ${t.main_category ? '' : 'selected'}>Kategori belum ditentukan</option>
+          ${FOOD_MAIN.map(m => `<option value="${m.k}" ${t.main_category === m.k ? 'selected' : ''}>${m.label}</option>`).join('')}
+        </select>
+        <div style="display:flex;gap:6px;">
+          ${t.status !== 'approved' ? `<button class="follow-btn" onclick="window.__tagSetStatus('${t.id}','approved')">✓ Setujui</button>` : ''}
+          ${t.status !== 'rejected' ? `<button class="follow-btn" style="background:var(--surface-2);color:var(--text);" onclick="window.__tagSetStatus('${t.id}','rejected')">✕ Tolak</button>` : ''}
+          <button class="follow-btn" style="background:var(--surface-2);color:var(--text);flex:0 0 auto;" aria-label="Hapus" onclick="window.__tagDelete('${t.id}')">🗑</button>
+        </div>
       </div>
     `).join('');
   } catch (e) {
-    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat tag: ${e.message}</span>`;
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat jenis jualan: ${escapeHtml(e.message || String(e))}</span>`;
   }
 }
 
-window.__toggleTagReviewed = async function (id, reviewed) {
-  try {
-    await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'update_tag_suggestion_reviewed', tag_id: id, reviewed } });
-    loadAdminTagSuggestions();
-  } catch (e) {
-    alert('Gagal update status: ' + e.message);
-  }
+window.__tagSetStatus = async function (id, status) {
+  try { await adminTagsCall({ action: 'update', tag_id: id, status }); loadAdminTagSuggestions(); }
+  catch (e) { alert('Gagal mengubah status: ' + (e.message || e)); }
+};
+window.__tagSetMain = async function (id, main) {
+  try { await adminTagsCall({ action: 'update', tag_id: id, main_category: main || null }); showToast('Kategori disimpan'); }
+  catch (e) { alert('Gagal menyimpan kategori: ' + (e.message || e)); }
+};
+window.__tagDelete = async function (id) {
+  if (!confirm('Hapus jenis jualan ini dari daftar?')) return;
+  try { await adminTagsCall({ action: 'delete', tag_id: id }); loadAdminTagSuggestions(); }
+  catch (e) { alert('Gagal menghapus: ' + (e.message || e)); }
 };
 
 window.__updateReportStatus = async function (reportId, status) {
