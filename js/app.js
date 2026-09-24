@@ -3022,7 +3022,13 @@ function renderPedagang() {
   main.innerHTML = `
     ${renderAnnouncementBanner(getRelevantAnnouncementsForVendor(v))}
     ${renderBannerSlider(getRelevantBannersForVendor(v))}
-    <div class="vendor-hero">
+    <button type="button" class="pd-greet" onclick="window.__openEditProfile('${v.id}')">
+      <img class="pd-avatar pd-mascot" src="icons/maskot.png" alt="" />
+      <span class="pd-greet-text"><div class="pd-greet-name">Halo, ${escapeHtml(v.name)}</div><div class="pd-greet-sub">Terus semangat jualannya!</div>
+        <div class="pd-badges">${v.is_premium ? '<span class="pd-badge prem">👑 Unggulan</span>' : ''}${v.verification_status === 'verified' ? '<span class="pd-badge ver">✓ Terverifikasi</span>' : ''}</div></span>
+      <span class="pd-chev">›</span>
+    </button>
+    <div class="vendor-hero pd-hero-status ${v.active ? 'on' : ''}">
       <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
       <div class="vendor-hero-name">${v.name}</div>
       <div class="status-banner ${v.active ? 'active' : 'inactive'}">
@@ -3097,6 +3103,17 @@ function renderPedagang() {
       ` : ''}
     </div>
 
+    <button type="button" class="pd-share" onclick="var b=document.getElementById('vendor-qr-box'); if(b) b.scrollIntoView({behavior:'smooth',block:'center'})">
+      <span class="pd-share-ic">▦</span>
+      <span class="pd-share-text"><b>Bagikan Toko</b><small>Tingkatkan jangkauan toko kamu lewat QR &amp; link</small></span><span class="pd-chev">›</span>
+    </button>
+    <div class="pd-sec"><h2>Kelola Toko</h2></div>
+    <div class="pd-tiles">
+      <button type="button" class="pd-tile" onclick="window.__openProductManager('${v.id}')"><span class="pd-tile-ic">📦</span><span class="pd-tile-lbl">Produk</span></button>
+      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">🏪</span><span class="pd-tile-lbl">Profil Toko</span></button>
+      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">🕐</span><span class="pd-tile-lbl">Jam Operasional</span></button>
+      <button type="button" class="pd-tile ${v.verification_status === 'verified' ? 'ok' : ''}" onclick="window.__openVerificationForm('${v.id}')"><span class="pd-tile-ic">🛡️</span><span class="pd-tile-lbl">Verifikasi</span>${v.verification_status === 'verified' ? '<span class="pd-tile-sub">Terverifikasi</span>' : ''}</button>
+    </div>
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">📱</span>
@@ -3264,7 +3281,7 @@ function renderPedagang() {
     </div>
 
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
-    <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openFaqModal()">❓ Bantuan & FAQ</button>
+    <button type="button" class="pd-help" onclick="window.__openFaqModal()"><span class="pd-help-ic">?</span><span class="pd-share-text"><b>Butuh Bantuan?</b><small>Lihat FAQ atau hubungi kami</small></span><span class="pd-chev">›</span></button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
