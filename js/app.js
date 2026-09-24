@@ -3085,11 +3085,14 @@ function renderPedagang() {
         </div>
       ` : ''}
 
-      <button class="big-toggle ${v.active ? 'on' : 'off'}" onclick="window.__toggleStatus()">
-        ${v.active
-          ? '🔴 SELESAI JUALAN <small>Tekan untuk berhenti</small>'
-          : '🟢 SAYA JUALAN <small>Lokasi & status akan aktif</small>'}
-      </button>
+      <div class="go-wrap ${v.active ? 'on' : 'off'}">
+        ${v.active ? '' : '<img class="go-mascot" src="icons/maskot-jualan.png" alt="" aria-hidden="true" />'}
+        <button class="big-toggle ${v.active ? 'on' : 'off'}" onclick="window.__toggleStatus()">
+          ${v.active
+            ? '🔴 SELESAI JUALAN <small>Tekan untuk berhenti</small>'
+            : '▶ MULAI JUALAN <small>Lokasi & status akan aktif</small>'}
+        </button>
+      </div>
 
       ${!v.active ? `
         <div style="font-size:11px;color:var(--text-faint);margin-top:14px;text-align:left;">Berapa lama Anda jualan?</div>
