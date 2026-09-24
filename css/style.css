@@ -996,3 +996,30 @@ header{ position:static; display:contents; }
 .reg-hero-art img{ width:min(100%,340px); height:auto; display:block; }
 .reg-hero-art.collapsed{ max-height:0; opacity:0; margin:0; }
 @media (prefers-reduced-motion:reduce){ .reg-hero-art{ transition:none; } }
+
+/* --- Layar masuk pedagang (mengikuti mockup) --- */
+[hidden]{ display:none !important; }
+.lg-card{ padding:20px 18px 18px; background:var(--surface); border:1px solid var(--stroke); border-radius:20px; box-shadow:var(--shadow); text-align:left; }
+.lg-top{ display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:12px; }
+.lg-txt h2{ margin:0; font-family:'Poppins',sans-serif; font-size:22px; line-height:1.2; font-weight:800; color:var(--text); }
+.lg-txt h2 span{ color:var(--brand); }
+.lg-txt p{ margin:8px 0 0; font-size:12.5px; line-height:1.4; color:var(--text-soft); max-width:170px; }
+.lg-mascot{ flex:0 0 118px; height:118px; border-radius:50%; background:radial-gradient(circle at 50% 55%,#FFEFC9 0%,#FFE3A8 100%); display:flex; align-items:flex-end; justify-content:center; }
+.lg-mascot img{ width:104px; height:auto; margin-bottom:2px; }
+.lg-label{ display:flex; align-items:center; gap:8px; margin:14px 0 6px; font-size:14px; font-weight:700; color:var(--text); }
+.lg-ic svg{ width:24px; height:24px; display:block; }
+.lg-field{ display:flex; align-items:center; gap:10px; min-height:48px; padding:0 14px; background:var(--surface); border:1.5px solid var(--field-line); border-radius:14px; color:var(--text-dim); }
+.lg-field:focus-within{ border-color:var(--brand); box-shadow:0 0 0 3px rgba(255,107,74,.15); }
+.lg-svg{ width:18px; height:18px; flex-shrink:0; }
+.lg-field input{ flex:1; min-width:0; border:none; outline:none; background:transparent; font-family:'Inter',sans-serif; font-size:14px; color:var(--text); padding:0; }
+.lg-eye{ border:none; background:none; padding:4px; color:var(--text-dim); cursor:pointer; display:flex; }
+.lg-hint{ margin:5px 2px 0; font-size:11.5px; color:var(--text-faint); }
+.lg-error{ color:#E5484D; font-size:12px; min-height:0; margin-top:6px; }
+.lg-submit{ display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:52px; margin-top:14px; border:none; border-radius:14px; background:linear-gradient(135deg,var(--hero-from),var(--brand)); color:#fff; font-family:'Inter',sans-serif; font-weight:800; font-size:15px; letter-spacing:.3px; cursor:pointer; box-shadow:0 10px 18px -10px rgba(255,107,74,.9); }
+.lg-submit .lg-svg{ width:22px; height:22px; }
+.lg-forgot{ display:block; margin:12px 0 4px; text-align:center; font-size:13px; font-weight:700; color:var(--brand); text-decoration:underline; }
+.lg-or{ display:flex; align-items:center; gap:10px; margin:10px 0; color:var(--text-dim); font-size:12.5px; }
+.lg-or::before, .lg-or::after{ content:''; flex:1; height:1px; background:var(--stroke); }
+.lg-reg{ display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:48px; border:1.5px solid #F7C9BC; border-radius:14px; background:#FFF6F2; color:var(--brand); font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
+.lg-reg b{ font-size:18px; line-height:1; }
+.lg-banner{ display:block; width:100%; height:auto; margin:14px 0; }
