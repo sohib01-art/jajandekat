@@ -963,11 +963,40 @@ const FOOD_MAIN = [
   { k:'minuman', label:'Minuman', img:'icons/kat-minuman.webp', e:'🥤', items:['Es Teh','Teh Hangat','Teh Manis','Teh Tarik','Lemon Tea','Thai Tea','Milk Tea','Jus Alpukat','Jus Mangga','Jus Jeruk','Jus Melon','Jus Semangka','Jus Apel','Jus Nanas','Jus Buah Naga','Es Jeruk','Es Lemon','Es Cendol','Es Dawet','Es Campur','Es Teler','Es Doger','Es Selendang Mayang','Es Kelapa Muda','Es Buah','Kopi Hitam','Kopi Susu','Es Kopi Susu','Kopi Gula Aren','Cappuccino','Latte','Americano','Boba','Cheese Tea','Matcha','Cokelat','Milkshake','Smoothie','Yakult Drink','Soda','Mojito Non-Alkohol'] },
   { k:'manis', label:'Manis & Dessert', img:'icons/kat-manis.webp', e:'🍰', items:['Martabak Manis','Terang Bulan','Pancake','Waffle','Crepes','Donat','Brownies','Bolu','Cake','Cupcake','Muffin','Puding','Agar-Agar','Es Krim','Gelato','Dessert Box','Salad Buah','Puding Buah','Pisang Cokelat','Pisang Keju','Pisang Nugget','Roti Bakar','Roti Kukus','Roti Maryam','Klepon','Onde-Onde','Dadar Gulung','Kue Lumpur','Kue Lapis','Putu','Serabi','Lupis','Cenil','Getuk','Tape','Kolak'] },
   { k:'fast', label:'Fast Food & Modern', img:'icons/kat-fast.webp', e:'🍔', items:['Burger','Chicken Burger','Cheese Burger','Hot Dog','Pizza','Pizza Mini','Kebab','Shawarma','Sandwich','Toast','Chicken Wings','Fried Chicken','Chicken Strip','Popcorn Chicken','French Fries','Potato Wedges','Hash Brown','Mozzarella Stick','Nachos','Pasta','Spaghetti','Mac & Cheese','Rice Bowl','Chicken Rice Bowl','Beef Rice Bowl','Korean Chicken','Korean Street Food','Corndog','Toast Kekinian','Croffle','Donat Kekinian','Dessert Kekinian'] },
-  { k:'lain', label:'Lain-lain', img:'icons/kat-lain.webp', e:'✨', items:[] },
 ];
 // label lama (data pedagang sebelum perubahan) -> kategori baru
 const FOOD_LEGACY = { 'nasi':'berat', 'ayam & daging':'berat', 'ikan & seafood':'berat', 'minuman':'minuman', 'kopi':'minuman', 'es':'minuman', 'roti & kue':'manis', 'jajanan':'jajanan', 'snack & camilan':'jajanan', 'kebab':'fast' };
 const foodNorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+// Lima kategori kuliner (stiker) + tambahan jenis
+FOOD_MAIN.forEach(m => { m.kul = true; m.short = m.label; });
+FOOD_MAIN.find(m => m.k === 'berat').items.push('Warung Makan', 'Bebek');
+FOOD_MAIN.find(m => m.k === 'minuman').items.push('Kopi', 'Jus Buah', 'Minuman Herbal', 'Es Kelapa');
+FOOD_MAIN.find(m => m.k === 'fast').items.push('Korean Food', 'Japanese Street Food');
+// Kategori non-kuliner: [kunci, nama lengkap, nama pendek, emoji, {sub-kelompok: 'jenis|jenis|...'}]
+const CAT_DEFS = [
+  ['kebutuhan','Kebutuhan Harian','Kebutuhan Harian','🛒',{'Warung & Sembako':'Warung Kelontong|Toko Sembako|Toko Beras|Toko Minyak & Kebutuhan Dapur|Toko Bahan Pokok','Air & Gas':'Depot Air Minum|Air Galon|Agen LPG|Gas Rumah Tangga','Kebutuhan Pribadi':'Toko Perlengkapan Mandi|Toko Kosmetik Harian|Toko Kebutuhan Bayi|Toko Alat Tulis','Kebutuhan Rumah':'Toko Plastik|Toko Peralatan Dapur|Toko Kebutuhan Rumah Tangga|Toko Perlengkapan Kebersihan'}],
+  ['segar','Sayur, Buah, Ikan & Daging Segar','Bahan Segar','🥬',{'Sayur & Buah':'Sayur Keliling|Sayuran|Buah|Sayur Organik|Bumbu Dapur','Ikan & Seafood':'Ikan Segar|Udang|Cumi|Kepiting|Ikan Asin','Daging & Ayam':'Daging Sapi|Ayam Potong|Daging Kambing|Bebek Potong','Bahan Segar Lain':'Telur|Tahu & Tempe'}],
+  ['fashion','Fashion','Fashion','👕',{'Pakaian':'Toko Baju|Pakaian Pria|Pakaian Wanita|Pakaian Anak|Pakaian Bayi|Baju Muslim|Batik|Kaos|Seragam','Muslim & Hijab':'Hijab|Gamis|Mukena|Sarung|Peci|Aksesoris Hijab','Fashion Pelengkap':'Sepatu|Sandal|Tas|Dompet|Topi|Ikat Pinggang|Aksesoris','Jasa Fashion':'Jahit|Permak Pakaian|Bordir|Sablon Pakaian'}],
+  ['servis','Servis & Perbaikan','Servis','🔧',{'Elektronik':'Servis TV|Servis Kulkas|Servis Mesin Cuci|Servis Elektronik|Servis Kipas','HP & Gadget':'Servis HP|Servis Laptop|Servis Komputer|Ganti Layar|Ganti Baterai|Instalasi Software','Peralatan Rumah':'Servis Pompa Air|Servis Mesin|Perbaikan Peralatan Rumah','Teknisi':'Tukang Listrik|Tukang Las|Tukang Kayu|Tukang Bangunan|Tukang Cat|Tukang Plafon'}],
+  ['kecantikan','Kecantikan & Perawatan','Kecantikan','💇',{'Rambut':'Salon|Barbershop|Pangkas Rambut|Hair Stylist|Hair Coloring','Perawatan':'Facial|Skincare|Spa|Perawatan Tubuh|Massage','Kecantikan':'Makeup Artist|Nail Art|Eyelash|Brow Treatment','Produk':'Kosmetik|Parfum|Produk Perawatan Rambut'}],
+  ['rumah','Rumah & Perlengkapan','Rumah','🏠',{'Perabot':'Furniture|Meja|Kursi|Lemari|Rak|Kasur','Dapur':'Peralatan Masak|Peralatan Makan|Panci|Wajan|Peralatan Dapur','Dekorasi':'Dekorasi Rumah|Hiasan Dinding|Tanaman Hias|Pot|Lampu|Tirai','Kebutuhan Rumah':'Perlengkapan Kamar|Perlengkapan Kamar Mandi|Perlengkapan Kebersihan|Peralatan Rumah Tangga'}],
+  ['otomotif','Otomotif','Otomotif','🏍️',{'Bengkel':'Bengkel Motor|Bengkel Mobil|Servis Mesin|Servis Rem|Servis AC Mobil','Ban':'Tambal Ban|Ganti Ban|Ban Motor|Ban Mobil|Vulkanisir','Cuci & Perawatan':'Cuci Motor|Cuci Mobil|Detailing|Poles Kendaraan','Suku Cadang':'Sparepart Motor|Sparepart Mobil|Oli|Aki|Aksesoris Kendaraan'}],
+  ['digital','Digital & Percetakan','Digital & Cetak','🖨️',{'Percetakan':'Print|Fotokopi|Scan|Laminasi|Jilid|Cetak Foto','Desain':'Desain Grafis|Desain Logo|Desain Undangan|Desain Poster|Desain Banner','Cetak Promosi':'Brosur|Flyer|Banner|Spanduk|Sticker|Kartu Nama|Undangan','Digital':'Pulsa|Paket Data|Token Listrik|Top Up|Pembayaran Digital|Jasa Komputer|Jasa Mengetik'}],
+  ['pertanian','Pertanian & Hewan','Tani & Hewan','🌱',{'Pertanian':'Bibit Tanaman|Tanaman Hias|Sayuran|Buah|Pupuk|Pestisida|Media Tanam|Peralatan Berkebun','Peternakan':'Pakan Ternak|Bibit Ternak|Telur|Hewan Ternak','Hewan Peliharaan':'Pet Shop|Pakan Kucing|Pakan Anjing|Aksesoris Hewan|Grooming Hewan|Jasa Penitipan Hewan'}],
+  ['kado','Kado & Kreatif','Kado & Kreatif','🎁',{'Hadiah':'Toko Kado|Hampers|Parcel|Buket Bunga|Buket Uang|Buket Snack','Handmade':'Kerajinan Tangan|Crochet|Rajut|Souvenir|Aksesoris Handmade','Custom':'Mug Custom|Kaos Custom|Tumbler Custom|Gantungan Kunci|Undangan Custom|Plakat|Merchandise'}],
+  ['jasa_rumah','Jasa Rumah','Jasa Rumah','🧹',{'Laundry':'Laundry Kiloan|Laundry Sepatu|Laundry Karpet|Cuci Sofa|Cuci Kasur','Kebersihan & Taman':'Cleaning Service|Tukang Kebun|Potong Rumput','Angkut & Renovasi':'Jasa Pindahan|Jasa Angkut Barang|Jasa Renovasi|Jasa Tukang|Perbaikan Atap|Pengecatan Rumah','Instalasi & Servis':'Instalasi Listrik|Instalasi Air|Servis AC|Jasa Keliling'}],
+  ['pendidikan','Pendidikan','Pendidikan','🎓',{'Les & Bimbingan':'Les Privat|Bimbingan Belajar|Les Matematika|Les Bahasa Inggris|Les Membaca|Les Menulis|Les Mengaji','Kursus':'Kursus Komputer|Kursus Bahasa|Kursus Musik|Kursus Menggambar|Kursus Keterampilan','Jasa Pendidikan':'Jasa Mengetik|Jasa Print Tugas|Jasa Desain Tugas|Tutor Online|Konsultasi Pendidikan'}],
+  ['kreatif','Jasa Kreatif','Jasa Kreatif','🎨',{'Foto & Video':'Fotografi|Videografi|Foto Produk|Video Produk|Editing Foto|Editing Video','Desain & Konten':'Desain Grafis|Desain Logo|Ilustrasi|Jasa Konten Media Sosial|Admin Media Sosial|Copywriting|Voice Over','Acara & Digital':'MC|Dekorasi Acara|Event Organizer|Undangan Digital|Website Sederhana|Jasa Digital Marketing'}],
+  ['kesehatan','Kesehatan','Kesehatan','❤️',{'Obat & Alat':'Apotek|Toko Obat|Alat Kesehatan|Optik','Layanan':'Klinik|Bidan|Dokter Praktik|Pijat & Refleksi|Bekam|Terapi Herbal','Herbal':'Jamu|Madu|Produk Herbal'}],
+  ['lain','Lain-lain','Lain-lain','✨',{'Lain-lain':'Toko HP & Aksesoris|Elektronik|Alat Olahraga|Mainan|Hobi & Koleksi|Buku|Barang Bekas'}],
+];
+CAT_DEFS.forEach(([k, label, short, e, subs]) => {
+  const sub = Object.entries(subs).map(([n, s]) => ({ n, items: s.split('|') }));
+  const seen = new Set(), items = [];
+  sub.forEach(g => g.items.forEach(i => { const n = foodNorm(i); if (!seen.has(n)) { seen.add(n); items.push(i); } }));
+  FOOD_MAIN.push({ k, label, short, img: `icons/kat-${k}.webp`, e, items, sub });
+});
+Object.assign(FOOD_LEGACY, { 'mi ayam':'berat', 'lainnya':'lain', 'desain gambar':'kreatif', 'warung':'kebutuhan', 'toko kelontong':'kebutuhan', 'sembako':'kebutuhan', 'sayur & buah':'segar', 'daging & ikan':'segar', 'pakaian':'fashion', 'apotek':'kesehatan', 'laundry':'jasa_rumah', 'bengkel':'otomotif', 'elektronik':'lain' });
 const FOOD_INDEX = {};
 FOOD_MAIN.forEach(m => m.items.forEach(i => { const n = foodNorm(i); const arr = (FOOD_INDEX[n] = FOOD_INDEX[n] || []); if (!arr.includes(m.k)) arr.push(m.k); }));
 FOOD_MAIN.forEach(m => { FOOD_INDEX[foodNorm(m.label)] = [m.k]; });
@@ -982,8 +1011,9 @@ function vendorMainCats(v) {
   return [...set];
 }
 function foodItems(k) {
-  if (k !== 'lain') return FOOD_MAIN.find(m => m.k === k).items;
-  return CATEGORY_OPTIONS.map(c => c.label).filter(l => !foodMainsOfLabel(l));
+  const m = FOOD_MAIN.find(x => x.k === k);
+  if (k !== 'lain') return m.items;
+  return [...m.items, ...CATEGORY_OPTIONS.map(c => c.label).filter(l => !foodMainsOfLabel(l))];
 }
 let homeType = null;
 // ----- Pemilih jenis jualan (pendaftaran) -----
@@ -1010,7 +1040,10 @@ function foodAllPool() {
 function foodTidy(s) { return String(s).trim().replace(/\s+/g, ' ').slice(0, 40).replace(/(^|[\s\-\/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()); }
 function foodIsListed(n) { return !!FOOD_INDEX[n] || CATEGORY_OPTIONS.some(c => foodNorm(c.label) === n); }
 function foodMainsHtml() {
-  return FOOD_MAIN.map(m => `<button type="button" class="food-main ${foodS().mains().includes(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${foodS().mains().includes(m.k)}"><img src="${m.img}" alt="${m.label}" loading="lazy" /><span class="food-check">✓</span></button>`).join('');
+  const on = k => foodS().mains().includes(k);
+  const kul = FOOD_MAIN.filter(m => m.kul).map(m => `<button type="button" class="food-main ${on(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${on(m.k)}"><img src="${m.img}" alt="${m.label}" loading="lazy" /><span class="food-check">✓</span></button>`).join('');
+  const oth = FOOD_MAIN.filter(m => !m.kul).map(m => `<button type="button" class="food-sq ${on(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${on(m.k)}"><img src="${m.img}" alt="" loading="lazy" /><span>${m.short}</span><i class="food-check">✓</i></button>`).join('');
+  return `<div class="food-sub-lbl">Kuliner</div><div class="food-mains">${kul}</div><div class="food-sub-lbl">Lainnya</div><div class="fm-sqgrid">${oth}</div>`;
 }
 function foodSelectedHtml() {
   const all = foodSelectedAll();
@@ -1020,22 +1053,30 @@ function foodSelectedHtml() {
 function foodSuggestHtml() {
   const q = foodNorm(foodQuery);
   const sel = new Set(foodSelectedAll().map(foodNorm));
-  let list;
+  const chip = l => `<button type="button" class="food-chip ${sel.has(foodNorm(l)) ? 'picked' : ''}" onclick="window.__foodToggle(${foodArg(l)})">${escapeHtml(l)}</button>`;
+  const mains = foodS().mains();
+  let body = '';
   if (q) {
     const pool = foodAllPool().filter(l => foodNorm(l).includes(q));
     pool.sort((x, y) => (foodNorm(y).startsWith(q) - foodNorm(x).startsWith(q)));
-    list = pool.slice(0, 16);
-  } else if (foodS().mains().length) {
-    const seen = new Set(); list = [];
-    foodS().mains().forEach(k => foodItems(k).forEach(l => { if (!seen.has(foodNorm(l))) { seen.add(foodNorm(l)); list.push(l); } }));
-    list = list.slice(0, 30);
+    body = pool.slice(0, 16).map(chip).join('');
+  } else if (mains.length) {
+    const seen = new Set();
+    mains.forEach(k => {
+      const m = FOOD_MAIN.find(x => x.k === k);
+      const groups = m.sub || [{ n: m.label, items: foodItems(k) }];
+      groups.forEach(g => {
+        const its = g.items.filter(l => !seen.has(foodNorm(l)));
+        its.forEach(l => seen.add(foodNorm(l)));
+        if (its.length) body += `<div class="food-sub-lbl">${escapeHtml(g.n)}</div>` + its.map(chip).join('');
+      });
+    });
   } else {
     return '<div class="food-empty">Pilih kategori di atas, atau ketik jenis jualanmu.</div>';
   }
-  const chips = list.map(l => `<button type="button" class="food-chip ${sel.has(foodNorm(l)) ? 'picked' : ''}" onclick="window.__foodToggle(${foodArg(l)})">${escapeHtml(l)}</button>`).join('');
   const exact = q && foodAllPool().some(l => foodNorm(l) === q);
   const add = (q && !exact) ? `<button type="button" class="food-chip add" onclick="window.__foodAdd()">＋ Tambah “${escapeHtml(foodTidy(foodQuery))}”</button>` : '';
-  return (chips || add) ? add + chips : '<div class="food-empty">Tidak ada yang cocok.</div>';
+  return (body || add) ? add + body : '<div class="food-empty">Tidak ada yang cocok.</div>';
 }
 function foodRefresh() {
   const set = (id, h) => { const el = document.getElementById(id); if (el) el.innerHTML = h; };
@@ -1045,7 +1086,7 @@ function foodPickerHtml(scope) {
   if (scope) foodScope = scope;
   return `<div id="food-picker">
     <div class="food-lbl">1. Pilih kategori</div>
-    <div id="food-mains" class="food-mains">${foodMainsHtml()}</div>
+    <div id="food-mains">${foodMainsHtml()}</div>
     <div class="food-lbl">2. Ketik atau pilih jenis jualanmu</div>
     <div id="food-selected" class="food-selected">${foodSelectedHtml()}</div>
     <div class="cari-bar food-search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="food-q" type="text" value="${escapeHtml(foodQuery)}" oninput="window.__foodQuery(this.value)" placeholder="Ketik jenis jualan, misal: cilok" autocomplete="off" enterkeyhint="done" /></div>
@@ -1121,10 +1162,16 @@ function renderPembeli() {
   const hmActive = FOOD_MAIN.find(c => 'grp:' + c.k === activeCat);
   let filteredVendors = hmActive ? vendors.filter(v => vendorMainCats(v).includes(hmActive.k)) : vendors;
   if (hmActive && homeType) filteredVendors = filteredVendors.filter(v => [...(v.categories || []), ...(v.custom_tags || [])].some(l => foodNorm(l) === foodNorm(homeType)));
-  const catGridHtml = FOOD_MAIN.map(c => `
-    <button class="fm-tile ${c.k === 'jajanan' ? 'hero' : ''} ${c.k === 'lain' ? 'wide' : ''} ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')" aria-label="${c.label}" aria-pressed="${hmActive === c}">
+  const tileK = c => `
+    <button class="fm-tile ${c.k === 'jajanan' ? 'hero' : ''} ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')" aria-label="${c.label}" aria-pressed="${hmActive === c}">
       <img src="${c.img}" alt="${c.label}" loading="lazy" />
-    </button>`).join('');
+    </button>`;
+  const tileO = c => `
+    <button class="fm-sq ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')" aria-label="${c.label}" aria-pressed="${hmActive === c}">
+      <img src="${c.img}" alt="" loading="lazy" /><span>${c.short}</span>
+    </button>`;
+  const kulGridHtml = FOOD_MAIN.filter(c => c.kul).map(tileK).join('');
+  const othGridHtml = FOOD_MAIN.filter(c => !c.kul).map(tileO).join('');
   const typeChipsHtml = hmActive && foodItems(hmActive.k).length ? `<div class="map-chip-row" style="margin-top:10px;">${foodItems(hmActive.k).slice(0, 16).map(l => `<button type="button" class="map-chip ${homeType && foodNorm(homeType) === foodNorm(l) ? 'active' : ''}" onclick="window.__setType(${foodArg(l)})">${escapeHtml(l)}</button>`).join('')}</div>` : '';
   const bn = getRelevantBannersForBuyer();
   const bannerHtml = bn.length ? renderBannerSlider(bn) : `
@@ -1137,7 +1184,9 @@ function renderPembeli() {
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     ${bannerHtml}
     <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__setCat('semua')">Lihat Semua →</button></div>
-    <div class="fm-grid">${catGridHtml}</div>${typeChipsHtml}
+    <div class="fm-grid">${kulGridHtml}</div>${hmActive && hmActive.kul ? typeChipsHtml : ''}
+    <div class="sec-head" style="margin-top:14px;"><h2>Kategori Lainnya</h2></div>
+    <div class="fm-sqgrid">${othGridHtml}</div>${hmActive && !hmActive.kul ? typeChipsHtml : ''}
     <div class="sec-head"><h2>📍 Pedagang Terdekat</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
     ${near.length ? `<div class="hm-near">${near.map(renderHmNearCard).join('')}</div>` : nearbyEmptyHtml()}
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
@@ -2288,7 +2337,7 @@ function renderCariView() {
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
     </div>
-    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.label}</button>`).join('')}</div>
+    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
     <div id="search-results" style="margin-top:8px;"></div>
 
     <div class="vendor-hero" style="margin-top:20px;text-align:left;">
