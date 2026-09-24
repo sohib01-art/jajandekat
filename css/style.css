@@ -951,3 +951,15 @@ nav.bottom{
 .cari-bar:focus-within{ border-color:var(--brand); }
 
 .chip-ic{ width:18px; height:18px; vertical-align:-4px; margin-right:2px; object-fit:contain; }
+
+/* --- Rapikan header: tidak bertabrakan di layar sempit & tidak menutupi separuh layar --- */
+header{ position:static; display:contents; }
+.hero-sheet{ position:sticky; top:0; z-index:20; }
+.brand-zone{ flex:1 1 auto; min-width:0; gap:8px; }
+.brand-text{ min-width:0; }
+.brand{ font-size:clamp(18px, 5.6vw, 22px); white-space:nowrap; }
+.tagline{ font-size:10.5px; line-height:1.25; }
+.brand-logo{ width:32px; height:38px; }
+.loc-pill{ flex:0 1 auto; max-width:112px; min-width:0; padding:5px 9px; }
+.bell-btn{ width:38px; height:38px; }
+@media (max-width:400px){ .loc-pill > svg{ display:none; } .loc-pill{ max-width:96px; } }
