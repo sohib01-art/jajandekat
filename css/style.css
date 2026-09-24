@@ -949,3 +949,5 @@ nav.bottom{
 .cari-bar svg{ flex-shrink:0; }
 .cari-bar input{ flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--text); font-family:'Inter',sans-serif; font-size:13.5px; }
 .cari-bar:focus-within{ border-color:var(--brand); }
+
+.chip-ic{ width:18px; height:18px; vertical-align:-4px; margin-right:2px; object-fit:contain; }
