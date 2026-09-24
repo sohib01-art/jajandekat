@@ -1023,3 +1023,26 @@ header{ position:static; display:contents; }
 .lg-reg{ display:flex; align-items:center; justify-content:center; gap:10px; width:100%; min-height:48px; border:1.5px solid #F7C9BC; border-radius:14px; background:#FFF6F2; color:var(--brand); font-family:'Inter',sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
 .lg-reg b{ font-size:18px; line-height:1; }
 .lg-banner{ display:block; width:100%; height:auto; margin:14px 0; }
+
+/* --- Kategori bergambar (beranda) & pemilih jenis jualan (daftar) --- */
+.fm-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.fm-tile{ padding:0; border:2px solid transparent; border-radius:18px; background:var(--surface); box-shadow:var(--shadow); cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+.fm-tile img{ width:100%; height:auto; display:block; }
+.fm-tile.hero, .fm-tile.wide{ grid-column:1 / -1; }
+.fm-tile.wide img{ max-height:120px; object-fit:contain; }
+.fm-tile.active{ border-color:var(--brand); }
+.food-lbl{ margin:14px 0 8px; font-size:13px; font-weight:700; color:var(--text); text-align:left; }
+.food-mains{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.food-main{ position:relative; padding:2px; border:2px solid var(--stroke); border-radius:16px; background:var(--surface); cursor:pointer; }
+.food-main img{ width:100%; height:auto; display:block; }
+.food-main.picked{ border-color:var(--brand); background:#FFF3EC; }
+.food-check{ display:none; position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; background:var(--brand); color:#fff; font-size:13px; font-weight:800; align-items:center; justify-content:center; }
+.food-main.picked .food-check{ display:flex; }
+.food-selected{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; min-height:28px; }
+.food-empty, .food-hint{ font-size:11.5px; color:var(--text-faint); text-align:left; }
+.food-hint{ margin-top:10px; }
+.food-search{ margin-top:0; }
+.food-suggest{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.food-chip{ padding:8px 12px; border:1.5px solid var(--field-line); border-radius:999px; background:var(--surface); color:var(--text); font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; cursor:pointer; }
+.food-chip.picked{ background:var(--brand); border-color:var(--brand); color:#fff; }
+.food-chip.add{ border-style:dashed; border-color:var(--brand); color:var(--brand); }
