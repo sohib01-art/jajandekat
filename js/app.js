@@ -1133,12 +1133,31 @@ function hmVendorEmoji(v) { return (v.photo_url || v.mode_icon) ? '' : (v.emoji 
 function hmRating(v) { return v.rating_count > 0 ? `<span style="color:#F5A800">★</span> ${v.rating_avg} <span style="color:var(--text-dim);font-weight:500">(${v.rating_count})</span>` : ''; }
 // Status buka disamakan dengan lembar detail pedagang: aktif, atau punya lokasi & tidak tutup hari ini.
 function hmIsOpen(v) { return !!(v.active || (!vendorClosedTodayNote(v) && vendorIsShowable(v))); }
+// Subjudul kartu: jenis jualan yang dikenal; label lama "Lainnya" diganti nama kategori utamanya.
+function hmCatLabel(v) {
+  const labels = [...(v.categories || []), ...(v.custom_tags || [])];
+  const good = labels.find(l => foodMainsOfLabel(l) && foodNorm(l) !== 'lainnya');
+  if (good) return good;
+  if ((v.custom_tags || [])[0]) return v.custom_tags[0];
+  const m = FOOD_MAIN.find(x => x.k === vendorMainCats(v)[0]);
+  return m ? m.short : '';
+}
+function renderHmNearVCard(v) {
+  const d = vendorDistanceLabel(v), open = hmIsOpen(v), rt = hmRating(v);
+  return `<button type="button" class="hm-vc" onclick="window.__openVendorSheet('${v.id}')">
+    <span class="hm-vc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}<span class="hm-vc-st ${open ? '' : 'off'}">${open ? 'Buka' : 'Tutup'}</span></span>
+    <span class="hm-vc-name">${escapeHtml(v.name)}</span>
+    <span class="hm-vc-meta">${rt ? rt + ' · ' : ''}${escapeHtml(hmCatLabel(v))}</span>
+    <span class="hm-vc-km">${d ? '📍 ' + d : ''}</span>
+  </button>`;
+}
+window.__scrollNear = function () { setTimeout(() => { const el = document.getElementById('hm-near-anchor'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); };
 function renderHmNearCard(v) {
   const d = vendorDistanceLabel(v);
   return `<button class="hm-nc" onclick="window.__openVendorSheet('${v.id}')">
     <span class="hm-nc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}</span>
     <span class="hm-nc-b"><span class="hm-nc-top"><span class="hm-nc-name">${escapeHtml(v.name)}</span><span class="hm-pill ${hmIsOpen(v) ? '' : 'off'}">${hmIsOpen(v) ? (d || 'Buka') : 'Tutup'}</span></span>
-      <span class="hm-nc-cat">${escapeHtml((v.categories || [])[0] || '')}</span><span class="hm-nc-rt">${hmRating(v)}</span></span>
+      <span class="hm-nc-cat">${escapeHtml(hmCatLabel(v))}</span><span class="hm-nc-rt">${hmRating(v)}</span></span>
   </button>`;
 }
 function renderHmRecCard(v) {
@@ -1146,12 +1165,16 @@ function renderHmRecCard(v) {
   return `<div class="hm-rc" role="button" tabindex="0" onclick="window.__openVendorSheet('${v.id}')">
     <div class="hm-rc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}${d ? `<span class="hm-rc-km">${d}</span>` : ''}
       <button class="hm-rc-heart ${followedIds.has(v.id) ? 'on' : ''}" aria-label="Ikuti ${escapeHtml(v.name)}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">${followedIds.has(v.id) ? '♥' : '♡'}</button></div>
-    <div class="hm-rc-name">${escapeHtml(v.name)}</div><div class="hm-rc-cat">${escapeHtml((v.categories || [])[0] || '')}</div><div class="hm-rc-rt">${hmRating(v)}</div>
+    <div class="hm-rc-name">${escapeHtml(v.name)}</div><div class="hm-rc-cat">${escapeHtml(hmCatLabel(v))}</div><div class="hm-rc-rt">${hmRating(v)}</div>
   </div>`;
 }
 
+function hmSearchHtml() {
+  const n = window.__regionName || 'Di sekitar kamu';
+  return HM_SEARCH_HTML + `<button type="button" class="hm-locrow" onclick="window.__enableLocation && window.__enableLocation()" aria-label="Lokasi"><svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg><span id="loc-pill-text">${escapeHtml(n)}</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`;
+}
 function renderPembeli() {
-  { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = (bottomView === 'status') ? HM_SEARCH_HTML : ''; }
+  { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = (bottomView === 'status') ? hmSearchHtml() : ''; }
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
   if (bottomView === 'favorit') return renderFavoritView();
@@ -1163,32 +1186,35 @@ function renderPembeli() {
   let filteredVendors = hmActive ? vendors.filter(v => vendorMainCats(v).includes(hmActive.k)) : vendors;
   if (hmActive && homeType) filteredVendors = filteredVendors.filter(v => [...(v.categories || []), ...(v.custom_tags || [])].some(l => foodNorm(l) === foodNorm(homeType)));
   const tileK = c => `
-    <button class="fm-tile ${c.k === 'jajanan' ? 'hero' : ''} ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')" aria-label="${c.label}" aria-pressed="${hmActive === c}">
+    <button class="fm-tile ${c.k === 'jajanan' ? 'hero' : ''} ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}');window.__scrollNear()" aria-label="${c.label}" aria-pressed="${hmActive === c}">
       <img src="${c.img}" alt="${c.label}" loading="lazy" />
     </button>`;
   const tileO = c => `
-    <button class="fm-sq ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')" aria-label="${c.label}" aria-pressed="${hmActive === c}">
+    <button class="fm-sq ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}');window.__scrollNear()" aria-label="${c.label}" aria-pressed="${hmActive === c}">
       <img src="${c.img}" alt="" loading="lazy" /><span>${c.short}</span>
     </button>`;
   const kulGridHtml = FOOD_MAIN.filter(c => c.kul).map(tileK).join('');
   const othGridHtml = FOOD_MAIN.filter(c => !c.kul).map(tileO).join('');
-  const typeChipsHtml = hmActive && foodItems(hmActive.k).length ? `<div class="map-chip-row" style="margin-top:10px;">${foodItems(hmActive.k).slice(0, 16).map(l => `<button type="button" class="map-chip ${homeType && foodNorm(homeType) === foodNorm(l) ? 'active' : ''}" onclick="window.__setType(${foodArg(l)})">${escapeHtml(l)}</button>`).join('')}</div>` : '';
+  const typeChipsHtml = hmActive && foodItems(hmActive.k).length ? `<div class="map-chip-row" style="margin-top:10px;">${foodItems(hmActive.k).slice(0, 16).map(l => `<button type="button" class="map-chip ${homeType && foodNorm(homeType) === foodNorm(l) ? 'active' : ''}" onclick="window.__setType(${foodArg(l)});window.__scrollNear()">${escapeHtml(l)}</button>`).join('')}</div>` : '';
   const bn = getRelevantBannersForBuyer();
   const bannerHtml = bn.length ? renderBannerSlider(bn) : `
     <div class="hm-banner"><div><h2>Dukung Pedagang<br>Lokal di Sekitarmu</h2><p>Temukan kuliner, toko, dan jasa terdekat dengan mudah.</p><button onclick="window.__goView('cari')">Cari Sekarang →</button></div><div class="hm-banner-art">🧑‍🍳</div></div>`;
-  const near = buyerLoc ? nearbyVendors(filteredVendors).slice(0, 6) : [];
+  const near = buyerLoc ? nearbyVendors(filteredVendors).slice(0, 8) : [];
+  const filterPill = hmActive ? `<div class="hm-filterpill"><span>Menampilkan: <b>${hmActive.short}${homeType ? ' · ' + escapeHtml(homeType) : ''}</b></span><button type="button" onclick="window.__setCat('semua')" aria-label="Hapus filter">✕</button></div>` : '';
   const recs = sortVendorsForDisplay(filteredVendors).slice(0, 8);
 
   main.innerHTML = `
     ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     ${bannerHtml}
-    <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__setCat('semua')">Lihat Semua →</button></div>
-    <div class="fm-grid">${kulGridHtml}</div>${hmActive && hmActive.kul ? typeChipsHtml : ''}
-    <div class="sec-head" style="margin-top:14px;"><h2>Kategori Lainnya</h2></div>
-    <div class="fm-sqgrid">${othGridHtml}</div>${hmActive && !hmActive.kul ? typeChipsHtml : ''}
+    <div id="hm-near-anchor"></div>
+    ${filterPill}
     <div class="sec-head"><h2>📍 Pedagang Terdekat</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
-    ${near.length ? `<div class="hm-near">${near.map(renderHmNearCard).join('')}</div>` : nearbyEmptyHtml()}
+    ${near.length ? `<div class="hm-vrow">${near.map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml()}
+    <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__setCat('semua')">Lihat Semua →</button></div>
+    <div class="fm-row">${kulGridHtml}</div>${hmActive && hmActive.kul ? typeChipsHtml : ''}
+    <div class="sec-head" style="margin-top:12px;"><h2>Kategori Lainnya</h2></div>
+    <div class="fm-sqgrid compact">${othGridHtml}</div>${hmActive && !hmActive.kul ? typeChipsHtml : ''}
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
     ${recs.length ? `<div class="hm-rec">${recs.map(renderHmRecCard).join('')}</div>` : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>'}
   `;
@@ -1965,7 +1991,7 @@ function renderBuyerRegionLabel(names) {
   const text = document.getElementById('buyer-region-text');
   if (!wrap || !text) return;
   const name = names && names.length ? names[0] : null;
-  const lp = document.getElementById('loc-pill-text'); if (lp) lp.textContent = name || 'Aktifkan';
+  window.__regionName = name || ''; const lp = document.getElementById('loc-pill-text'); if (lp) lp.textContent = name || 'Di sekitar kamu';
   if (!name) { wrap.hidden = true; return; }
   text.textContent = name;
   wrap.hidden = false;
