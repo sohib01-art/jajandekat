@@ -2491,6 +2491,7 @@ window.__regWizardGo = function (delta) {
   regStep = Math.max(0, Math.min(4, regStep + delta));
   const track = document.getElementById('reg-wizard-track');
   if (track) track.style.transform = `translateX(-${regStep * 100}%)`;
+  const regArt = document.getElementById('reg-hero-art'); if (regArt) regArt.classList.toggle('collapsed', regStep > 0);
   document.querySelectorAll('.reg-dot').forEach((d, i) => {
     d.classList.toggle('active', i === regStep);
     d.classList.toggle('done', i < regStep);
@@ -2940,7 +2941,7 @@ function renderPedagang() {
       ` : ''}
 
       <div class="vendor-hero">
-        <div class="vendor-hero-emoji">🛒</div>
+        <div class="reg-hero-art ${regStep > 0 ? 'collapsed' : ''}" id="reg-hero-art"><img src="icons/maskot-daftar.png" alt="Yuk! Daftar di JajanDekat" /></div>
         <div class="vendor-hero-name">Daftar Sebagai Pedagang</div>
         <div class="reg-dots">
           ${[0, 1, 2, 3, 4].map(i => `<div class="reg-dot ${i === regStep ? 'active' : ''} ${i < regStep ? 'done' : ''}"></div>`).join('')}
