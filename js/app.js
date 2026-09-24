@@ -957,19 +957,20 @@ const HM_SEARCH_HTML = `
   </div>`;
 // 12 kategori beranda -> dipetakan ke kategori pedagang yang sudah ada (per grup / label / kata kunci)
 const HM_CATS = [
-  { k:'makanan', l:'Makanan<br>& Minuman', e:'🍴', c:'#FF8A3D', g:['Makanan Siap Saji'] },
-  { k:'jajanan', l:'Jajanan<br>Pasar', e:'🍢', c:'#FF9A3D', x:['Gorengan','Jajanan'] },
-  { k:'warung', l:'Warung<br>& Toko', e:'🏪', c:'#FF7A45', g:['Barang & Perlengkapan'] },
-  { k:'sembako', l:'Sembako', e:'🧺', c:'#FFA030', g:['Kebutuhan Harian'] },
-  { k:'sayur', l:'Sayur<br>& Buah', e:'🥬', c:'#6DB33F', re:/sayur|buah/i },
-  { k:'daging', l:'Daging<br>& Ikan', e:'🐟', c:'#F26B50', re:/daging|ikan|seafood|ayam potong/i },
-  { k:'kue', l:'Kue<br>& Roti', e:'🍰', c:'#EF5A5A', x:['Roti & Kue'] },
-  { k:'minuman', l:'Minuman<br>Segar', e:'🥤', c:'#FF8A3D', g:['Minuman & Camilan'] },
-  { k:'pakaian', l:'Pakaian &<br>Aksesoris', e:'👕', c:'#FF9A3D', g:['Fashion & Aksesoris'] },
-  { k:'elektronik', l:'Elektronik', e:'📱', c:'#3C7BE8', re:/elektronik|\bhp\b|pulsa|gadget/i },
-  { k:'jasa', l:'Jasa Lokal', e:'🔧', c:'#F0704A', g:['Jasa & Layanan'] },
-  { k:'lainnya', l:'Lainnya', e:'⋯', c:'#F5A623', g:['Lainnya'] },
+  { k:'makanan', l:'Makanan<br>& Minuman', i:'nasi', c:'#FF8A3D', g:['Makanan Siap Saji'] },
+  { k:'jajanan', l:'Jajanan<br>Pasar', i:'jajanan', c:'#FF9A3D', x:['Gorengan','Jajanan'] },
+  { k:'warung', l:'Warung<br>& Toko', i:'warung', c:'#FF7A45', x:['Warung','Toko Kelontong'] },
+  { k:'sembako', l:'Sembako', i:'sembako', c:'#FFA030', g:['Kebutuhan Harian'], x:['Sembako','Telur'] },
+  { k:'sayur', l:'Sayur<br>& Buah', i:'sayur', c:'#6DB33F', re:/sayur|buah/i },
+  { k:'daging', l:'Daging<br>& Ikan', i:'ikan_seafood', c:'#F26B50', re:/daging|ikan|seafood/i },
+  { k:'kue', l:'Kue<br>& Roti', i:'roti_kue', c:'#EF5A5A', x:['Roti & Kue'] },
+  { k:'minuman', l:'Minuman<br>Segar', i:'minuman', c:'#FF8A3D', x:['Minuman','Kopi','Snack & Camilan'] },
+  { k:'pakaian', l:'Pakaian &<br>Aksesoris', i:'pakaian', c:'#FF9A3D', g:['Fashion & Aksesoris'] },
+  { k:'elektronik', l:'Elektronik', i:'elektronik', c:'#3C7BE8', g:['Barang & Perlengkapan'] },
+  { k:'jasa', l:'Jasa Lokal', i:'jasa_keliling', c:'#F0704A', g:['Jasa & Layanan'] },
+  { k:'lainnya', l:'Lainnya', i:'lainnya', c:'#F5A623', g:['Lainnya'] },
 ];
+const hmPlain = c => c.l.replace(/<br>/g, ' ');
 function hmMatch(cat, label) {
   const opt = CATEGORY_OPTIONS.find(o => o.label === label);
   return !!((cat.g && opt && cat.g.includes(opt.group)) || (cat.x && cat.x.includes(label)) || (cat.re && cat.re.test(label)));
@@ -977,11 +978,13 @@ function hmMatch(cat, label) {
 function hmVendorPhoto(v) { const s = vendorPhotoStyle(v); return s ? `style="${s}"` : ''; }
 function hmVendorEmoji(v) { return (v.photo_url || v.mode_icon) ? '' : (v.emoji || '🍜'); }
 function hmRating(v) { return v.rating_count > 0 ? `<span style="color:#F5A800">★</span> ${v.rating_avg} <span style="color:var(--text-dim);font-weight:500">(${v.rating_count})</span>` : ''; }
+// Status buka disamakan dengan lembar detail pedagang: aktif, atau punya lokasi & tidak tutup hari ini.
+function hmIsOpen(v) { return !!(v.active || (!vendorClosedTodayNote(v) && vendorIsShowable(v))); }
 function renderHmNearCard(v) {
   const d = vendorDistanceLabel(v);
   return `<button class="hm-nc" onclick="window.__openVendorSheet('${v.id}')">
     <span class="hm-nc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}</span>
-    <span class="hm-nc-b"><span class="hm-nc-top"><span class="hm-nc-name">${escapeHtml(v.name)}</span><span class="hm-pill ${v.active ? '' : 'off'}">${v.active ? (d || 'Buka') : 'Tutup'}</span></span>
+    <span class="hm-nc-b"><span class="hm-nc-top"><span class="hm-nc-name">${escapeHtml(v.name)}</span><span class="hm-pill ${hmIsOpen(v) ? '' : 'off'}">${hmIsOpen(v) ? (d || 'Buka') : 'Tutup'}</span></span>
       <span class="hm-nc-cat">${escapeHtml((v.categories || [])[0] || '')}</span><span class="hm-nc-rt">${hmRating(v)}</span></span>
   </button>`;
 }
@@ -1007,7 +1010,7 @@ function renderPembeli() {
   const filteredVendors = hmActive ? vendors.filter(v => (v.categories || []).some(l => hmMatch(hmActive, l))) : vendors;
   const catGridHtml = HM_CATS.map(c => `
     <button class="hm-cat ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}')">
-      <span class="hm-cat-ic" style="background:${c.c};color:#fff">${c.e}</span><span class="hm-cat-lb">${c.l}</span>
+      <span class="cat-circle hm-cat-ic" style="background:${c.c}">${categoryIconImgTag(hmPlain(c), c.i, '')}</span><span class="hm-cat-lb">${c.l}</span>
     </button>`).join('');
   const bn = getRelevantBannersForBuyer();
   const bannerHtml = bn.length ? renderBannerSlider(bn) : `
@@ -2171,7 +2174,7 @@ function renderCariView() {
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
     </div>
-    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${HM_CATS.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.l.replace('<br>', ' ')}</button>`).join('')}</div>
+    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${HM_CATS.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${categoryIconImgTag(hmPlain(c), c.i, 'chip-ic')} ${hmPlain(c)}</button>`).join('')}</div>
     <div id="search-results" style="margin-top:8px;"></div>
 
     <div class="vendor-hero" style="margin-top:20px;text-align:left;">
