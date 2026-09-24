@@ -1006,7 +1006,8 @@ function foodMainsOfLabel(l) { const n = foodNorm(l); return FOOD_INDEX[n] || (f
 // Kategori utama pedagang: diturunkan dari jenis jualan (categories + custom_tags). Tidak ada yang cocok -> Lain-lain.
 function vendorMainCats(v) {
   const set = new Set();
-  [...(v.categories || []), ...(v.custom_tags || [])].forEach(l => { const m = foodMainsOfLabel(l); if (m) m.forEach(x => set.add(x)); });
+  // label lama "Lainnya" hanya berarti Lain-lain kalau tidak ada jenis jualan lain yang dikenal
+  [...(v.categories || []), ...(v.custom_tags || [])].forEach(l => { if (foodNorm(l) === 'lainnya') return; const m = foodMainsOfLabel(l); if (m) m.forEach(x => set.add(x)); });
   if (!set.size) set.add('lain');
   return [...set];
 }
