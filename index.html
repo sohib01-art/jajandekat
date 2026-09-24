@@ -29,7 +29,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="css/style.css?v=64">
+<link rel="stylesheet" href="css/style.css?v=65">
 </head>
 <body>
 <div id="app">
@@ -52,10 +52,6 @@
             </div>
           </div>
         </div>
-        <button type="button" class="loc-pill" id="loc-pill" aria-label="Lokasi saya" onclick="window.__enableLocation && window.__enableLocation()">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
-          <span class="loc-pill-txt"><small>Lokasi saya</small><b id="loc-pill-text">Aktifkan</b></span>
-        </button>
         <button id="btn-bell" class="bell-btn" aria-label="Notifikasi" hidden>
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/>
@@ -109,7 +105,7 @@
 </div>
 
 <script src="js/config.js?v=43"></script>
-<script src="js/app.js?v=73"></script>
+<script src="js/app.js?v=74"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
