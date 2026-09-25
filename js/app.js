@@ -4119,11 +4119,19 @@ window.__registerVendor = async function () {
 
     const region = await detectRegion(); // otomatis, tidak menghalangi kalau ditolak/gagal
 
-    const { data, error } = await sb
-      .from('vendors')
-      .insert({ name, category, categories, emoji, mode_icon: modeIcon, whatsapp, pin, referred_by_vendor_id: referredByVendorId, region, reminder_time: reminderTime || null, custom_tags: customTags, fixed_lat: regFixedLat, fixed_lng: regFixedLng, schedule_text: regScheduleValue.trim() || null, location_note: regLocationNoteValue.trim() || null, buka_24jam: regBuka24Value, jam_buka: regBuka24Value ? null : (regJamBukaValue || null), jam_tutup: regBuka24Value ? null : (regJamTutupValue || null), hari_buka: normalizeHariBuka(regHariBukaValue), tutup_libur_nasional: regTutupLiburValue })
-      .select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_text,reminder_time,created_at,custom_tags,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional')
-      .single();
+    // PIN WAJIB lewat RPC register_vendor: fungsi ini yang hash PIN (bcrypt) sebelum disimpan.
+    // JANGAN pernah insert kolom "pin" langsung dari client -- itu menyimpannya polos & membuat PIN tidak pernah cocok saat login.
+    const { data: rows, error } = await sb.rpc('register_vendor', {
+      p_name: name, p_category: category, p_categories: categories, p_emoji: emoji, p_mode_icon: modeIcon,
+      p_whatsapp: whatsapp, p_pin: pin, p_referred_by_vendor_id: referredByVendorId, p_region: region,
+      p_reminder_time: reminderTime || null, p_custom_tags: customTags,
+      p_fixed_lat: regFixedLat, p_fixed_lng: regFixedLng,
+      p_schedule_text: regScheduleValue.trim() || null, p_location_note: regLocationNoteValue.trim() || null,
+      p_buka_24jam: regBuka24Value, p_jam_buka: regBuka24Value ? null : (regJamBukaValue || null),
+      p_jam_tutup: regBuka24Value ? null : (regJamTutupValue || null),
+      p_hari_buka: normalizeHariBuka(regHariBukaValue), p_tutup_libur_nasional: regTutupLiburValue,
+    });
+    const data = rows && rows[0];
 
     if (customTags.length) logTagSuggestions(customTags.join(', '), foodMainSel[0]); // tidak ditunggu, jangan blokir alur pendaftaran
 
