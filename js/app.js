@@ -2450,7 +2450,7 @@ function renderMap() {
   vendors.filter(vendorIsShowable).forEach(v => {
     const p = vendorDisplayLatLng(v);
     const iconHtml = v.photo_url
-      ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${v.photo_url}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
+      ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${escapeHtml(v.photo_url)}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
       : v.mode_icon
       ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('mode_icons/${v.mode_icon}.png');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
       : `<div style="font-size:22px;filter:drop-shadow(0 0 6px #3DDC97)">${v.emoji || '🍜'}</div>`;
@@ -2460,9 +2460,9 @@ function renderMap() {
     });
     const popupHtml = `
       <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;">
-        ${v.name}${v.is_premium ? ' ⭐' : ''}
+        ${escapeHtml(v.name)}${v.is_premium ? ' ⭐' : ''}
       </div>
-      ${vendorChatEnabled(v) ? `<button onclick="window.__openChatModal('${v.id}','${v.name.replace(/'/g, "\\'")}')"
+      ${vendorChatEnabled(v) ? `<button onclick="window.__openChatModal('${v.id}','${escapeHtml(v.name).replace(/'/g, "\\'")}')"
          style="display:inline-block;margin-top:6px;background:var(--brand);color:#fff;border:none;text-decoration:none;
          font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;">
         💬 Chat di App
@@ -3341,7 +3341,7 @@ function renderPedagang() {
     </button>
     <div class="vendor-hero pd-hero-status ${v.active ? 'on' : ''}">
       <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
-      <div class="vendor-hero-name">${v.name}</div>
+      <div class="vendor-hero-name">${escapeHtml(v.name)}</div>
       <div class="status-banner ${v.active ? 'active' : 'inactive'}">
         <div>
           <div class="status-banner-title">${v.active ? 'Sedang Jualan' : 'Belum Jualan Hari Ini'}</div>
@@ -3671,7 +3671,7 @@ async function loadCampaignProgress(vendorId) {
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
       <span style="font-size:14px;">${vendorDone ? '🟢' : '⚪'}</span>
-      <span style="font-size:11.5px;">1 pedagang aktif direkrut ${vendorDone ? `(${validVendorRecruit.name})` : '— belum ada yang memenuhi syarat'}</span>
+      <span style="font-size:11.5px;">1 pedagang aktif direkrut ${vendorDone ? `(${escapeHtml(validVendorRecruit.name)})` : '— belum ada yang memenuhi syarat'}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
       <span style="font-size:14px;">${buyerDone ? '🟢' : '⚪'}</span>
@@ -4952,9 +4952,9 @@ function renderAdminVendorList(list) {
       <div style="display:flex;gap:10px;align-items:center;">
         <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         <div class="vendor-info">
-          <div class="vendor-name">${v.name}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
-          <div class="vendor-sub mono">WA: ${v.whatsapp || '-'} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
-          <div class="vendor-sub">${(v.categories || []).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
+          <div class="vendor-name">${escapeHtml(v.name)}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
+          <div class="vendor-sub mono">WA: ${escapeHtml(v.whatsapp || '-')} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
+          <div class="vendor-sub">${(v.categories || []).map(c => escapeHtml(c)).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
           ${v.is_premium ? `<div class="vendor-sub" style="color:var(--brand);">⭐ Premium sampai ${premiumUntilStr || '(tanpa batas — akun lama)'}</div>` : ''}
           ${v.active && v.location_error_message && (!v.location_updated_at || new Date(v.location_error_at) > new Date(v.location_updated_at)) ? `<div class="vendor-sub" style="color:#f87171;">📍⚠️ Lokasi gagal update (${new Date(v.location_error_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}): ${escapeHtml(v.location_error_message)}</div>` : ''}
           ${v.active && v.location_updated_at ? `<div class="vendor-sub" style="color:var(--text-faint);">📍 Lokasi terakhir update: ${new Date(v.location_updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
@@ -4962,9 +4962,9 @@ function renderAdminVendorList(list) {
         </div>
       </div>
       <div class="admin-row">
-        <button class="icon-btn" title="Reset PIN" onclick="window.__adminResetPin('${v.id}','${v.name.replace(/'/g, "\\'")}')">🔑</button>
+        <button class="icon-btn" title="Reset PIN" onclick="window.__adminResetPin('${v.id}','${escapeHtml(v.name).replace(/'/g, "\\'")}')">🔑</button>
         ${v.photo_url ? `<button class="icon-btn" title="Hapus Foto" onclick="window.__adminRemovePhoto('${v.id}')">🖼️</button>` : ''}
-        <button class="icon-btn danger" title="Hapus Akun" onclick="window.__adminDeleteVendor('${v.id}','${v.name.replace(/'/g, "\\'")}')">🗑️</button>
+        <button class="icon-btn danger" title="Hapus Akun" onclick="window.__adminDeleteVendor('${v.id}','${escapeHtml(v.name).replace(/'/g, "\\'")}')">🗑️</button>
         <span style="flex:1;"></span>
         ${v.is_premium ? `<button class="admin-cancel-link" onclick="window.__adminCancelPremium('${v.id}')">Cabut Premium</button>` : ''}
         ${v.promo_until && new Date(v.promo_until) > new Date() ? `<button class="admin-cancel-link" onclick="window.__adminCancelPromo('${v.id}')">Cabut Promo</button>` : ''}
@@ -5025,10 +5025,10 @@ async function loadAdminRequests() {
       return `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:700;font-size:12.5px;">${v.name}</span>
+          <span style="font-weight:700;font-size:12.5px;">${escapeHtml(v.name)}</span>
           <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;">${label}</span>
         </div>
-        <div style="font-size:11px;color:var(--text-dim);" class="mono">WA: ${v.whatsapp || '-'} · ${v.category || '-'}</div>
+        <div style="font-size:11px;color:var(--text-dim);" class="mono">WA: ${escapeHtml(v.whatsapp || '-')} · ${escapeHtml(v.category || '-')}</div>
         <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
           ${r.request_type === 'premium' ? `
