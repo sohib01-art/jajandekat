@@ -3106,7 +3106,18 @@ window.__toggleDefaultOpen = async function (vendorId) {
     myVendorPin = enteredPin.trim();
   }
   try {
-    await sb.from('vendors').update({ default_open: newValue }).eq('id', vendorId);
+    // Dulu: sb.from('vendors').update(...) langsung -- hanya dijaga RLS berdasar header
+    // x-device-id yang bisa dipalsukan klien. Sekarang wajib lewat RPC yang cek PIN di server.
+    const { error } = await sb.rpc('update_vendor_settings', {
+      p_vendor_id: vendorId, p_pin: myVendorPin || '',
+      p_reminder_time: v.reminder_time || null, p_show_whatsapp: v.show_whatsapp,
+      p_custom_tags: v.custom_tags || [], p_fixed_lat: v.fixed_lat ?? null, p_fixed_lng: v.fixed_lng ?? null,
+      p_schedule_text: v.schedule_text || null, p_location_note: v.location_note || null,
+      p_default_open: newValue, p_jam_buka: v.jam_buka || null, p_jam_tutup: v.jam_tutup || null,
+      p_buka_24jam: v.buka_24jam || false, p_hari_buka: v.hari_buka || [],
+      p_tutup_libur_nasional: v.tutup_libur_nasional || false, p_photo_url: v.photo_url || null,
+    });
+    if (error) throw error;
     v.default_open = newValue;
     showToast(newValue ? 'Toko ditandai Buka lagi ✅' : 'Toko ditandai Tutup Sementara');
     renderPedagang();
@@ -3170,15 +3181,17 @@ window.__saveEditProfile = async function (vendorId) {
     if (error) throw error;
 
     // Kolom reminder_time, show_whatsapp, custom_tags, lokasi mangkal, jadwal & status
-    // buka diupdate terpisah (di luar RPC update_vendor_profile yang sudah ada).
-    const { error: updateError } = await sb.from('vendors').update({
-      reminder_time: reminderTime || null, show_whatsapp: showWhatsapp, custom_tags: customTags,
-      fixed_lat: editFixedLat, fixed_lng: editFixedLng, schedule_text: scheduleText,
-      location_note: locationNote, default_open: defaultOpen,
-      jam_buka: jamBuka, jam_tutup: jamTutup, buka_24jam: buka24jam,
-      hari_buka: hariBuka, tutup_libur_nasional: tutupLibur, photo_url: photoUrl,
-    }).eq('id', vendorId);
-    if (updateError) throw updateError; // dulu gagal diam-diam (mis. izin kolom belum diberikan)
+    // buka diupdate lewat RPC update_vendor_settings (wajib PIN di server, bukan cuma
+    // dijaga RLS berdasar header x-device-id yang bisa dipalsukan klien).
+    const { error: updateError } = await sb.rpc('update_vendor_settings', {
+      p_vendor_id: vendorId, p_pin: myVendorPin || '',
+      p_reminder_time: reminderTime || null, p_show_whatsapp: showWhatsapp, p_custom_tags: customTags,
+      p_fixed_lat: editFixedLat, p_fixed_lng: editFixedLng, p_schedule_text: scheduleText,
+      p_location_note: locationNote, p_default_open: defaultOpen,
+      p_jam_buka: jamBuka, p_jam_tutup: jamTutup, p_buka_24jam: buka24jam,
+      p_hari_buka: hariBuka, p_tutup_libur_nasional: tutupLibur, p_photo_url: photoUrl,
+    });
+    if (updateError) throw updateError;
     if (customTags.length) logTagSuggestions(customTags.join(', '), editMainSel[0]); // tidak ditunggu, jangan blokir alur simpan
 
     v.name = name; v.categories = finalCats; v.category = finalCats[0] || null;
@@ -4259,7 +4272,16 @@ window.__registerVendor = async function () {
     if (regPhotoFile) {
       try {
         const photoUrl = await uploadVendorPhoto(data.id, regPhotoFile);
-        await sb.from('vendors').update({ photo_url: photoUrl }).eq('id', data.id);
+        // PIN baru saja dibuat saat register_vendor di atas, jadi dipakai langsung di sini.
+        await sb.rpc('update_vendor_settings', {
+          p_vendor_id: data.id, p_pin: pin,
+          p_reminder_time: data.reminder_time || null, p_show_whatsapp: data.show_whatsapp,
+          p_custom_tags: data.custom_tags || [], p_fixed_lat: data.fixed_lat ?? null, p_fixed_lng: data.fixed_lng ?? null,
+          p_schedule_text: data.schedule_text || null, p_location_note: data.location_note || null,
+          p_default_open: data.default_open, p_jam_buka: data.jam_buka || null, p_jam_tutup: data.jam_tutup || null,
+          p_buka_24jam: data.buka_24jam || false, p_hari_buka: data.hari_buka || [],
+          p_tutup_libur_nasional: data.tutup_libur_nasional || false, p_photo_url: photoUrl,
+        });
         data.photo_url = photoUrl;
       } catch (e) { showToast('Toko berhasil didaftarkan, tapi foto gagal diunggah. Coba unggah lagi lewat Edit Profil.'); }
     }
