@@ -551,9 +551,14 @@ window.__openProductForm = function (productId) {
 
       <label style="font-size:11px;color:var(--text-faint);">Foto produk (opsional)</label>
       <input type="file" id="prod-photo-input" accept="image/*" style="display:none" onchange="window.__onProductPhotoSelected(event)" />
-      <div id="prod-photo-zone" onclick="document.getElementById('prod-photo-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+      <div id="prod-photo-zone" onclick="document.getElementById('prod-photo-input').click()" style="margin:4px 0 6px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         ${pendingProductPhotoPreview ? `<img src="${pendingProductPhotoPreview}" style="width:100%;max-width:160px;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>` : '📷 Tambah foto produk'}
       </div>
+      <div style="font-size:10px;color:var(--text-faint);margin:0 0 10px;">Gunakan foto produk milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk memastikan tidak melanggar privasi orang lain.</div>
+      <label id="prod-photo-consent-wrap" style="display:none;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin:0 0 12px;cursor:pointer;">
+        <input id="prod-photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+        <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
+      </label>
 
       <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;margin-bottom:14px;cursor:pointer;">
         <input id="prod-active" type="checkbox" ${!existing || existing.active ? 'checked' : ''} style="width:17px;height:17px;" />
@@ -580,6 +585,10 @@ window.__onProductPhotoSelected = function (event) {
     pendingProductPhotoPreview = e.target.result;
     const zone = document.getElementById('prod-photo-zone');
     if (zone) zone.innerHTML = `<img src="${pendingProductPhotoPreview}" style="width:100%;max-width:160px;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>`;
+    const consentWrap = document.getElementById('prod-photo-consent-wrap');
+    if (consentWrap) consentWrap.style.display = 'flex';
+    const consentBox = document.getElementById('prod-photo-consent');
+    if (consentBox) consentBox.checked = false;
   };
   reader.readAsDataURL(file);
 };
@@ -594,6 +603,10 @@ window.__saveProduct = async function () {
 
   if (!name) { errEl.textContent = 'Nama produk wajib diisi.'; return; }
   if (!vendorId) { errEl.textContent = 'Sesi toko tidak ditemukan, coba buka ulang.'; return; }
+  if (pendingProductPhotoFile && !document.getElementById('prod-photo-consent')?.checked) {
+    errEl.textContent = 'Centang dulu konfirmasi tanggung jawab foto sebelum menyimpan.';
+    return;
+  }
 
   errEl.textContent = 'Menyimpan...';
   try {
@@ -2918,6 +2931,9 @@ let editModeIcon = null;
 let editCatPickerQuery = '';
 let editFixedLat = null;
 let editFixedLng = null;
+let editPhotoFile = null;
+let editPhotoPreview = null;
+let editPhotoRemoved = false;
 
 window.__openEditProfile = function (vendorId) {
   const v = vendors.find(v => v.id === vendorId);
@@ -2930,6 +2946,30 @@ window.__openEditProfile = function (vendorId) {
   editCatPickerQuery = '';
   editFixedLat = v.fixed_lat || null;
   editFixedLng = v.fixed_lng || null;
+  editPhotoFile = null;
+  editPhotoPreview = v.photo_url || null;
+  editPhotoRemoved = false;
+  renderEditProfile(vendorId);
+};
+
+// Pilih foto baru dari kamera ATAU galeri — sengaja tidak pakai atribut "capture" supaya
+// browser menampilkan pilihan lengkap (kamera + galeri), bukan langsung buka kamera.
+window.__onEditPhotoSelected = function (event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  editPhotoFile = file;
+  editPhotoRemoved = false;
+  const reader = new FileReader();
+  reader.onload = e => { editPhotoPreview = e.target.result; renderEditProfile(myVendorId); };
+  reader.readAsDataURL(file);
+};
+
+window.__editPhotoRemove = function (vendorId) {
+  editPhotoFile = null;
+  editPhotoPreview = null;
+  editPhotoRemoved = true;
+  const input = document.getElementById('edit-photo-input');
+  if (input) input.value = '';
   renderEditProfile(vendorId);
 };
 
@@ -2977,7 +3017,23 @@ function renderEditProfile(vendorId) {
         <input id="edit-name" type="text" value="${v.name.replace(/"/g, '&quot;')}" placeholder="Nama usaha" />
         <input id="edit-whatsapp" type="tel" value="${v.whatsapp || ''}" placeholder="Nomor WhatsApp" />
 
-        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Mode jualan Anda (pilih 1)</div>
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:6px;">Foto toko</div>
+        <input type="file" id="edit-photo-input" accept="image/*" style="display:none" onchange="window.__onEditPhotoSelected(event)" />
+        <div class="reg-photo-box">
+          ${editPhotoPreview
+            ? `<div class="reg-photo-preview"><img src="${editPhotoPreview}" alt="Pratinjau foto toko" /><button type="button" class="reg-photo-remove" onclick="window.__editPhotoRemove('${vendorId}')">✕ Hapus foto</button></div>`
+            : `<button type="button" class="reg-photo-pick" onclick="document.getElementById('edit-photo-input').click()">📷 Pilih Foto (kamera / galeri)</button>`}
+        </div>
+        ${editPhotoPreview ? `<button type="button" onclick="document.getElementById('edit-photo-input').click()" style="margin-top:6px;width:100%;padding:9px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-size:12px;font-weight:700;">Ganti foto</button>` : ''}
+        <div style="font-size:10px;color:var(--text-faint);margin-top:6px;text-align:left;line-height:1.5;">Gunakan foto toko/produk milik sendiri (bukan foto orang lain tanpa izin). Anda bertanggung jawab penuh atas foto yang diunggah, termasuk kepatuhan terhadap privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar dapat dihapus tanpa pemberitahuan.</div>
+        ${editPhotoFile ? `
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;text-align:left;">
+          <input id="edit-photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+          <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
+        </label>
+        ` : ''}
+
+        <div style="text-align:left;font-size:11px;color:var(--text-faint);margin-top:10px;">Mode jualan Anda (pilih 1)</div>
         <div class="cat-picker-grid">${modeHtml}</div>
 
         ${foodPickerHtml('edit')}
@@ -3061,12 +3117,18 @@ window.__toggleDefaultOpen = async function (vendorId) {
 
 window.__saveEditProfile = async function (vendorId) {
   const errEl = document.getElementById('edit-error');
+  const v = vendors.find(v => v.id === vendorId);
+  if (!v) return;
   const name = document.getElementById('edit-name').value.trim();
   const whatsapp = normalizeWhatsapp(document.getElementById('edit-whatsapp').value.trim());
 
   if (!name) { errEl.textContent = 'Nama usaha wajib diisi.'; return; }
   foodScope = 'edit';
   if (foodSelectedAll().length === 0 && editMainSel.length === 0) { errEl.textContent = 'Pilih minimal 1 jenis jualan.'; return; }
+  if (editPhotoFile && !document.getElementById('edit-photo-consent')?.checked) {
+    errEl.textContent = 'Centang dulu konfirmasi tanggung jawab foto sebelum menyimpan.';
+    return;
+  }
 
   // Sesi baru belum punya PIN di memori -> minta sekali (sama seperti alur toggle status)
   if (myVendorPin === null) {
@@ -3079,6 +3141,15 @@ window.__saveEditProfile = async function (vendorId) {
 
   errEl.textContent = 'Menyimpan...';
   try {
+    // Foto: kalau penjual tidak pilih foto baru & tidak menekan "Hapus foto", foto lama
+    // TETAP dipertahankan (bukan ditimpa null) — ini yang dulu jadi penyebab foto hilang.
+    let photoUrl = v.photo_url || null;
+    if (editPhotoFile) {
+      try { photoUrl = await uploadVendorPhoto(vendorId, editPhotoFile); }
+      catch (e) { errEl.textContent = 'Gagal mengunggah foto: ' + (e.message || 'terjadi kesalahan.'); return; }
+    } else if (editPhotoRemoved) {
+      photoUrl = null;
+    }
     const reminderTime = document.getElementById('edit-reminder').value.trim();
     const showWhatsapp = document.getElementById('edit-show-whatsapp').checked;
     const customTags = [...editTagsList];
@@ -3105,19 +3176,19 @@ window.__saveEditProfile = async function (vendorId) {
       fixed_lat: editFixedLat, fixed_lng: editFixedLng, schedule_text: scheduleText,
       location_note: locationNote, default_open: defaultOpen,
       jam_buka: jamBuka, jam_tutup: jamTutup, buka_24jam: buka24jam,
-      hari_buka: hariBuka, tutup_libur_nasional: tutupLibur,
+      hari_buka: hariBuka, tutup_libur_nasional: tutupLibur, photo_url: photoUrl,
     }).eq('id', vendorId);
     if (updateError) throw updateError; // dulu gagal diam-diam (mis. izin kolom belum diberikan)
     if (customTags.length) logTagSuggestions(customTags.join(', '), editMainSel[0]); // tidak ditunggu, jangan blokir alur simpan
 
-    const v = vendors.find(v => v.id === vendorId);
     v.name = name; v.categories = finalCats; v.category = finalCats[0] || null;
     v.mode_icon = editModeIcon; v.whatsapp = whatsapp; v.reminder_time = reminderTime || null;
     v.show_whatsapp = showWhatsapp; v.custom_tags = customTags;
     v.fixed_lat = editFixedLat; v.fixed_lng = editFixedLng; v.schedule_text = scheduleText;
     v.location_note = locationNote; v.default_open = defaultOpen;
     v.jam_buka = jamBuka; v.jam_tutup = jamTutup; v.buka_24jam = buka24jam;
-    v.hari_buka = hariBuka; v.tutup_libur_nasional = tutupLibur;
+    v.hari_buka = hariBuka; v.tutup_libur_nasional = tutupLibur; v.photo_url = photoUrl;
+    editPhotoFile = null; editPhotoPreview = photoUrl; editPhotoRemoved = false;
     showToast('Profil toko berhasil diperbarui! ✅');
     renderPedagang();
   } catch (e) {
@@ -3199,11 +3270,18 @@ function renderPedagang() {
               </div>
               <div class="reg-photo-box">
                 <div class="reg-step-sub" style="margin-top:14px;">Foto utama toko/dagangan (opsional)</div>
-                <input id="reg-photo-input" type="file" accept="image/*" capture="environment" style="display:none;" onchange="window.__regPhotoPick(this)" />
+                <input id="reg-photo-input" type="file" accept="image/*" style="display:none;" onchange="window.__regPhotoPick(this)" />
                 ${regPhotoPreview
                   ? `<div class="reg-photo-preview"><img src="${regPhotoPreview}" alt="Pratinjau foto toko" /><button type="button" class="reg-photo-remove" onclick="window.__regPhotoRemove()">✕ Hapus foto</button></div>`
                   : `<button type="button" class="reg-photo-pick" onclick="document.getElementById('reg-photo-input').click()">📷 Ambil / Pilih Foto</button>`}
                 <div class="food-hint" style="margin-top:6px;">Boleh dilewati dan ditambahkan nanti lewat Edit Profil.</div>
+                <div style="font-size:10px;color:var(--text-faint);margin-top:4px;line-height:1.5;">Gunakan foto milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam.</div>
+                ${regPhotoFile ? `
+                <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;">
+                  <input id="reg-photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+                  <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
+                </label>
+                ` : ''}
               </div>
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
@@ -3291,17 +3369,23 @@ function renderPedagang() {
 
       ${!v.active ? `
         <div style="margin-top:16px;">
-          <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="window.__onPhotoSelected(event)" />
+          <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="window.__onPhotoSelected(event)" />
           <div id="photo-zone" onclick="document.getElementById('photo-input').click()" style="
             border:1.5px dashed var(--stroke); border-radius:14px; padding:16px;
             text-align:center; cursor:pointer; color:var(--text-dim); font-size:12.5px;">
             ${pendingPhotoPreview
               ? `<img src="${pendingPhotoPreview}" style="width:100%;border-radius:10px;margin-bottom:8px;" /><span style="color:var(--brand);">Ganti foto</span>`
-              : '📷 Ambil foto dagangan (opsional)'}
+              : '📷 Ambil / Pilih foto dagangan (opsional)'}
           </div>
           <div style="font-size:10px;color:var(--text-faint);margin-top:5px;text-align:left;">
-            Foto dagangan/gerobak saja. Foto tidak pantas akan dihapus tanpa pemberitahuan.
+            Foto dagangan/gerobak saja. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar akan dihapus tanpa pemberitahuan.
           </div>
+          ${pendingPhotoFile ? `
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;text-align:left;">
+            <input id="photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+            <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
+          </label>
+          ` : ''}
         </div>
       ` : ''}
 
@@ -4112,6 +4196,10 @@ window.__registerVendor = async function () {
   if (!modeIcon) { errEl.textContent = 'Pilih mode jualan Anda.'; return; }
   if (!whatsapp) { errEl.textContent = 'Nomor WhatsApp wajib diisi (jadi penanda akun Anda).'; return; }
   if (!/^\d{6}$/.test(pin)) { errEl.textContent = 'PIN wajib 6 angka.'; return; }
+  if (regPhotoFile && !document.getElementById('reg-photo-consent')?.checked) {
+    errEl.textContent = 'Centang dulu konfirmasi tanggung jawab foto sebelum lanjut.';
+    return;
+  }
 
   // Cegah satu nomor WA didaftarkan dua kali
   const dupe = vendors.find(v => v.whatsapp === whatsapp);
@@ -4305,10 +4393,14 @@ window.__toggleStatus = async function () {
       return;
     }
   } else {
+    if (pendingPhotoFile && !document.getElementById('photo-consent')?.checked) {
+      alert('Centang dulu konfirmasi tanggung jawab foto sebelum mulai jualan.');
+      return;
+    }
     // Ambil lokasi nyata dari browser (gratis, bawaan HP)
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
-      let photoUrl = null;
+      let photoUrl = v.photo_url || null; // pertahankan foto lama kalau tidak pilih foto baru
       if (pendingPhotoFile) {
         try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
         catch (e) { console.error('Gagal upload foto:', e); }
@@ -4334,7 +4426,7 @@ window.__toggleStatus = async function () {
       );
       if (!lanjut) return;
 
-      let photoUrl = null;
+      let photoUrl = v.photo_url || null; // pertahankan foto lama kalau tidak pilih foto baru
       if (pendingPhotoFile) {
         try { photoUrl = await uploadVendorPhoto(v.id, pendingPhotoFile); }
         catch (e) { console.error('Gagal upload foto:', e); }
