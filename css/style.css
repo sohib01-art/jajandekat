@@ -1078,3 +1078,10 @@ header{ position:static; display:contents; }
 .fm-sqgrid.compact span{ font-size:9.5px; }
 .hm-filterpill{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0 0; padding:8px 12px; background:#FFF3EC; border:1px solid #F7C9BC; border-radius:12px; font-size:12px; color:var(--text); }
 .hm-filterpill button{ border:none; background:none; color:var(--brand); font-size:14px; font-weight:800; cursor:pointer; }
+
+/* --- Foto utama saat pendaftaran pedagang --- */
+.reg-photo-box{ margin-top:2px; }
+.reg-photo-pick{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:44px; border:1.5px dashed var(--field-line); border-radius:14px; background:var(--surface-2); color:var(--text); font-family:'Inter',sans-serif; font-weight:600; font-size:13px; cursor:pointer; }
+.reg-photo-preview{ position:relative; width:132px; }
+.reg-photo-preview img{ width:132px; height:132px; object-fit:cover; border-radius:14px; border:1px solid var(--stroke); display:block; }
+.reg-photo-remove{ margin-top:6px; border:none; background:none; color:#E5484D; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
