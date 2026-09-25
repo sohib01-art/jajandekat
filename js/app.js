@@ -36,6 +36,11 @@ let referralCodeFromLink = null;
 // Ubah ke true untuk menghidupkannya lagi. Di server (RLS Supabase) chat tetap dibatasi khusus pedagang Premium.
 const CHAT_DALAM_APP_AKTIF = false;
 
+// Versi Ketentuan Layanan & Kebijakan Privasi yang berlaku saat ini. Dikirim ke RPC register_vendor
+// dan dicatat di tabel vendor_consents supaya ada jejak persetujuan per pedagang. Naikkan nilai ini
+// (mis. jadi tanggal revisi terbaru) kalau isi terms.html/privacy.html berubah signifikan.
+const CONSENT_VERSION = '1.0';
+
 // ---------- WEB PUSH: minta izin & simpan langganan ----------
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -3311,6 +3316,10 @@ function renderPedagang() {
               <div class="reg-step-title">5. Lokasi &amp; jam buka</div>
               <div class="reg-step-sub">Semua bagian ini opsional dan bisa diubah nanti di Edit Profil Toko.</div>
               ${renderJadwalFields({ p: 'reg', track: true, reminder: regReminderValue, hasLoc: !!regFixedLat, buka24: regBuka24Value, jamBuka: regJamBukaValue, jamTutup: regJamTutupValue, hari: regHariBukaValue, tutupLibur: regTutupLiburValue, schedule: regScheduleValue, locationNote: regLocationNoteValue, onToggle: 'window.__toggleRegBuka24', onCapture: 'window.__captureRegLocation' })}
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:14px;cursor:pointer;text-align:left;">
+                <input id="reg-terms-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+                <span>Saya menyetujui <a href="terms.html" target="_blank" onclick="event.stopPropagation()" style="color:var(--brand);">Ketentuan Layanan</a> dan <a href="privacy.html" target="_blank" onclick="event.stopPropagation()" style="color:var(--brand);">Kebijakan Privasi</a> JajanDekat.</span>
+              </label>
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button data-reg-submit onclick="window.__registerVendor()">Daftar sekarang</button></div>
             </div>
 
@@ -4213,6 +4222,10 @@ window.__registerVendor = async function () {
     errEl.textContent = 'Centang dulu konfirmasi tanggung jawab foto sebelum lanjut.';
     return;
   }
+  if (!document.getElementById('reg-terms-consent')?.checked) {
+    errEl.textContent = 'Centang dulu persetujuan Ketentuan Layanan & Kebijakan Privasi sebelum lanjut.';
+    return;
+  }
 
   // Cegah satu nomor WA didaftarkan dua kali
   const dupe = vendors.find(v => v.whatsapp === whatsapp);
@@ -4256,6 +4269,7 @@ window.__registerVendor = async function () {
       p_buka_24jam: regBuka24Value, p_jam_buka: regBuka24Value ? null : (regJamBukaValue || null),
       p_jam_tutup: regBuka24Value ? null : (regJamTutupValue || null),
       p_hari_buka: normalizeHariBuka(regHariBukaValue), p_tutup_libur_nasional: regTutupLiburValue,
+      p_consent_version: CONSENT_VERSION,
     });
     const data = rows && rows[0];
 
