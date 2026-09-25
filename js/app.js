@@ -2493,6 +2493,8 @@ let regWhatsappValue = '';
 let pickWhatsappValue = '';
 let announcements = [];
 let regPinValue = '';
+let regPhotoFile = null;
+let regPhotoPreview = null;
 let regReminderValue = '';
 let regTagsValue = '';
 let regScheduleValue = '';
@@ -2890,6 +2892,21 @@ window.__pickEmoji = function (e) {
   renderPedagang();
 };
 
+window.__regPhotoPick = function (input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('File harus berupa gambar.'); return; }
+  if (file.size > 15 * 1024 * 1024) { showToast('Ukuran foto maksimal 15MB.'); return; }
+  regPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = e => { regPhotoPreview = e.target.result; renderPedagang(); };
+  reader.readAsDataURL(file);
+};
+window.__regPhotoRemove = function () {
+  regPhotoFile = null; regPhotoPreview = null;
+  const input = document.getElementById('reg-photo-input'); if (input) input.value = '';
+  renderPedagang();
+};
 window.__pickModeIcon = function (icon) {
   selectedModeIcon = icon;
   renderPedagang();
@@ -3179,6 +3196,14 @@ function renderPedagang() {
                     <span>${m.label}</span>
                   </button>
                 `).join('')}
+              </div>
+              <div class="reg-photo-box">
+                <div class="reg-step-sub" style="margin-top:14px;">Foto utama toko/dagangan (opsional)</div>
+                <input id="reg-photo-input" type="file" accept="image/*" capture="environment" style="display:none;" onchange="window.__regPhotoPick(this)" />
+                ${regPhotoPreview
+                  ? `<div class="reg-photo-preview"><img src="${regPhotoPreview}" alt="Pratinjau foto toko" /><button type="button" class="reg-photo-remove" onclick="window.__regPhotoRemove()">✕ Hapus foto</button></div>`
+                  : `<button type="button" class="reg-photo-pick" onclick="document.getElementById('reg-photo-input').click()">📷 Ambil / Pilih Foto</button>`}
+                <div class="food-hint" style="margin-top:6px;">Boleh dilewati dan ditambahkan nanti lewat Edit Profil.</div>
               </div>
               <div class="reg-nav-row"><button class="reg-nav-back" onclick="window.__regWizardGo(-1)">Kembali</button><button onclick="window.__regWizardGo(1)">Lanjut</button></div>
             </div>
@@ -4143,6 +4168,13 @@ window.__registerVendor = async function () {
       return;
     }
 
+    if (regPhotoFile) {
+      try {
+        const photoUrl = await uploadVendorPhoto(data.id, regPhotoFile);
+        await sb.from('vendors').update({ photo_url: photoUrl }).eq('id', data.id);
+        data.photo_url = photoUrl;
+      } catch (e) { showToast('Toko berhasil didaftarkan, tapi foto gagal diunggah. Coba unggah lagi lewat Edit Profil.'); }
+    }
     vendors.push(data);
     myVendorId = data.id;
     myVendorPin = pin;
@@ -4151,6 +4183,7 @@ window.__registerVendor = async function () {
     selectedModeIcon = null;
     selectedCategories = []; foodMainSel = []; foodQuery = '';
     regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
+    regPhotoFile = null; regPhotoPreview = null;
     regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
     regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
     regHariBukaValue = [0, 1, 2, 3, 4, 5, 6]; regTutupLiburValue = false;
