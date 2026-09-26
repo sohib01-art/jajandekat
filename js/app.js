@@ -296,6 +296,7 @@ const GUIDE_STEPS = {
       { icon: '💬', text: 'Ketuk kartu pedagang di <b>Beranda</b> untuk melihat detailnya, lalu hubungi pedagang langsung lewat WhatsApp.', action: () => goToBottomView('status') },
       { icon: '🍽️', text: 'Di detail pedagang, tekan <b>Lihat menu</b> untuk melihat menu/produk yang mereka jual, sebelum datang.', action: () => goToBottomView('status') },
       { icon: '📰', text: 'Buka tab <b>Akun</b> lalu pilih <b>Artikel</b> untuk tips, rekomendasi kuliner, dan info seputar JajanDekat.', action: () => goToBottomView('akun') },
+      { icon: '📖', text: 'Punya pengalaman jajan seru? Buka tab <b>Akun</b> lalu pilih <b>Ajukan Cerita</b> untuk membagikannya — bisa tayang di halaman Artikel setelah ditinjau admin.', action: () => { goToBottomView('akun'); window.__openBuyerStoryForm(); } },
     ],
   },
   pedagang: {
@@ -309,6 +310,7 @@ const GUIDE_STEPS = {
       { icon: '⭐', text: 'Aktifkan <b>Premium</b> dari dashboard pedagang untuk tampil lebih menonjol.', action: () => goToPedagangDashboard() },
       { icon: '🔥', text: 'Pasang <b>Promosi Lokal</b> harian untuk menyorot kartu tokomu ke posisi atas.', action: () => goToPedagangDashboard() },
       { icon: '🔗', text: 'Bagikan <b>QR/link referral</b> di bagian atas dashboard untuk mengajak pembeli & pedagang baru.', action: () => goToPedagangDashboard() },
+      { icon: '📖', text: 'Punya kisah, perjuangan, atau momen berkesan selama berjualan? Tekan <b>Ajukan Cerita Dagangan</b> di dashboard tokomu — bisa tayang di halaman Artikel JajanDekat setelah ditinjau admin.', action: () => { if (myVendorId) { goToPedagangDashboard(); window.__openVendorStoryForm(myVendorId); } else { goToPedagangDashboard(); } } },
       { icon: '❓', text: 'Ada pertanyaan lain? Cek <b>Bantuan & FAQ</b>.', action: () => window.__openFaqModal() },
     ],
   },
@@ -2203,29 +2205,56 @@ window.__goPedagang = function () { goToPedagangDashboard(); window.scrollTo(0, 
 
 function renderAkunView() {
   const perm = pushSupported() ? Notification.permission : null;
-  const row = (icon, title, sub, onclick) => `
+  const row = (icon, colorClass, title, sub, onclick) => `
     <button class="acc-row" onclick="${onclick}">
-      <span class="acc-ico">${icon}</span>
+      <span class="acc-ico ${colorClass}">${icon}</span>
       <span class="acc-text"><span class="acc-title">${title}</span>${sub ? `<span class="acc-sub">${sub}</span>` : ''}</span>
       <span class="acc-chev">›</span>
     </button>`;
   const notifSub = perm === 'granted' ? 'Aktif' : perm === 'denied' ? 'Diblokir di browser' : 'Belum aktif · ketuk untuk mengaktifkan';
+  // Ilustrasi kios kecil di hero, diadaptasi dari grafis header utama (atap bergaris, pin lokasi)
+  const heroIllus = `
+    <svg class="acc-hero-illus" viewBox="0 0 120 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="90" cy="30" r="22" fill="rgba(255,255,255,.14)"/>
+      <rect x="18" y="46" width="52" height="34" rx="3" fill="rgba(255,255,255,.16)"/>
+      <path d="M14 46h60l-5-14H19l-5 14Z" fill="rgba(255,255,255,.24)"/>
+      <path d="M14 46h12v6a6 6 0 0 1-12 0v-6Zm12 0h12v6a6 6 0 0 1-12 0v-6Zm12 0h12v6a6 6 0 0 1-12 0v-6Zm12 0h12v6a6 6 0 0 1-12 0v-6Zm12 0h12v6a6 6 0 0 1-12 0v-6Z" fill="rgba(255,255,255,.32)"/>
+      <path d="M100 58a9 9 0 0 0-9 9c0 7 9 16 9 16s9-9 9-16a9 9 0 0 0-9-9Z" fill="rgba(255,255,255,.5)"/>
+      <circle cx="100" cy="67" r="3.4" fill="rgba(255,107,74,.9)"/>
+    </svg>`;
   main.innerHTML = `
     <div class="acc-hero">
-      <div class="acc-avatar">🧑</div>
-      <div>
+      ${heroIllus}
+      <div class="acc-avatar"><img src="icons/avatar-pembeli.png" alt="" /></div>
+      <div class="acc-hero-main">
         <div class="acc-name">Pembeli JajanDekat</div>
         <div class="acc-note">${followedIds.size ? `Mengikuti ${followedIds.size} pedagang` : 'Belum mengikuti pedagang'} · tanpa perlu akun</div>
+        ${followedIds.size ? `<button class="acc-pill" onclick="goToBottomView('favorit')">👥 ${followedIds.size} Pedagang Diikuti →</button>` : ''}
       </div>
     </div>
+
+    <div class="acc-section-label">Aktivitas</div>
     <div class="acc-list">
-      ${perm ? row('🔔', 'Notifikasi', notifSub, 'window.__notifTap()') : ''}
-      ${row('📰', 'Artikel', 'Tips dan info kuliner', 'window.__openArtikelList()')}
-      ${row('📖', 'Ajukan Cerita', 'Bagikan pengalaman jajan Anda', "window.__openBuyerStoryForm()")}
-      ${row('🧭', 'Panduan penggunaan', '', "window.__openGuideModal('pembeli')")}
-      ${row('❓', 'Bantuan &amp; FAQ', '', 'window.__openFaqModal()')}
-      ${row('📤', 'Bagikan aplikasi', 'Ajak teman dan pedagang', 'window.__shareApp()')}
-      ${row('🛒', 'Ingin berjualan?', 'Buka mode Pedagang', 'window.__goPedagang()')}
+      ${perm ? row('🔔', 'acc-ico-orange', 'Notifikasi', notifSub, 'window.__notifTap()') : ''}
+      ${row('❤️', 'acc-ico-pink', 'Pedagang Diikuti', `${followedIds.size} pedagang`, "goToBottomView('favorit')")}
+    </div>
+
+    <div class="acc-section-label">Jelajah</div>
+    <div class="acc-list">
+      ${row('📰', 'acc-ico-blue', 'Artikel', 'Tips dan info kuliner', 'window.__openArtikelList()')}
+      ${row('📖', 'acc-ico-purple', 'Ajukan Cerita', 'Bagikan pengalaman jajan Anda', "window.__openBuyerStoryForm()")}
+    </div>
+
+    <div class="acc-section-label">Bantuan</div>
+    <div class="acc-list">
+      ${row('🧭', 'acc-ico-green', 'Panduan Penggunaan', 'Pelajari cara pakai aplikasi', "window.__openGuideModal('pembeli')")}
+      ${row('❓', 'acc-ico-yellow', 'Bantuan &amp; FAQ', 'Jawaban untuk pertanyaan Anda', 'window.__openFaqModal()')}
+    </div>
+
+    <div class="acc-section-label">Lainnya</div>
+    <div class="acc-list">
+      ${row('📤', 'acc-ico-teal', 'Bagikan JajanDekat', 'Ajak teman dan keluarga', 'window.__shareApp()')}
+      ${row('🛒', 'acc-ico-pink', 'Ingin Berjualan?', 'Buka mode Pedagang', 'window.__goPedagang()')}
     </div>
   `;
 }
