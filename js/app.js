@@ -770,7 +770,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -1203,7 +1203,7 @@ function renderHmNearCard(v) {
   return `<button class="hm-nc" onclick="window.__openVendorSheet('${v.id}')">
     <span class="hm-nc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}</span>
     <span class="hm-nc-b"><span class="hm-nc-top"><span class="hm-nc-name">${escapeHtml(v.name)}</span><span class="hm-pill ${hmIsOpen(v) ? '' : 'off'}">${hmIsOpen(v) ? (d || 'Buka') : 'Tutup'}</span></span>
-      <span class="hm-nc-cat">${escapeHtml(hmCatLabel(v))}</span><span class="hm-nc-rt">${hmRating(v)}</span></span>
+      <span class="hm-nc-cat">${escapeHtml(hmCatLabel(v))}${v.claim_status === 'unclaimed' ? ' · <span style="color:#9CA3AF;">Belum diklaim</span>' : ''}</span><span class="hm-nc-rt">${hmRating(v)}</span></span>
   </button>`;
 }
 function renderHmRecCard(v) {
@@ -2296,6 +2296,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
       </div>
       <div class="vs-body">
         <div class="vs-title">${escapeHtml(v.name)}</div>
+        ${v.claim_status === 'unclaimed' ? '<div class="vs-line" style="color:#9CA3AF;">ℹ️ Toko ini didaftarkan pembeli, belum dikonfirmasi pemiliknya.</div>' : ''}
         <div class="vs-meta">
           ${v.rating_count > 0 ? `<span class="vp-rating">⭐ ${v.rating_avg} <span class="vp-rating-count">(${v.rating_count} ulasan)</span></span>` : '<span class="vs-muted">Belum ada ulasan</span>'}
           ${cats ? `<span class="vs-muted">${cats}</span>` : ''}
@@ -2438,6 +2439,7 @@ function renderCariView() {
       <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
     </div>
     <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
+    <button type="button" onclick="window.__openAddVendorModal()" style="display:flex;align-items:center;gap:6px;width:100%;padding:9px 12px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:11.5px;margin:4px 0 8px;">➕ Toko belum ada di JajanDekat? Tambahkan sendiri</button>
     <div id="search-results" style="margin-top:8px;"></div>
 
     <div class="vendor-hero" style="margin-top:20px;text-align:left;">
@@ -2468,7 +2470,7 @@ function renderCariView() {
     );
     results.innerHTML = filtered.length
       ? `<div class="hm-near">${sortVendorsForDisplay(filtered).map(renderHmNearCard).join('')}</div>`
-      : '<div class="nb-empty">Tidak ada pedagang yang cocok.</div>';
+      : `<div class="nb-empty">Tidak ada pedagang yang cocok.<button type="button" onclick="window.__openAddVendorModal()" style="display:block;margin:10px auto 0;padding:9px 14px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:11.5px;">➕ Tambahkan toko ini</button></div>`;
   }
   document.querySelectorAll('#cari-chips .map-chip').forEach(btn => {
     btn.onclick = () => {
@@ -2492,6 +2494,132 @@ window.__shareApp = function () {
   }
 };
 
+
+// ---------- TAMBAH TOKO OLEH PEMBELI (belum diklaim) ----------
+// Pembeli bisa daftarkan toko yang belum ada di JajanDekat. Beda dari __registerVendor:
+// tanpa PIN, tanpa auto-link_owner_device — pakai RPC register_vendor_unclaimed yang
+// nyimpan claim_status='unclaimed' + submitted_by_device_id. Pemilik asli baru bisa
+// login/kelola toko ini setelah klaim disetujui admin (alur terpisah, belum dibuat).
+let baName = '';
+let baWhatsapp = '';
+let baCategoryKey = null;
+let baLat = null;
+let baLng = null;
+let baLocationNote = '';
+let baBusy = false;
+
+window.__openAddVendorModal = function () {
+  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baBusy = false;
+  document.getElementById('addvendor-modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'addvendor-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:20px;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">➕ Tambahkan Toko</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">Nemu pedagang/toko yang belum ada di JajanDekat? Daftarkan di sini. Toko ini akan tampil dengan status <b>"Belum diklaim"</b> sampai pemiliknya konfirmasi lewat WhatsApp ke admin.</div>
+
+      <input id="ba-name" type="text" value="" oninput="window.__baUpdate('name', this.value)" placeholder="Nama toko, misal: Bakso Pak Slamet" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
+
+      <div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">Jenis dagangan</div>
+      <div id="ba-cat-row" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;">
+        ${FOOD_MAIN.map(m => `<button type="button" class="map-chip" data-k="${m.k}" onclick="window.__baSelectCategory('${m.k}')">${m.e} ${m.short || m.label}</button>`).join('')}
+      </div>
+
+      <input id="ba-whatsapp" type="tel" value="" oninput="window.__baUpdate('whatsapp', this.value)" placeholder="Nomor WhatsApp toko (contoh: 6281234567890)" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:6px;box-sizing:border-box;" />
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Nggak yakin nomornya? Isi saja nomor WhatsApp kamu sendiri sementara — pemilik toko bisa menggantinya lewat menu Edit Profil setelah klaim disetujui.</div>
+
+      <button type="button" id="ba-loc-btn" onclick="window.__baCaptureLocation()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;margin-bottom:4px;">📍 Pakai lokasi saya sekarang</button>
+      <div id="ba-loc-status" style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Berdiri dekat toko/lapaknya, lalu tekan tombol di atas.</div>
+
+      <input id="ba-note" type="text" value="" oninput="window.__baUpdate('note', this.value)" placeholder="Catatan lokasi (opsional), misal: sebelah warung Bu Siti" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
+
+      <div id="ba-error" style="color:#f87171;font-size:11.5px;min-height:14px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" onclick="document.getElementById('addvendor-modal-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button type="button" id="ba-submit-btn" onclick="window.__submitAddVendor()" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Tambahkan Toko</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__baUpdate = function (field, value) {
+  if (field === 'name') baName = value;
+  if (field === 'whatsapp') baWhatsapp = value;
+  if (field === 'note') baLocationNote = value;
+};
+
+window.__baSelectCategory = function (k) {
+  baCategoryKey = baCategoryKey === k ? null : k;
+  document.querySelectorAll('#ba-cat-row .map-chip').forEach(b => b.classList.toggle('active', b.dataset.k === baCategoryKey));
+};
+
+window.__baCaptureLocation = function () {
+  const statusEl = document.getElementById('ba-loc-status');
+  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
+  if (statusEl) statusEl.textContent = 'Mengambil lokasi…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      baLat = pos.coords.latitude; baLng = pos.coords.longitude;
+      if (statusEl) statusEl.textContent = '✅ Lokasi tersimpan dari posisi sekarang.';
+    },
+    () => { if (statusEl) statusEl.textContent = 'Gagal mengambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+};
+
+window.__submitAddVendor = async function () {
+  const errEl = document.getElementById('ba-error');
+  const name = (document.getElementById('ba-name')?.value ?? baName).trim();
+  const whatsapp = normalizeWhatsapp((document.getElementById('ba-whatsapp')?.value ?? baWhatsapp).trim());
+  const note = (document.getElementById('ba-note')?.value ?? baLocationNote).trim();
+  const cat = FOOD_MAIN.find(m => m.k === baCategoryKey);
+
+  if (!name || name.length < 2) { errEl.textContent = 'Nama toko wajib diisi.'; return; }
+  if (!cat) { errEl.textContent = 'Pilih jenis dagangan dulu.'; return; }
+  if (!whatsapp || whatsapp.length < 8) { errEl.textContent = 'Nomor WhatsApp wajib diisi.'; return; }
+  if (baLat == null || baLng == null) { errEl.textContent = 'Ambil lokasi dulu — tekan tombol "Pakai lokasi saya sekarang".'; return; }
+
+  const dupe = vendors.find(v => v.whatsapp === whatsapp);
+  if (dupe) { errEl.textContent = `Nomor ini sudah terdaftar sebagai "${dupe.name}".`; return; }
+
+  if (baBusy) return;
+  baBusy = true;
+  errEl.textContent = 'Menyimpan...';
+  const btn = document.getElementById('ba-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
+  try {
+    const { data: rows, error } = await sb.rpc('register_vendor_unclaimed', {
+      p_name: name, p_category: cat.label, p_categories: [cat.label], p_emoji: cat.e,
+      p_whatsapp: whatsapp, p_fixed_lat: baLat, p_fixed_lng: baLng,
+      p_location_note: note || null, p_device_id: deviceId,
+    });
+    if (error) throw error;
+    const newId = rows && rows[0] && rows[0].id;
+    if (!newId) throw new Error('Gagal membaca data toko baru.');
+
+    // Ambil ulang baris lengkap (kolom sama seperti loadVendors) supaya field lain
+    // (rating, is_premium, dst) konsisten dengan default kolomnya, bukan cuma yang dikembalikan RPC.
+    const { data: fullRow } = await sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
+
+    vendors.push(fullRow || rows[0]);
+    document.getElementById('addvendor-modal-overlay')?.remove();
+    showToast('Toko berhasil ditambahkan! Menunggu konfirmasi pemilik. 🙏');
+    if (bottomView === 'cari') renderCariView();
+    window.__openVendorSheet(newId);
+  } catch (e) {
+    const friendly = e && e.message && e.message.includes('vendors_whatsapp_unique')
+      ? 'Nomor WhatsApp ini sudah terdaftar untuk toko lain.'
+      : 'Gagal menyimpan: ' + (e && e.message ? e.message : 'terjadi kesalahan tidak diketahui');
+    errEl.textContent = friendly;
+  } finally {
+    baBusy = false;
+    const b = document.getElementById('ba-submit-btn');
+    if (b) { b.disabled = false; b.textContent = 'Tambahkan Toko'; }
+  }
+};
 
 function renderMap() {
   const el = document.getElementById('map');
