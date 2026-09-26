@@ -2225,7 +2225,7 @@ function renderAkunView() {
   main.innerHTML = `
     <div class="acc-hero">
       ${heroIllus}
-      <div class="acc-avatar"><img src="icons/avatar-pembeli.png" alt="" /></div>
+      <div class="acc-avatar"><img src="icons/avatar-pembeli.png" width="52" height="52" alt="" /></div>
       <div class="acc-hero-main">
         <div class="acc-name">Pembeli JajanDekat</div>
         <div class="acc-note">${followedIds.size ? `Mengikuti ${followedIds.size} pedagang` : 'Belum mengikuti pedagang'} · tanpa perlu akun</div>
