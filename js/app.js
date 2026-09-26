@@ -873,6 +873,31 @@ async function uploadArticleCoverImage(file) {
   return data.publicUrl;
 }
 
+async function uploadVendorStoryPhoto(vendorId, file) {
+  // Foto cerita pedagang — folder terpisah per pedagang, nama file pakai timestamp
+  // (bukan ditimpa seperti foto profil) karena satu pedagang bisa kirim beberapa cerita.
+  const blob = await compressImage(file, 1000, 0.75, false);
+  const path = `stories/${vendorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function uploadBuyerStoryPhoto(deviceId, file) {
+  // Foto cerita dari pembeli — folder terpisah dari cerita pedagang, dikelompokkan per device_id.
+  const blob = await compressImage(file, 1000, 0.75, false);
+  const path = `stories-pembeli/${deviceId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb.storage.from('vendor-photos').upload(path, blob, {
+    contentType: 'image/jpeg', upsert: true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('vendor-photos').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 async function uploadProductImage(vendorId, file) {
   const blob = await compressImage(file, 800, 0.75, true);
   const path = `products/${vendorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
@@ -2196,6 +2221,7 @@ function renderAkunView() {
     <div class="acc-list">
       ${perm ? row('🔔', 'Notifikasi', notifSub, 'window.__notifTap()') : ''}
       ${row('📰', 'Artikel', 'Tips dan info kuliner', 'window.__openArtikelList()')}
+      ${row('📖', 'Ajukan Cerita', 'Bagikan pengalaman jajan Anda', "window.__openBuyerStoryForm()")}
       ${row('🧭', 'Panduan penggunaan', '', "window.__openGuideModal('pembeli')")}
       ${row('❓', 'Bantuan &amp; FAQ', '', 'window.__openFaqModal()')}
       ${row('📤', 'Bagikan aplikasi', 'Ajak teman dan pedagang', 'window.__shareApp()')}
@@ -3607,6 +3633,19 @@ function renderPedagang() {
         </div>
       </div>
       <div id="my-reviews-list" style="font-size:12px;color:var(--text-faint);">Memuat ulasan...</div>
+    </div>
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📖</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ceritakan Kisah Dagangan Anda</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Kisah, perjuangan, atau momen berkesan selama berjualan — bisa ditampilkan di halaman Artikel JajanDekat setelah ditinjau admin</div>
+        </div>
+      </div>
+      <button onclick="window.__openVendorStoryForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
+        ✍️ Ajukan Cerita Dagangan
+      </button>
     </div>
 
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
@@ -5717,6 +5756,177 @@ window.__adminRejectArticle = async function (id) {
     loadAdminArticles();
   } catch (e) {
     alert('Gagal menolak: ' + e.message);
+  }
+};
+
+// ---------- CERITA DAGANGAN PEDAGANG (diajukan pedagang, ditinjau admin sebelum tayang) ----------
+let pendingVendorStoryFile = null;
+let pendingVendorStoryPreview = null;
+
+window.__openVendorStoryForm = function (vendorId) {
+  pendingVendorStoryFile = null;
+  pendingVendorStoryPreview = null;
+
+  document.getElementById('vendor-story-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'vendor-story-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;text-align:left;max-height:88vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">📖 Ajukan Cerita Dagangan</div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:14px;">Ceritanya akan ditinjau admin dulu (biasanya 1-2 hari kerja) sebelum tayang di halaman Artikel JajanDekat.</div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Judul cerita</label>
+      <input id="vs-title" type="text" maxlength="120" placeholder="Contoh: Perjuangan Saya Jualan di Tengah Hujan" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Ceritanya (minimal 30 karakter)</label>
+      <textarea id="vs-content" rows="8" maxlength="8000" placeholder="Tulis kisah dagangan Anda di sini..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;margin:4px 0 10px;"></textarea>
+
+      <label style="font-size:11px;color:var(--text-faint);">Foto pendukung (opsional)</label>
+      <input type="file" id="vs-photo-input" accept="image/*" style="display:none" onchange="window.__onVendorStoryPhotoSelected(event)" />
+      <div id="vs-photo-zone" onclick="document.getElementById('vs-photo-input').click()" style="margin:4px 0 12px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        📷 Tambah foto
+      </div>
+
+      <div id="vs-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('vendor-story-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__submitVendorStory('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Kirim untuk Ditinjau</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__onVendorStoryPhotoSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingVendorStoryFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingVendorStoryPreview = e.target.result;
+    const zone = document.getElementById('vs-photo-zone');
+    if (zone) zone.innerHTML = `<img src="${pendingVendorStoryPreview}" style="width:100%;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.__submitVendorStory = async function (vendorId) {
+  const errEl = document.getElementById('vs-error');
+  const title = document.getElementById('vs-title').value.trim();
+  const content = document.getElementById('vs-content').value.trim();
+
+  if (!title) { errEl.textContent = 'Judul cerita wajib diisi.'; return; }
+  if (content.length < 30) { errEl.textContent = 'Ceritanya masih terlalu pendek (minimal 30 karakter).'; return; }
+
+  // Sama seperti alur lain (edit profil, ganti status buka/tutup): PIN diminta sekali
+  // per sesi lalu dipakai ulang untuk RPC-RPC berikutnya.
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return;
+    const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: vendorId, p_pin: enteredPin.trim() });
+    if (!ok) { errEl.textContent = 'PIN salah.'; return; }
+    myVendorPin = enteredPin.trim();
+  }
+
+  errEl.textContent = 'Mengirim...';
+  try {
+    let coverUrl = null;
+    if (pendingVendorStoryFile) {
+      coverUrl = await uploadVendorStoryPhoto(vendorId, pendingVendorStoryFile);
+    }
+    const { error } = await sb.rpc('submit_vendor_story', {
+      p_vendor_id: vendorId, p_pin: myVendorPin || '',
+      p_title: title, p_content: content, p_cover_image: coverUrl,
+    });
+    if (error) throw error;
+
+    document.getElementById('vendor-story-overlay').remove();
+    pendingVendorStoryFile = null; pendingVendorStoryPreview = null;
+    showToast('Cerita terkirim! Akan tayang setelah ditinjau admin 📖');
+  } catch (e) {
+    errEl.textContent = 'Gagal mengirim: ' + (e.message || 'terjadi kesalahan.');
+  }
+};
+
+// ---------- CERITA DAGANGAN PEMBELI (diajukan pembeli, ditinjau admin sebelum tayang) ----------
+let pendingBuyerStoryFile = null;
+let pendingBuyerStoryPreview = null;
+
+window.__openBuyerStoryForm = function () {
+  pendingBuyerStoryFile = null;
+  pendingBuyerStoryPreview = null;
+
+  document.getElementById('buyer-story-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'buyer-story-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;text-align:left;max-height:88vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">📖 Ajukan Cerita</div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:14px;">Ceritakan pengalaman jajan Anda — momen berkesan, pedagang favorit, atau kisah unik lainnya. Akan ditinjau admin dulu (biasanya 1-2 hari kerja) sebelum tayang di halaman Artikel.</div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Judul cerita</label>
+      <input id="bs-title" type="text" maxlength="120" placeholder="Contoh: Ketemu Bakso Legendaris Gara-gara Nyasar" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin:4px 0 10px;" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Ceritanya (minimal 30 karakter)</label>
+      <textarea id="bs-content" rows="8" maxlength="8000" placeholder="Tulis pengalaman Anda di sini..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;margin:4px 0 10px;"></textarea>
+
+      <label style="font-size:11px;color:var(--text-faint);">Foto pendukung (opsional)</label>
+      <input type="file" id="bs-photo-input" accept="image/*" style="display:none" onchange="window.__onBuyerStoryPhotoSelected(event)" />
+      <div id="bs-photo-zone" onclick="document.getElementById('bs-photo-input').click()" style="margin:4px 0 12px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        📷 Tambah foto
+      </div>
+
+      <div id="bs-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('buyer-story-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__submitBuyerStory()" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Kirim untuk Ditinjau</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__onBuyerStoryPhotoSelected = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingBuyerStoryFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingBuyerStoryPreview = e.target.result;
+    const zone = document.getElementById('bs-photo-zone');
+    if (zone) zone.innerHTML = `<img src="${pendingBuyerStoryPreview}" style="width:100%;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.__submitBuyerStory = async function () {
+  const errEl = document.getElementById('bs-error');
+  const title = document.getElementById('bs-title').value.trim();
+  const content = document.getElementById('bs-content').value.trim();
+
+  if (!title) { errEl.textContent = 'Judul cerita wajib diisi.'; return; }
+  if (content.length < 30) { errEl.textContent = 'Ceritanya masih terlalu pendek (minimal 30 karakter).'; return; }
+
+  errEl.textContent = 'Mengirim...';
+  try {
+    let coverUrl = null;
+    if (pendingBuyerStoryFile) {
+      coverUrl = await uploadBuyerStoryPhoto(deviceId, pendingBuyerStoryFile);
+    }
+    const { error } = await sb.rpc('submit_buyer_story', {
+      p_device_id: deviceId, p_title: title, p_content: content, p_cover_image: coverUrl,
+    });
+    if (error) throw error;
+
+    document.getElementById('buyer-story-overlay').remove();
+    pendingBuyerStoryFile = null; pendingBuyerStoryPreview = null;
+    showToast('Cerita terkirim! Akan tayang setelah ditinjau admin 📖');
+  } catch (e) {
+    errEl.textContent = 'Gagal mengirim: ' + (e.message || 'terjadi kesalahan.');
   }
 };
 
