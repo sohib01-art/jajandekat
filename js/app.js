@@ -2317,6 +2317,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
           <button class="vs-btn" onclick="window.__vsAct('menu','${v.id}')"><span class="vs-emoji">🍽️</span>Lihat menu</button>
           ${canMap ? `<button class="vs-btn" onclick="window.__vsAct('map','${v.id}')"><img class="vs-ic" src="icons/icon_map.png" alt="">Lihat di peta</button>` : ''}
           <button class="vs-btn ${following ? 'on' : ''}" onclick="window.__vsAct('follow','${v.id}')">${following ? '<img class="vs-ic" src="icons/icon_check.png" alt="">Mengikuti' : '<span class="vs-emoji">➕</span>Ikuti'}</button>
+          ${v.claim_status === 'unclaimed' ? `<button class="vs-btn ghost wide" onclick="window.__openClaimVendorModal('${v.id}')">🙋 Ini toko saya — Klaim</button>` : ''}
           <button class="vs-btn ghost wide" onclick="window.__vsAct('review','${v.id}')">💬 Beri ulasan atau masukan</button>
         </div>
       </div>
@@ -2618,6 +2619,72 @@ window.__submitAddVendor = async function () {
     baBusy = false;
     const b = document.getElementById('ba-submit-btn');
     if (b) { b.disabled = false; b.textContent = 'Tambahkan Toko'; }
+  }
+};
+
+// ---------- KLAIM TOKO OLEH PEMILIK ASLI (untuk toko berstatus unclaimed) ----------
+let cvWhatsapp = '';
+let cvNote = '';
+let cvBusy = false;
+
+window.__openClaimVendorModal = function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  cvWhatsapp = ''; cvNote = ''; cvBusy = false;
+  document.getElementById('claimvendor-modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'claimvendor-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:20px;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">🙋 Klaim "${escapeHtml(v.name)}"</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">Toko ini didaftarkan pembeli lain dan belum ada pemiliknya. Kalau ini toko/dagangan kamu, isi nomor WhatsApp aktif untuk verifikasi. Admin akan mengecek dan menghubungi lewat WhatsApp itu dalam 1-2 hari.</div>
+
+      <input id="cv-whatsapp" type="tel" value="" oninput="window.__cvUpdate('whatsapp', this.value)" placeholder="Nomor WhatsApp kamu (contoh: 6281234567890)" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
+
+      <textarea id="cv-note" rows="2" oninput="window.__cvUpdate('note', this.value)" placeholder="Catatan tambahan (opsional), misal: nama pemilik, ciri toko, dll" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical;"></textarea>
+
+      <div id="cv-error" style="color:#f87171;font-size:11.5px;min-height:14px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" onclick="document.getElementById('claimvendor-modal-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button type="button" id="cv-submit-btn" onclick="window.__submitClaimVendor('${vendorId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Kirim Klaim</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__cvUpdate = function (field, value) {
+  if (field === 'whatsapp') cvWhatsapp = value;
+  if (field === 'note') cvNote = value;
+};
+
+window.__submitClaimVendor = async function (vendorId) {
+  const errEl = document.getElementById('cv-error');
+  const whatsapp = normalizeWhatsapp((document.getElementById('cv-whatsapp')?.value ?? cvWhatsapp).trim());
+  const note = (document.getElementById('cv-note')?.value ?? cvNote).trim();
+
+  if (!whatsapp || whatsapp.length < 8) { errEl.textContent = 'Nomor WhatsApp wajib diisi.'; return; }
+  if (cvBusy) return;
+  cvBusy = true;
+  errEl.textContent = 'Mengirim...';
+  const btn = document.getElementById('cv-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Mengirim…'; }
+  try {
+    const { error } = await sb.rpc('submit_vendor_claim', {
+      p_vendor_id: vendorId, p_device_id: deviceId, p_whatsapp: whatsapp, p_note: note || null,
+    });
+    if (error) throw error;
+    document.getElementById('claimvendor-modal-overlay')?.remove();
+    window.__closeVendorSheet();
+    showToast('Klaim terkirim! Admin akan menghubungi WhatsApp kamu dalam 1-2 hari. 🙏');
+  } catch (e) {
+    errEl.textContent = 'Gagal mengirim klaim: ' + (e && e.message ? e.message : 'terjadi kesalahan tidak diketahui');
+  } finally {
+    cvBusy = false;
+    const b = document.getElementById('cv-submit-btn');
+    if (b) { b.disabled = false; b.textContent = 'Kirim Klaim'; }
   }
 };
 
@@ -4916,6 +4983,7 @@ async function renderAdminDashboard() {
       <button class="admin-tab" data-tab="vendors" onclick="window.__adminSwitchTab('vendors')">🏪 Pedagang</button>
       <button class="admin-tab" data-tab="articles" onclick="window.__adminSwitchTab('articles')">📝 Artikel</button>
       <button class="admin-tab" data-tab="requests" onclick="window.__adminSwitchTab('requests')">🔔 Permintaan</button>
+      <button class="admin-tab" data-tab="claims" onclick="window.__adminSwitchTab('claims')">🙋 Klaim Toko</button>
       <button class="admin-tab" data-tab="reports" onclick="window.__adminSwitchTab('reports')">🚩 Laporan</button>
       <button class="admin-tab" data-tab="tags" onclick="window.__adminSwitchTab('tags')">🏷️ Jenis Jualan</button>
       <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
@@ -4943,6 +5011,11 @@ async function renderAdminDashboard() {
 
     <div class="admin-panel" data-panel="requests" style="display:none;">
       <div id="admin-requests" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat permintaan...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="claims" style="display:none;">
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Toko yang didaftarkan pembeli (belum diklaim), lalu ada yang mengaku sebagai pemiliknya. Cek nomor WhatsApp yang diklaim — kalau cocok dengan toko aslinya, setujui. Kalau ragu, hubungi dulu lewat WA sebelum menyetujui.</div>
+      <div id="admin-claims" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat klaim...</div></div>
     </div>
 
     <div class="admin-panel" data-panel="reports" style="display:none;">
@@ -5140,6 +5213,7 @@ async function renderAdminDashboard() {
   `;
   loadAdminReports();
   loadAdminRequests();
+  loadAdminClaims();
   loadAdminAnnouncements();
   loadAdminBanners();
   loadAdminArticles();
@@ -5278,6 +5352,74 @@ window.__dismissVendorRequest = async function (requestId) {
     loadAdminRequests();
   } catch (e) {
     alert('Gagal menutup permintaan: ' + e.message);
+  }
+};
+
+// ---------- KLAIM TOKO (toko yang didaftarkan pembeli, diklaim pemilik asli) ----------
+async function loadAdminClaims() {
+  const el = document.getElementById('admin-claims');
+  if (!el) return;
+  try {
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'list_vendor_claims' } });
+    if (error) throw error;
+    if (data && data.error) throw new Error(data.error);
+    const rows = (data.claims || []).filter(c => c.status === 'pending');
+    if (rows.length === 0) { el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada klaim masuk. 👍</div>'; return; }
+    el.innerHTML = rows.map(c => {
+      const v = c.vendors;
+      if (!v) return '';
+      return `
+      <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:700;font-size:12.5px;">${escapeHtml(v.name)}</span>
+          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:#E5E7EB;color:#374151;">Belum diklaim</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);" class="mono">WA toko saat ini: ${escapeHtml(v.whatsapp || '-')}</div>
+        <div style="font-size:11px;color:var(--brand);font-weight:700;" class="mono">WA pengklaim: ${escapeHtml(c.claimant_whatsapp || '-')}</div>
+        ${c.note ? `<div style="font-size:11px;color:var(--text-dim);">📝 ${escapeHtml(c.note)}</div>` : ''}
+        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(c.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          <button class="follow-btn" onclick="window.__adminApproveClaim('${c.id}','${escapeHtml(v.name).replace(/'/g, "\\'")}','${escapeHtml(c.claimant_whatsapp || '').replace(/'/g, "\\'")}')">✅ Setujui Klaim</button>
+          <button class="follow-btn" style="color:#f87171;" onclick="window.__adminRejectClaim('${c.id}')">✕ Tolak</button>
+          <button class="follow-btn" onclick="window.open('https://wa.me/${(c.claimant_whatsapp || '').replace(/[^\\d]/g, '')}','_blank')">💬 Hubungi Pengklaim</button>
+        </div>
+      </div>
+    `;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">Gagal memuat klaim: ${e.message}</span>`;
+  }
+}
+
+window.__adminApproveClaim = async function (claimId, vendorName, claimantWhatsapp) {
+  if (!confirm(`Setujui klaim untuk "${vendorName}"? PIN baru akan dibuat dan toko langsung terhubung ke perangkat pengklaim.`)) return;
+  try {
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'approve_vendor_claim', claim_id: claimId } });
+    if (error) throw error;
+    if (data && data.error) throw new Error(data.error);
+    const pin = data.new_pin;
+    alert(`Klaim disetujui. PIN baru: ${pin}\n\nSampaikan PIN ini ke pengklaim lewat WhatsApp (tombol "Hubungi Pengklaim" sebelum ini bisa dipakai lagi untuk mengirim PIN-nya).`);
+    if (claimantWhatsapp) {
+      const msg = `Halo, klaim kepemilikan toko "${vendorName}" di JajanDekat sudah disetujui. PIN login toko kamu: ${pin}. Simpan baik-baik ya, jangan dibagikan ke orang lain.`;
+      window.open(`https://wa.me/${claimantWhatsapp.replace(/[^\d]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+    loadAdminClaims();
+    if (adminVendorData) { const { data: fresh } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false }); if (fresh) { adminVendorData = fresh; document.getElementById('admin-list').innerHTML = renderAdminVendorList(adminVendorData); } }
+  } catch (e) {
+    alert('Gagal menyetujui klaim: ' + e.message);
+  }
+};
+
+window.__adminRejectClaim = async function (claimId) {
+  const note = prompt('Alasan penolakan (opsional, akan dicatat):', '');
+  if (note === null) return; // batal
+  try {
+    const { data, error } = await sb.functions.invoke('admin-action', { body: { password: adminPasswordCache, action: 'reject_vendor_claim', claim_id: claimId, claim_note: note || null } });
+    if (error) throw error;
+    if (data && data.error) throw new Error(data.error);
+    loadAdminClaims();
+  } catch (e) {
+    alert('Gagal menolak klaim: ' + e.message);
   }
 };
 
