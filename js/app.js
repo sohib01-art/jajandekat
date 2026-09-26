@@ -1986,7 +1986,24 @@ function vendorClosedTodayNote(v) {
   }
   const hari = normalizeHariBuka(v.hari_buka);
   if (hari && !hari.includes(now.getDay())) return `Tutup hari ini · libur hari ${HARI_PANJANG[now.getDay()]}`;
+  if (vendorOutsideJamOperasional(v)) return `Tutup sekarang · buka ${v.jam_buka.slice(0, 5)}–${v.jam_tutup.slice(0, 5)}`;
   return null;
+}
+
+// Cek apakah waktu sekarang berada DI LUAR rentang jam_buka–jam_tutup toko (untuk toko lokasi tetap
+// yang isi jadwal jam spesifik, bukan buka_24jam). Menangani jadwal yang melewati tengah malam
+// (misal 18:00–02:00). Kalau jam belum diisi sama sekali, jangan batasi (anggap tidak ada jadwal jam).
+function vendorOutsideJamOperasional(v) {
+  if (v.buka_24jam) return false;
+  if (!v.jam_buka || !v.jam_tutup) return false;
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const openMin = toMin(v.jam_buka);
+  const closeMin = toMin(v.jam_tutup);
+  if (openMin === closeMin) return false; // jam sama dianggap buka penuh, bukan tutup penuh
+  const now = new Date();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  if (openMin < closeMin) return curMin < openMin || curMin >= closeMin;
+  return curMin >= closeMin && curMin < openMin; // lewat tengah malam
 }
 
 // Label jadwal siap-tampil: hari buka · jam (24 jam / jam_buka–jam_tutup) · tanggal merah · schedule_text lama
@@ -2302,7 +2319,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
           ${cats ? `<span class="vs-muted">${cats}</span>` : ''}
         </div>
         <div class="vs-status ${canMap && !vendorClosedTodayNote(v) ? 'on' : ''}">
-          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : (vendorClosedTodayNote(v) ? 'Tutup hari ini' : (canMap ? 'Sedang buka' : 'Belum buka'))}
+          <span class="vs-status-dot"></span>${v.active ? 'Sedang buka' + (untilStr ? ' · sampai ' + untilStr : '') : (vendorClosedTodayNote(v) ? (vendorClosedTodayNote(v).startsWith('Tutup sekarang') ? 'Tutup sekarang' : 'Tutup hari ini') : (canMap ? 'Sedang buka' : 'Belum buka'))}
         </div>
         ${vendorScheduleLabel(v) ? `<div class="vs-line">🕐 <span>${escapeHtml(vendorScheduleLabel(v))}</span></div>` : ''}
         ${vendorClosedTodayNote(v) ? `<div class="vs-line vs-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
