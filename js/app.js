@@ -2524,10 +2524,11 @@ let baCategoryKey = null;
 let baLat = null;
 let baLng = null;
 let baLocationNote = '';
+let baPhotoFile = null;
 let baBusy = false;
 
 window.__openAddVendorModal = function () {
-  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baBusy = false;
+  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baPhotoFile = null; baBusy = false;
   document.getElementById('addvendor-modal-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'addvendor-modal-overlay';
@@ -2553,6 +2554,12 @@ window.__openAddVendorModal = function () {
 
       <input id="ba-note" type="text" value="" oninput="window.__baUpdate('note', this.value)" placeholder="Catatan lokasi (opsional), misal: sebelah warung Bu Siti" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
 
+      <div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">Foto toko (opsional)</div>
+      <input type="file" id="ba-photo-input" accept="image/*" style="display:none;" onchange="window.__baPhotoPick(this)" />
+      <div id="ba-photo-preview-wrap" style="margin-bottom:10px;">
+        <button type="button" id="ba-photo-btn" onclick="document.getElementById('ba-photo-input').click()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>
+      </div>
+
       <div id="ba-error" style="color:#f87171;font-size:11.5px;min-height:14px;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;">
         <button type="button" onclick="document.getElementById('addvendor-modal-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
@@ -2572,6 +2579,29 @@ window.__baUpdate = function (field, value) {
 window.__baSelectCategory = function (k) {
   baCategoryKey = baCategoryKey === k ? null : k;
   document.querySelectorAll('#ba-cat-row .map-chip').forEach(b => b.classList.toggle('active', b.dataset.k === baCategoryKey));
+};
+
+window.__baPhotoPick = function (input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  baPhotoFile = file;
+  const wrap = document.getElementById('ba-photo-preview-wrap');
+  if (!wrap) return;
+  const url = URL.createObjectURL(file);
+  wrap.innerHTML = `
+    <div style="position:relative;width:100%;">
+      <img src="${url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;display:block;" />
+      <button type="button" onclick="window.__baRemovePhoto()" style="position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-weight:700;">✕</button>
+    </div>
+  `;
+};
+
+window.__baRemovePhoto = function () {
+  baPhotoFile = null;
+  const input = document.getElementById('ba-photo-input');
+  if (input) input.value = '';
+  const wrap = document.getElementById('ba-photo-preview-wrap');
+  if (wrap) wrap.innerHTML = `<button type="button" id="ba-photo-btn" onclick="document.getElementById('ba-photo-input').click()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>`;
 };
 
 window.__baCaptureLocation = function () {
@@ -2623,6 +2653,19 @@ window.__submitAddVendor = async function () {
     const { data: fullRow } = await sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
 
     vendors.push(fullRow || rows[0]);
+
+    if (baPhotoFile) {
+      try {
+        const photoUrl = await uploadVendorPhoto(newId, baPhotoFile);
+        await sb.rpc('set_unclaimed_vendor_photo', { p_vendor_id: newId, p_photo_url: photoUrl });
+        const pushed = vendors.find(x => x.id === newId);
+        if (pushed) pushed.photo_url = photoUrl;
+      } catch (photoErr) {
+        // Toko tetap berhasil ditambahkan meski foto gagal — jangan gagalkan seluruh proses karena ini.
+        console.error('Gagal upload foto toko:', photoErr);
+      }
+    }
+
     document.getElementById('addvendor-modal-overlay')?.remove();
     showToast('Toko berhasil ditambahkan! Menunggu konfirmasi pemilik. 🙏');
     if (bottomView === 'cari') renderCariView();
