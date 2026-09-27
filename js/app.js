@@ -558,7 +558,7 @@ window.__openProductForm = function (productId) {
 
       <label style="font-size:11px;color:var(--text-faint);">Foto produk (opsional)</label>
       <input type="file" id="prod-photo-input" accept="image/*" style="display:none" onchange="window.__onProductPhotoSelected(event)" />
-      <div id="prod-photo-zone" onclick="document.getElementById('prod-photo-input').click()" style="margin:4px 0 6px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+      <div id="prod-photo-zone" onclick="window.__openPhotoChooser('prod-photo-input')" style="margin:4px 0 6px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         ${pendingProductPhotoPreview ? `<img src="${pendingProductPhotoPreview}" style="width:100%;max-width:160px;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>` : '📷 Tambah foto produk'}
       </div>
       <div style="font-size:10px;color:var(--text-faint);margin:0 0 10px;">Gunakan foto produk milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk memastikan tidak melanggar privasi orang lain.</div>
@@ -685,10 +685,10 @@ window.__openVerificationForm = async function (vendorId) {
 
       <label style="font-size:11px;color:var(--text-faint);">Foto KTP (wajib)</label>
       <input type="file" id="verify-ktp-input" accept="image/*" capture="environment" style="display:none" onchange="window.__onKtpPhotoSelected(event)" />
-      <div id="verify-ktp-zone" onclick="document.getElementById('verify-ktp-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
-        📷 Ambil/unggah foto KTP
+      <div id="verify-ktp-zone" onclick="window.__triggerKtpCamera()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        📸 Ambil foto KTP (langsung dari kamera)
       </div>
-      <div style="font-size:10px;color:var(--text-faint);margin:-6px 0 10px;">Foto KTP hanya dilihat admin untuk verifikasi, tidak ditampilkan ke publik.</div>
+      <div style="font-size:10px;color:var(--text-faint);margin:-6px 0 10px;">Wajib foto langsung pakai kamera (nggak bisa dari galeri) untuk mencegah pemalsuan identitas. Foto KTP hanya dilihat admin untuk verifikasi, tidak ditampilkan ke publik.</div>
 
       <div id="verify-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
 
@@ -702,13 +702,33 @@ window.__openVerificationForm = async function (vendorId) {
 };
 
 let pendingKtpFile = null;
+let pendingKtpMeta = null; // { capturedAt, lat, lng } — identitas digital dari HP, dicatat saat foto diambil
+
+// KTP WAJIB langsung dari kamera — sengaja TIDAK lewat window.__openPhotoChooser (yang kasih pilihan
+// galeri), supaya orang nggak bisa unggah foto KTP lama/hasil edit/scan orang lain. Ditambah metadata
+// perangkat (device_id) + waktu + lokasi saat pengambilan, buat jejak audit kalau ada yang berusaha
+// memalsukan identitas — bukan bukti hukum yang kuat, tapi bahan pertimbangan admin saat review manual.
+window.__triggerKtpCamera = function () {
+  const input = document.getElementById('verify-ktp-input');
+  if (!input) return;
+  input.setAttribute('capture', 'environment'); // dipaksa tiap kali, jaga-jaga kalau atribut sempat kehapus
+  input.click();
+};
 
 window.__onKtpPhotoSelected = function (event) {
   const file = event.target.files[0];
   if (!file) return;
   pendingKtpFile = file;
+  pendingKtpMeta = { capturedAt: new Date().toISOString(), lat: null, lng: null };
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { if (pendingKtpMeta) { pendingKtpMeta.lat = pos.coords.latitude; pendingKtpMeta.lng = pos.coords.longitude; } },
+      () => {}, // lokasi opsional — kalau ditolak/gagal, tetap lanjut tanpa lokasi
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
   const zone = document.getElementById('verify-ktp-zone');
-  if (zone) zone.innerHTML = `<span style="color:var(--brand);">✅ Foto KTP terpilih — tap untuk ganti</span>`;
+  if (zone) zone.innerHTML = `<span style="color:var(--brand);">✅ Foto KTP terpilih — tap untuk ambil ulang</span>`;
 };
 
 window.__submitVerification = async function (vendorId) {
@@ -732,6 +752,10 @@ window.__submitVerification = async function (vendorId) {
     const { error } = await sb.rpc('submit_vendor_verification', {
       p_vendor_id: vendorId, p_pin: myVendorPin || '',
       p_business_name: businessName, p_business_nib: nib, p_ktp_photo_url: ktpUrl,
+      p_ktp_capture_device_id: deviceId,
+      p_ktp_captured_at: pendingKtpMeta ? pendingKtpMeta.capturedAt : new Date().toISOString(),
+      p_ktp_capture_lat: pendingKtpMeta ? pendingKtpMeta.lat : null,
+      p_ktp_capture_lng: pendingKtpMeta ? pendingKtpMeta.lng : null,
     });
     if (error) throw error;
 
@@ -739,6 +763,7 @@ window.__submitVerification = async function (vendorId) {
     if (v) v.verification_status = 'pending';
     document.getElementById('verify-form-overlay').remove();
     pendingKtpFile = null;
+    pendingKtpMeta = null;
     showToast('Pengajuan verifikasi terkirim! ✅');
     renderPedagang();
   } catch (e) {
@@ -803,6 +828,53 @@ async function setVendorStatus(vendorId, active, untilMinutes, lat, lng, photoUr
 }
 
 // ---------- FOTO DAGANGAN (sementara, ikut terhapus saat selesai jualan) ----------
+// ---------- PEMILIH FOTO: KAMERA ATAU GALERI ----------
+// Dipakai semua tombol "pilih foto" di app (produk, verifikasi KTP, tambah toko, edit profil, dst).
+// Nggak ubah logika proses foto yang sudah ada sama sekali — cuma ganti cara MEMICU input file
+// aslinya: begitu pembeli/pedagang pilih "Ambil Foto" atau "Pilih dari Galeri", atribut `capture`
+// diset/dilepas dulu di input yang sudah ada, baru di-klik — jadi onchange handler-nya tetap sama persis.
+let __photoChooserTargetInput = null;
+
+window.__openPhotoChooser = function (inputId, opts = {}) {
+  __photoChooserTargetInput = inputId;
+  document.getElementById('photo-chooser-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'photo-chooser-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:260;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:380px;border-radius:22px;padding:26px 20px 20px;text-align:center;">
+      <div style="font-size:38px;margin-bottom:8px;">📷</div>
+      <div style="font-family:'Poppins';font-weight:700;font-size:16.5px;margin-bottom:4px;">Pilih Kamera atau Foto</div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:18px;">${escapeHtml(opts.subtitle || 'Silakan pilih cara untuk menambahkan foto.')}</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <button type="button" onclick="window.__photoChooserPick('camera')" style="flex:1;padding:16px 8px;border-radius:14px;border:none;background:linear-gradient(135deg,#FFE8D6,#FFD3B0);display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <span style="font-size:24px;">📸</span>
+          <span style="font-weight:700;font-size:12px;color:#7A3E00;">Ambil Foto</span>
+          <span style="font-size:9.5px;color:#8A5A28;">Pakai kamera</span>
+        </button>
+        <button type="button" onclick="window.__photoChooserPick('gallery')" style="flex:1;padding:16px 8px;border-radius:14px;border:none;background:linear-gradient(135deg,#DCEBFF,#C3DBFF);display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <span style="font-size:24px;">🖼️</span>
+          <span style="font-weight:700;font-size:12px;color:#1E4E8C;">Pilih dari Galeri</span>
+          <span style="font-size:9.5px;color:#3E6BA8;">Foto yang sudah ada</span>
+        </button>
+      </div>
+      <button type="button" onclick="document.getElementById('photo-chooser-overlay').remove()" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:700;font-size:13px;">Batal</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
+
+window.__photoChooserPick = function (mode) {
+  const input = __photoChooserTargetInput ? document.getElementById(__photoChooserTargetInput) : null;
+  document.getElementById('photo-chooser-overlay')?.remove();
+  if (!input) return;
+  if (mode === 'camera') input.setAttribute('capture', 'environment');
+  else input.removeAttribute('capture');
+  input.click();
+};
+
+
 function compressImage(file, targetSize = 800, quality = 0.75, squareCrop = true) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -2692,7 +2764,7 @@ window.__openAddVendorModal = function () {
       <div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">Foto toko (opsional)</div>
       <input type="file" id="ba-photo-input" accept="image/*" style="display:none;" onchange="window.__baPhotoPick(this)" />
       <div id="ba-photo-preview-wrap" style="margin-bottom:10px;">
-        <button type="button" id="ba-photo-btn" onclick="document.getElementById('ba-photo-input').click()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>
+        <button type="button" id="ba-photo-btn" onclick="window.__openPhotoChooser('ba-photo-input')" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>
       </div>
 
       <div id="ba-error" style="color:#f87171;font-size:11.5px;min-height:14px;margin-bottom:8px;"></div>
@@ -2736,7 +2808,7 @@ window.__baRemovePhoto = function () {
   const input = document.getElementById('ba-photo-input');
   if (input) input.value = '';
   const wrap = document.getElementById('ba-photo-preview-wrap');
-  if (wrap) wrap.innerHTML = `<button type="button" id="ba-photo-btn" onclick="document.getElementById('ba-photo-input').click()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>`;
+  if (wrap) wrap.innerHTML = `<button type="button" id="ba-photo-btn" onclick="window.__openPhotoChooser('ba-photo-input')" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>`;
 };
 
 window.__baCaptureLocation = function () {
@@ -3492,9 +3564,9 @@ function renderEditProfile(vendorId) {
         <div class="reg-photo-box">
           ${editPhotoPreview
             ? `<div class="reg-photo-preview"><img src="${editPhotoPreview}" alt="Pratinjau foto toko" /><button type="button" class="reg-photo-remove" onclick="window.__editPhotoRemove('${vendorId}')">✕ Hapus foto</button></div>`
-            : `<button type="button" class="reg-photo-pick" onclick="document.getElementById('edit-photo-input').click()">📷 Pilih Foto (kamera / galeri)</button>`}
+            : `<button type="button" class="reg-photo-pick" onclick="window.__openPhotoChooser('edit-photo-input')">📷 Pilih Foto (kamera / galeri)</button>`}
         </div>
-        ${editPhotoPreview ? `<button type="button" onclick="document.getElementById('edit-photo-input').click()" style="margin-top:6px;width:100%;padding:9px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-size:12px;font-weight:700;">Ganti foto</button>` : ''}
+        ${editPhotoPreview ? `<button type="button" onclick="window.__openPhotoChooser('edit-photo-input')" style="margin-top:6px;width:100%;padding:9px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-size:12px;font-weight:700;">Ganti foto</button>` : ''}
         <div style="font-size:10px;color:var(--text-faint);margin-top:6px;text-align:left;line-height:1.5;">Gunakan foto toko/produk milik sendiri (bukan foto orang lain tanpa izin). Anda bertanggung jawab penuh atas foto yang diunggah, termasuk kepatuhan terhadap privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar dapat dihapus tanpa pemberitahuan.</div>
         ${editPhotoFile ? `
         <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;text-align:left;">
@@ -3756,7 +3828,7 @@ function renderPedagang() {
                 <input id="reg-photo-input" type="file" accept="image/*" style="display:none;" onchange="window.__regPhotoPick(this)" />
                 ${regPhotoPreview
                   ? `<div class="reg-photo-preview"><img src="${regPhotoPreview}" alt="Pratinjau foto toko" /><button type="button" class="reg-photo-remove" onclick="window.__regPhotoRemove()">✕ Hapus foto</button></div>`
-                  : `<button type="button" class="reg-photo-pick" onclick="document.getElementById('reg-photo-input').click()">📷 Ambil / Pilih Foto</button>`}
+                  : `<button type="button" class="reg-photo-pick" onclick="window.__openPhotoChooser('reg-photo-input')">📷 Ambil / Pilih Foto</button>`}
                 <div class="food-hint" style="margin-top:6px;">Boleh dilewati dan ditambahkan nanti lewat Edit Profil.</div>
                 <div style="font-size:10px;color:var(--text-faint);margin-top:4px;line-height:1.5;">Gunakan foto milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam.</div>
                 ${regPhotoFile ? `
@@ -3857,7 +3929,7 @@ function renderPedagang() {
       ${!v.active ? `
         <div style="margin-top:16px;">
           <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="window.__onPhotoSelected(event)" />
-          <div id="photo-zone" onclick="document.getElementById('photo-input').click()" style="
+          <div id="photo-zone" onclick="window.__openPhotoChooser('photo-input')" style="
             border:1.5px dashed var(--stroke); border-radius:14px; padding:16px;
             text-align:center; cursor:pointer; color:var(--text-dim); font-size:12.5px;">
             ${pendingPhotoPreview
@@ -5256,7 +5328,7 @@ async function renderAdminDashboard() {
       <div class="vendor-hero" style="text-align:left;margin-bottom:10px;">
         <input id="bn-title" type="text" maxlength="80" placeholder="Judul banner (wajib, maks. 80 karakter — tidak tampil di slider)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
         <input type="file" id="bn-image-input" accept="image/*" style="display:none" onchange="window.__onBannerImageSelected(event)" />
-        <div id="bn-image-zone" onclick="document.getElementById('bn-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">📷 Pilih gambar banner (wajib)</div>
+        <div id="bn-image-zone" onclick="window.__openPhotoChooser('bn-image-input')" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">📷 Pilih gambar banner (wajib)</div>
         <div id="bn-image-preview"></div>
         <div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--text-dim);">Tujuan saat banner diketuk</div>
         <select id="bn-dest" onchange="window.__bnDestChange()" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;">${bnDestOptionsHtml()}</select>
@@ -5289,7 +5361,7 @@ async function renderAdminDashboard() {
         <textarea id="ann-message" rows="3" placeholder="Isi pengumuman..." style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:12.5px;resize:vertical;"></textarea>
         <input id="ann-link" type="text" placeholder="Link (opsional) — https://... atau tujuan dalam app: ?artikel=slug / ?vendor=ID" style="width:100%;box-sizing:border-box;margin-top:8px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;" />
         <input type="file" id="ann-image-input" accept="image/*" style="display:none" onchange="window.__onAnnouncementImageSelected(event)" />
-        <div id="ann-image-zone" onclick="document.getElementById('ann-image-input').click()" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+        <div id="ann-image-zone" onclick="window.__openPhotoChooser('ann-image-input')" style="margin-top:8px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
           📷 Tambah gambar (opsional)
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;">
@@ -6298,7 +6370,7 @@ window.__openVendorStoryForm = function (vendorId) {
 
       <label style="font-size:11px;color:var(--text-faint);">Foto pendukung (opsional)</label>
       <input type="file" id="vs-photo-input" accept="image/*" style="display:none" onchange="window.__onVendorStoryPhotoSelected(event)" />
-      <div id="vs-photo-zone" onclick="document.getElementById('vs-photo-input').click()" style="margin:4px 0 12px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+      <div id="vs-photo-zone" onclick="window.__openPhotoChooser('vs-photo-input')" style="margin:4px 0 12px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         📷 Tambah foto
       </div>
 
@@ -6389,7 +6461,7 @@ window.__openBuyerStoryForm = function () {
 
       <label style="font-size:11px;color:var(--text-faint);">Foto pendukung (opsional)</label>
       <input type="file" id="bs-photo-input" accept="image/*" style="display:none" onchange="window.__onBuyerStoryPhotoSelected(event)" />
-      <div id="bs-photo-zone" onclick="document.getElementById('bs-photo-input').click()" style="margin:4px 0 12px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+      <div id="bs-photo-zone" onclick="window.__openPhotoChooser('bs-photo-input')" style="margin:4px 0 12px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         📷 Tambah foto
       </div>
 
@@ -6472,7 +6544,7 @@ window.__adminOpenArticleForm = function (articleId) {
 
       <label style="font-size:11px;color:var(--text-faint);">Gambar sampul (opsional)</label>
       <input type="file" id="art-cover-input" accept="image/*" style="display:none" onchange="window.__onArticleCoverSelected(event)" />
-      <div id="art-cover-zone" onclick="document.getElementById('art-cover-input').click()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
+      <div id="art-cover-zone" onclick="window.__openPhotoChooser('art-cover-input')" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         ${pendingArticleCoverPreview ? `<img src="${pendingArticleCoverPreview}" style="width:100%;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti gambar</span>` : '📷 Tambah gambar sampul'}
       </div>
 
