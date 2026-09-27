@@ -377,6 +377,144 @@ function maybeShowGuideOnFirstVisit() {
   window.__openGuideModal(mode);
 }
 
+// ---------- ONBOARDING (layar perkenalan pertama kali pakai app) ----------
+// Ditampilkan sekali di atas view yang sudah dirender (mirip modal panduan),
+// lalu menandai jd_guide_seen juga supaya modal "Panduan Penggunaan" otomatis
+// tidak numpuk muncul lagi setelah ini (isinya sudah tercakup di sini).
+const OB_ICON_MAP = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path fill-rule="evenodd" d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></svg>`;
+const OB_ICON_SEARCH = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>`;
+const OB_ICON_HEART = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5 5 4h14l1.5 5.5M3.5 9.5a2.8 2.8 0 0 0 5.5 0 2.8 2.8 0 0 0 6 0 2.8 2.8 0 0 0 5.5 0M5 12.5V20h14v-7.5M10 20v-4.5h4V20"/></svg>`;
+const OB_ICON_BELL = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg>`;
+
+// slide[0] = layar "Selamat datang" (tanpa nomor), slide[1..3] = 1/3, 2/3, 3/3
+function obSlidesFor(role) {
+  if (role === 'pedagang') {
+    return [
+      { badge: null, mascot: 'icons/onboarding-wave.png', big: true,
+        title: 'Selamat datang di JajanDekat!', desc: 'Promosikan daganganmu dan ditemukan pembeli di sekitarmu dengan mudah.' },
+      { badge: '1/3', mascot: 'icons/onboarding-point.png',
+        title: 'Aktifkan status jualan', desc: 'Nyalakan status "Sedang Jualan" saat mulai berjualan, pembeli di sekitar langsung bisa melihat lokasimu.', icon: OB_ICON_MAP, iconLabel: 'Muncul otomatis di Peta pembeli terdekat' },
+      { badge: '2/3', mascot: 'icons/onboarding-point.png',
+        title: 'Lengkapi profil dagangan', desc: 'Tambahkan foto, kategori, dan jam buka supaya lebih mudah ditemukan lewat Cari.', icon: OB_ICON_SEARCH, iconLabel: 'Tampil saat pembeli mencari kategori kamu' },
+      { badge: '3/3', mascot: 'icons/onboarding-thumbsup.png',
+        title: 'Pantau pembeli yang mengikuti', desc: 'Kirim pengumuman ke pembeli yang follow supaya mereka tidak ketinggalan info dagangan kamu.', icon: OB_ICON_BELL, iconLabel: 'Kelola dari tab Akun kapan saja' },
+    ];
+  }
+  return [
+    { badge: null, mascot: 'icons/onboarding-wave.png', big: true,
+      title: 'Selamat datang di JajanDekat!', desc: 'Temukan jajanan dan pedagang di sekitarmu dengan mudah.' },
+    { badge: '1/3', mascot: 'icons/onboarding-point.png',
+      title: 'Temukan pedagang di sekitarmu', desc: 'Buka Peta untuk melihat pedagang yang sedang berjualan di dekat kamu.', icon: OB_ICON_MAP, iconLabel: 'Pedagang Terdekat' },
+    { badge: '2/3', mascot: 'icons/onboarding-point.png',
+      title: 'Cari jajanan favoritmu', desc: 'Gunakan Cari untuk menemukan makanan, minuman, atau pedagang berdasarkan nama dan kategori.', icon: OB_ICON_SEARCH, iconLabel: 'Cari jajanan, minuman, toko…' },
+    { badge: '3/3', mascot: 'icons/onboarding-thumbsup.png',
+      title: 'Jangan sampai ketinggalan', desc: 'Tekan ❤️ pada pedagang untuk mengikutinya. Kamu bisa melihatnya kembali di Favorit.', icon: OB_ICON_HEART, iconLabel: 'Tersimpan di tab Favorit' },
+  ];
+}
+
+function maybeShowOnboarding() {
+  if (localStorage.getItem('jd_onboarding_seen')) return;
+
+  let step = 'role';   // 'role' -> 'slides' -> 'final'
+  let chosenRole = null;
+  let slideIdx = 0;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'ob-overlay';
+  document.body.appendChild(overlay);
+
+  function finish() {
+    localStorage.setItem('jd_onboarding_seen', '1');
+    localStorage.setItem('jd_guide_seen', '1'); // isinya sudah tercakup di onboarding ini
+    if (chosenRole === 'pedagang' && mode !== 'pedagang') {
+      mode = 'pedagang';
+      btnPedagang.classList.add('active');
+      btnPembeli.classList.remove('active');
+      renderPedagang();
+    }
+    overlay.remove();
+  }
+
+  function renderRole() {
+    overlay.innerHTML = `
+      <button class="ob-skip" id="ob-skip-role">Lewati</button>
+      <div class="ob-screen">
+        <div class="ob-role-title">Kamu mau menggunakan<br>JajanDekat sebagai apa?</div>
+        <div class="ob-role-list">
+          <button class="ob-role-card" data-role="pembeli">
+            <span class="ob-role-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7Z"/></svg></span>
+            <span><span class="ob-role-name">Pembeli</span><br><span class="ob-role-desc">Temukan jajanan &amp; pedagang di sekitar</span></span>
+            <span class="ob-role-chev">›</span>
+          </button>
+          <button class="ob-role-card" data-role="pedagang">
+            <span class="ob-role-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 9.5 5 4h14l1.5 5.5M3.5 9.5a2.8 2.8 0 0 0 5.5 0 2.8 2.8 0 0 0 6 0 2.8 2.8 0 0 0 5.5 0M5 12.5V20h14v-7.5M10 20v-4.5h4V20"/></svg></span>
+            <span><span class="ob-role-name">Pedagang</span><br><span class="ob-role-desc">Promosikan jualan &amp; temukan pembeli</span></span>
+            <span class="ob-role-chev">›</span>
+          </button>
+        </div>
+      </div>
+      <div class="ob-footer">
+        <button class="ob-btn-primary" id="ob-role-next" disabled>Lanjut</button>
+      </div>
+    `;
+    document.getElementById('ob-skip-role').onclick = finish;
+    overlay.querySelectorAll('.ob-role-card').forEach(card => {
+      card.onclick = () => {
+        overlay.querySelectorAll('.ob-role-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        chosenRole = card.dataset.role;
+        document.getElementById('ob-role-next').disabled = false;
+      };
+    });
+    document.getElementById('ob-role-next').onclick = () => {
+      if (!chosenRole) return;
+      step = 'slides'; slideIdx = 0; renderSlide();
+    };
+  }
+
+  function renderSlide() {
+    const slides = obSlidesFor(chosenRole);
+    const s = slides[slideIdx];
+    overlay.innerHTML = `
+      <button class="ob-skip" id="ob-skip-slide">Lewati</button>
+      <div class="ob-screen">
+        ${s.badge ? `<div class="ob-badge">${s.badge}</div>` : ''}
+        <img class="ob-mascot${s.big ? ' lg' : ''}" src="${s.mascot}" alt="" width="210" height="480">
+        <div class="ob-title">${s.title}</div>
+        <div class="ob-desc">${s.desc}</div>
+        ${s.icon ? `<div class="ob-feature-preview">${s.icon}<span>${s.iconLabel}</span></div>` : ''}
+        <div class="ob-dots">${slides.map((_, i) => `<span class="ob-dot${i === slideIdx ? ' active' : ''}"></span>`).join('')}</div>
+      </div>
+      <div class="ob-footer">
+        ${slideIdx > 0 ? `<button class="ob-btn-back" id="ob-slide-back">‹ Kembali</button>` : ''}
+        <button class="ob-btn-primary" id="ob-slide-next">${slideIdx === slides.length - 1 ? 'Lanjut' : 'Berikutnya →'}</button>
+      </div>
+    `;
+    document.getElementById('ob-skip-slide').onclick = finish;
+    if (slideIdx > 0) document.getElementById('ob-slide-back').onclick = () => { slideIdx--; renderSlide(); };
+    document.getElementById('ob-slide-next').onclick = () => {
+      if (slideIdx < slides.length - 1) { slideIdx++; renderSlide(); }
+      else { step = 'final'; renderFinal(); }
+    };
+  }
+
+  function renderFinal() {
+    overlay.innerHTML = `
+      <div class="ob-screen ob-final">
+        <img class="ob-mascot lg" src="icons/onboarding-thumbsup.png" alt="" width="210" height="480">
+        <div class="ob-title">Siap menjelajah?</div>
+        <div class="ob-desc">Sekarang kamu sudah siap menemukan jajanan terdekat di sekitarmu!</div>
+      </div>
+      <div class="ob-footer">
+        <button class="ob-btn-primary" id="ob-final-start">Mulai Sekarang 🎉</button>
+      </div>
+    `;
+    document.getElementById('ob-final-start').onclick = finish;
+  }
+
+  renderRole();
+}
+
 // ---------- FAQ PEDAGANG (dari tabel `faq`, diisi via admin) ----------
 let faqOpenId = null;
 
@@ -6924,7 +7062,15 @@ async function init() {
       history.replaceState(null, '', location.pathname);
     }
 
-    maybeShowGuideOnFirstVisit();
+    // Kalau ini kunjungan pertama, tampilkan onboarding saja (isinya sudah mencakup
+    // panduan penggunaan) — modal "Panduan Penggunaan" otomatis baru dicek setelahnya
+    // supaya tidak numpuk 2 overlay sekaligus di atas kunjungan pertama.
+    const isFirstVisit = !localStorage.getItem('jd_onboarding_seen');
+    if (isFirstVisit) {
+      maybeShowOnboarding();
+    } else {
+      maybeShowGuideOnFirstVisit();
+    }
   } catch (e) {
     console.error(e);
     renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
