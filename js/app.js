@@ -415,7 +415,7 @@ function obSlidesFor(role) {
 function maybeShowOnboarding() {
   if (localStorage.getItem('jd_onboarding_seen')) return;
 
-  let step = 'role';   // 'role' -> 'slides' -> 'final'
+  let step = 'role';   // 'role' -> 'name' (khusus pembeli) -> 'slides' -> 'final'
   let chosenRole = null;
   let slideIdx = 0;
 
@@ -431,6 +431,8 @@ function maybeShowOnboarding() {
       btnPedagang.classList.add('active');
       btnPembeli.classList.remove('active');
       renderPedagang();
+    } else if (mode === 'pembeli') {
+      renderPembeli(); // refresh biar nama baru langsung kepakai di tab Akun
     }
     overlay.remove();
   }
@@ -468,8 +470,36 @@ function maybeShowOnboarding() {
     });
     document.getElementById('ob-role-next').onclick = () => {
       if (!chosenRole) return;
-      step = 'slides'; slideIdx = 0; renderSlide();
+      if (chosenRole === 'pembeli') { step = 'name'; renderName(); }
+      else { step = 'slides'; slideIdx = 0; renderSlide(); }
     };
+  }
+
+  function renderName() {
+    overlay.innerHTML = `
+      <button class="ob-skip" id="ob-skip-name">Lewati</button>
+      <div class="ob-screen">
+        <img class="ob-mascot lg" src="icons/onboarding-wave.png" alt="" width="210" height="320">
+        <div class="ob-title">Siapa nama kamu?</div>
+        <div class="ob-desc">Biar terasa lebih akrab, tampilan JajanDekat kamu nanti disapa pakai nama ini.</div>
+        <input type="text" id="ob-name-input" class="ob-name-input" placeholder="Nama panggilan kamu" maxlength="30" autocomplete="given-name">
+        <div class="ob-name-hint">Nama ini cuma tersimpan di HP kamu, tidak perlu akun</div>
+      </div>
+      <div class="ob-footer">
+        <button class="ob-btn-back" id="ob-name-later">Isi nanti saja</button>
+        <button class="ob-btn-primary" id="ob-name-next">Lanjut</button>
+      </div>
+    `;
+    document.getElementById('ob-skip-name').onclick = finish;
+    const input = document.getElementById('ob-name-input');
+    input.focus();
+    function saveNameIfFilled() {
+      const val = input.value.trim();
+      if (val) localStorage.setItem('jd_buyer_name', val.slice(0, 30));
+    }
+    document.getElementById('ob-name-later').onclick = () => { step = 'slides'; slideIdx = 0; renderSlide(); };
+    document.getElementById('ob-name-next').onclick = () => { saveNameIfFilled(); step = 'slides'; slideIdx = 0; renderSlide(); };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('ob-name-next').click(); });
   }
 
   function renderSlide() {
@@ -2430,6 +2460,30 @@ function renderFavoritView() {
 window.__openArtikelList = function () { artikelDetailSlug = null; window.__goView('artikel'); };
 window.__goPedagang = function () { goToPedagangDashboard(); window.scrollTo(0, 0); };
 
+window.__editBuyerName = function () {
+  document.getElementById('edit-name-modal-overlay')?.remove();
+  const current = localStorage.getItem('jd_buyer_name') || '';
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-name-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:12px;">✏️ Nama Panggilan Kamu</div>
+      <input type="text" id="edit-name-input" class="ob-name-input" style="max-width:100%;" placeholder="Nama panggilan kamu" maxlength="30" value="${current.replace(/"/g, '&quot;')}">
+      <button onclick="window.__saveBuyerName()" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:13px;">Simpan</button>
+      <button onclick="document.getElementById('edit-name-modal-overlay').remove()" style="width:100%;margin-top:8px;padding:12px;border-radius:10px;border:none;background:none;color:var(--text-dim);font-weight:600;font-size:13px;">Batal</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('edit-name-input').focus();
+};
+window.__saveBuyerName = function () {
+  const val = document.getElementById('edit-name-input').value.trim();
+  if (val) localStorage.setItem('jd_buyer_name', val.slice(0, 30));
+  else localStorage.removeItem('jd_buyer_name');
+  document.getElementById('edit-name-modal-overlay')?.remove();
+  renderAkunView();
+};
+
 function renderAkunView() {
   const perm = pushSupported() ? Notification.permission : null;
   const row = (icon, colorClass, title, sub, onclick) => `
@@ -2449,12 +2503,16 @@ function renderAkunView() {
       <path d="M100 58a9 9 0 0 0-9 9c0 7 9 16 9 16s9-9 9-16a9 9 0 0 0-9-9Z" fill="rgba(255,255,255,.5)"/>
       <circle cx="100" cy="67" r="3.4" fill="rgba(255,107,74,.9)"/>
     </svg>`;
+  const buyerName = (localStorage.getItem('jd_buyer_name') || '').trim();
   main.innerHTML = `
     <div class="acc-hero">
       ${heroIllus}
       <div class="acc-avatar"><img src="icons/avatar-pembeli.png" width="52" height="52" alt="" /></div>
       <div class="acc-hero-main">
-        <div class="acc-name">Pembeli JajanDekat</div>
+        <div class="acc-name-row">
+          <div class="acc-name">${buyerName ? `Halo, ${escapeHtml(buyerName)} 👋` : 'Pembeli JajanDekat'}</div>
+          <button class="acc-name-edit" onclick="window.__editBuyerName()" aria-label="Ubah nama">✏️</button>
+        </div>
         <div class="acc-note">${followedIds.size ? `Mengikuti ${followedIds.size} pedagang` : 'Belum mengikuti pedagang'} · tanpa perlu akun</div>
         ${followedIds.size ? `<button class="acc-pill" onclick="goToBottomView('favorit')">👥 ${followedIds.size} Pedagang Diikuti →</button>` : ''}
       </div>
@@ -4298,6 +4356,7 @@ function renderPedagang() {
     </div>
 
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
+    <button type="button" class="pd-help" onclick="window.__openGuideModal('pedagang')"><span class="pd-help-ic">🧭</span><span class="pd-share-text"><b>Panduan Penggunaan</b><small>Pelajari cara pakai aplikasi</small></span><span class="pd-chev">›</span></button>
     <button type="button" class="pd-help" onclick="window.__openFaqModal()"><span class="pd-help-ic">?</span><span class="pd-share-text"><b>Butuh Bantuan?</b><small>Lihat FAQ atau hubungi kami</small></span><span class="pd-chev">›</span></button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
