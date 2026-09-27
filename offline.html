@@ -3,74 +3,113 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>JajanDekat — Offline</title>
-<link rel="icon" href="icon-192.png">
+<title>JajanDekat — Kamu sedang offline</title>
 <meta name="theme-color" content="#FF6B4A">
 <style>
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #FFF6F2;
+    color: #241A16;
+  }
+  .wrap {
+    min-height: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #FFF6F3;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: #2A2A2A;
-    padding: 24px;
-  }
-  .card {
-    max-width: 360px;
     text-align: center;
+    padding: 32px 24px 40px;
   }
-  .emoji {
-    font-size: 56px;
-    margin-bottom: 12px;
-  }
-  .brand {
-    font-size: 24px;
-    font-weight: 800;
-    color: #2A2A2A;
-    margin-bottom: 4px;
-  }
-  .brand span { color: #FF6B4A; }
-  .tagline {
-    font-size: 13px;
-    color: #8a8a8a;
-    margin-bottom: 20px;
+  .mascot {
+    width: min(62vw, 260px);
+    height: auto;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 12px 20px rgba(255,107,74,0.18));
   }
   h1 {
-    font-size: 17px;
-    font-weight: 700;
-    margin: 0 0 8px;
+    font-family: 'Poppins', 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    margin: 4px 0 8px;
   }
   p {
-    font-size: 13.5px;
-    color: #6b6b6b;
-    line-height: 1.6;
-    margin: 0 0 24px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #6B5D57;
+    max-width: 320px;
+    margin: 0 0 28px;
   }
+  .brand {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    color: #FF6B4A;
+    margin-bottom: 22px;
+    letter-spacing: -0.01em;
+  }
+  .brand span { color: #241A16; }
   button {
+    appearance: none;
+    border: none;
     background: #FF6B4A;
     color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 12px 24px;
-    font-size: 14px;
+    font-family: inherit;
     font-weight: 700;
+    font-size: 15px;
+    padding: 13px 28px;
+    border-radius: 999px;
+    box-shadow: 0 8px 18px rgba(255,107,74,0.30);
     cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
   }
-  button:active { opacity: 0.85; }
+  button:active { transform: scale(0.97); }
+  .status {
+    margin-top: 16px;
+    font-size: 13px;
+    color: #9A8D87;
+  }
+  .status.online { color: #16A34A; font-weight: 600; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="emoji">📡</div>
+  <div class="wrap">
     <div class="brand">Jajan<span>Dekat</span></div>
-    <div class="tagline">Cek dulu, baru jalan.</div>
-    <h1>Koneksi internet terputus</h1>
-    <p>Halaman ini butuh koneksi untuk memuat data pedagang terbaru. Cek jaringan HP-mu, lalu coba lagi.</p>
-    <button onclick="location.reload()">Coba Lagi</button>
+    <img class="mascot" src="offline-mascot.png" alt="Maskot JajanDekat kebingungan karena tidak ada koneksi internet" width="260" height="260">
+    <h1>Yah, koneksi kamu terputus</h1>
+    <p>Sepertinya kamu sedang offline. Cek dulu koneksi internetnya, nanti halaman ini otomatis coba lagi.</p>
+    <button id="btn-retry" type="button">Coba Lagi</button>
+    <div class="status" id="status-text">Menunggu koneksi…</div>
   </div>
+
+  <script>
+    var statusEl = document.getElementById('status-text');
+    var retryBtn = document.getElementById('btn-retry');
+
+    function reloadIfPossible() {
+      fetch(location.href, { cache: 'no-store' })
+        .then(function () { location.reload(); })
+        .catch(function () {
+          statusEl.textContent = 'Masih belum ada koneksi…';
+          statusEl.classList.remove('online');
+        });
+    }
+
+    retryBtn.addEventListener('click', reloadIfPossible);
+
+    // Otomatis reload begitu browser mendeteksi koneksi kembali
+    window.addEventListener('online', function () {
+      statusEl.textContent = 'Koneksi kembali, memuat ulang…';
+      statusEl.classList.add('online');
+      setTimeout(reloadIfPossible, 400);
+    });
+
+    window.addEventListener('offline', function () {
+      statusEl.textContent = 'Menunggu koneksi…';
+      statusEl.classList.remove('online');
+    });
+  </script>
 </body>
 </html>
