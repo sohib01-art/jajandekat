@@ -30,6 +30,9 @@ const APP_SHELL = [
   '/icon-512.png',
   offlineFallbackPage,
   '/offline-mascot.png',
+  '/icons/onboarding-wave.png',
+  '/icons/onboarding-point.png',
+  '/icons/onboarding-thumbsup.png',
 ];
 
 // Library pihak ketiga (CDN) yang dipakai app — kita cache runtime
