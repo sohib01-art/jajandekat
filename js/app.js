@@ -2457,6 +2457,7 @@ function renderCariView() {
       <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
     </div>
     <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
+    <div id="offline-queue-banner"></div>
     <button type="button" onclick="window.__openAddVendorModal()" style="display:flex;align-items:center;gap:6px;width:100%;padding:9px 12px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:11.5px;margin:4px 0 8px;">➕ Toko belum ada di JajanDekat? Tambahkan sendiri</button>
     <div id="search-results" style="margin-top:8px;"></div>
 
@@ -2500,6 +2501,8 @@ function renderCariView() {
   input.oninput = runSearch;
   input.focus();
   runSearch();
+  updateOfflineQueueBanner();
+  if (navigator.onLine) flushVendorQueue(true);
 }
 
 window.__shareApp = function () {
@@ -2513,6 +2516,138 @@ window.__shareApp = function () {
 };
 
 
+// ---------- ANTREAN OFFLINE: TAMBAH TOKO ----------
+// Kalau submit gagal karena nggak ada sinyal (bukan gagal validasi dari server), data disimpan
+// dulu di IndexedDB lokal HP, lalu otomatis dicoba kirim lagi begitu ada sinyal (event 'online')
+// atau pas buka tab Cari lagi. Foto (kalau ada) ikut disimpan sebagai Blob di IndexedDB.
+// Catatan: ini jalan selama tab/app-nya masih kebuka; kalau app-nya ditutup total sebelum sempat
+// terkirim, baru dicoba lagi pas dibuka ulang — bukan Background Sync penuh (nggak semua browser,
+// terutama Safari/iOS, mendukungnya).
+const OFFLINE_DB_NAME = 'jajandekat-offline';
+const OFFLINE_DB_VERSION = 1;
+const OFFLINE_STORE = 'vendor-queue';
+let offlineFlushInProgress = false;
+
+function openOfflineDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(OFFLINE_STORE)) {
+        db.createObjectStore(OFFLINE_STORE, { keyPath: 'localId' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function offlineQueueAdd(item) {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+    tx.objectStore(OFFLINE_STORE).put(item);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function offlineQueueRemove(localId) {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+    tx.objectStore(OFFLINE_STORE).delete(localId);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function offlineQueueList() {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, 'readonly');
+    const req = tx.objectStore(OFFLINE_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Error jaringan (gagal konek sama sekali) dibedakan dari error validasi (server sempat merespons,
+// misal nomor WA dobel) — cuma yang jaringan yang boleh masuk antrean, error validasi harus langsung
+// kelihatan ke pembeli supaya bisa diperbaiki, bukan diam-diam tersimpan lalu gagal lagi belakangan.
+function isLikelyNetworkError(e) {
+  if (!navigator.onLine) return true;
+  if (!e) return false;
+  if (e.code || e.details || e.hint) return false; // ada respons dari Postgres/PostgREST = bukan soal jaringan
+  const msg = (e.message || '').toLowerCase();
+  return msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch');
+}
+
+async function updateOfflineQueueBanner() {
+  const el = document.getElementById('offline-queue-banner');
+  if (!el) return;
+  const items = await offlineQueueList().catch(() => []);
+  if (items.length === 0) { el.innerHTML = ''; return; }
+  const errCount = items.filter(i => i.lastError).length;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;background:#FEF3C7;color:#92400E;font-size:11px;margin-bottom:8px;">
+      <span>📦</span>
+      <span style="flex:1;">${items.length} toko menunggu dikirim${errCount ? ` (${errCount} gagal, perlu dicek)` : ' — nggak ada sinyal saat disimpan'}</span>
+      <button type="button" onclick="window.__retryOfflineQueue()" style="border:none;background:#92400E;color:#fff;font-weight:700;font-size:10.5px;padding:5px 10px;border-radius:8px;">Coba Lagi</button>
+    </div>
+  `;
+}
+
+async function flushVendorQueue(silent) {
+  if (offlineFlushInProgress) return;
+  offlineFlushInProgress = true;
+  try {
+    const items = await offlineQueueList();
+    for (const item of items) {
+      try {
+        const { data: rows, error } = await sb.rpc('register_vendor_unclaimed', {
+          p_name: item.name, p_category: item.category, p_categories: item.categories, p_emoji: item.emoji,
+          p_whatsapp: item.whatsapp, p_fixed_lat: item.lat, p_fixed_lng: item.lng,
+          p_location_note: item.locationNote || null, p_device_id: item.deviceId,
+        });
+        if (error) throw error;
+        const newId = rows && rows[0] && rows[0].id;
+        if (item.photoBlob && newId) {
+          try {
+            const path = `${newId}/foto.jpg`;
+            await sb.storage.from('vendor-photos').upload(path, item.photoBlob, { contentType: 'image/jpeg', upsert: true });
+            const { data: pub } = sb.storage.from('vendor-photos').getPublicUrl(path);
+            await sb.rpc('set_unclaimed_vendor_photo', { p_vendor_id: newId, p_photo_url: `${pub.publicUrl}?t=${Date.now()}` });
+          } catch (photoErr) { console.error('Foto dari antrean offline gagal diupload:', photoErr); }
+        }
+        await offlineQueueRemove(item.localId);
+        vendors = (await fetchVendors()).map(normalizeExpiry);
+        if (!silent) showToast(`"${item.name}" dari antrean offline berhasil terkirim! 🎉`);
+      } catch (e) {
+        if (isLikelyNetworkError(e)) {
+          break; // masih belum ada sinyal beneran — hentikan, coba lagi nanti, sisa antrean jangan dicoba dulu
+        }
+        // Error validasi (misal WA dobel) — tandai supaya kelihatan di banner, tapi jangan dihapus dari antrean
+        // (data yang sudah diisi pembeli jangan hilang begitu saja, biar admin/pembeli bisa cek manual).
+        item.lastError = e && e.message ? e.message : 'Gagal mengirim.';
+        await offlineQueueAdd(item);
+      }
+    }
+  } finally {
+    offlineFlushInProgress = false;
+    updateOfflineQueueBanner();
+  }
+}
+
+window.__retryOfflineQueue = function () { flushVendorQueue(false); };
+
+window.addEventListener('online', () => flushVendorQueue(true));
+
+
+// Pembeli bisa daftarkan toko yang belum ada di JajanDekat. Beda dari __registerVendor:
+// tanpa PIN, tanpa auto-link_owner_device — pakai RPC register_vendor_unclaimed yang
+// nyimpan claim_status='unclaimed' + submitted_by_device_id. Pemilik asli baru bisa
+// login/kelola toko ini setelah klaim disetujui admin (alur terpisah, belum dibuat).
 // ---------- TAMBAH TOKO OLEH PEMBELI (belum diklaim) ----------
 // Pembeli bisa daftarkan toko yang belum ada di JajanDekat. Beda dari __registerVendor:
 // tanpa PIN, tanpa auto-link_owner_device — pakai RPC register_vendor_unclaimed yang
@@ -2671,6 +2806,26 @@ window.__submitAddVendor = async function () {
     if (bottomView === 'cari') renderCariView();
     window.__openVendorSheet(newId);
   } catch (e) {
+    if (isLikelyNetworkError(e)) {
+      try {
+        const photoBlob = baPhotoFile ? await compressImage(baPhotoFile) : null;
+        await offlineQueueAdd({
+          localId: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
+          name, category: cat.label, categories: [cat.label], emoji: cat.e,
+          whatsapp, lat: baLat, lng: baLng, locationNote: note || null,
+          photoBlob, deviceId, savedAt: Date.now(),
+        });
+        document.getElementById('addvendor-modal-overlay')?.remove();
+        showToast('Nggak ada sinyal — toko disimpan dulu di HP, otomatis terkirim begitu ada sinyal. 📦');
+        updateOfflineQueueBanner();
+      } catch (queueErr) {
+        errEl.textContent = 'Gagal menyimpan offline: ' + (queueErr && queueErr.message ? queueErr.message : 'terjadi kesalahan.');
+      }
+      baBusy = false;
+      const b0 = document.getElementById('ba-submit-btn');
+      if (b0) { b0.disabled = false; b0.textContent = 'Tambahkan Toko'; }
+      return;
+    }
     const friendly = e && e.message && e.message.includes('vendors_whatsapp_unique')
       ? 'Nomor WhatsApp ini sudah terdaftar untuk toko lain.'
       : 'Gagal menyimpan: ' + (e && e.message ? e.message : 'terjadi kesalahan tidak diketahui');
@@ -6648,6 +6803,7 @@ async function init() {
     startGlobalChatWatch();
     startReviewAlertWatch();
     tryLocateBuyer();
+    if (navigator.onLine) flushVendorQueue(true);
 
     // Auto-follow kalau buka link/scan QR ajakan pedagang (?follow=KODE)
     const followCode = new URLSearchParams(location.search).get('follow');
