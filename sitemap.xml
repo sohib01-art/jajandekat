@@ -6,6 +6,12 @@
   <priority>0.8</priority>
 </url>
   <url>
+  <loc>https://jajandekat.my.id/artikel/?slug=doa-hujan-kutai-timur</loc>
+  <lastmod>2026-09-28</lastmod>
+  <changefreq>monthly</changefreq>
+  <priority>0.7</priority>
+</url>
+  <url>
   <loc>https://jajandekat.my.id/artikel/?slug=siomay-depan-rs-mata-jec-tanjung-priok</loc>
   <lastmod>2026-09-26</lastmod>
   <changefreq>monthly</changefreq>
@@ -90,7 +96,7 @@
   <priority>0.7</priority>
 </url>
   <url>
-  <loc>https://jajandekat.my.id/artikel/?slug=jajanan-legendaris-medan</loc>
+  <loc>https://jajandekat.my.id/artikel/?slug=jajanan-legendaris-jakarta</loc>
   <lastmod>2026-09-15</lastmod>
   <changefreq>monthly</changefreq>
   <priority>0.7</priority>
@@ -102,7 +108,7 @@
   <priority>0.7</priority>
 </url>
   <url>
-  <loc>https://jajandekat.my.id/artikel/?slug=jajanan-legendaris-surabaya</loc>
+  <loc>https://jajandekat.my.id/artikel/?slug=jajanan-legendaris-medan</loc>
   <lastmod>2026-09-15</lastmod>
   <changefreq>monthly</changefreq>
   <priority>0.7</priority>
@@ -114,7 +120,7 @@
   <priority>0.7</priority>
 </url>
   <url>
-  <loc>https://jajandekat.my.id/artikel/?slug=jajanan-legendaris-jakarta</loc>
+  <loc>https://jajandekat.my.id/artikel/?slug=jajanan-legendaris-surabaya</loc>
   <lastmod>2026-09-15</lastmod>
   <changefreq>monthly</changefreq>
   <priority>0.7</priority>
