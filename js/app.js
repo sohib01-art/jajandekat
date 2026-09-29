@@ -282,7 +282,15 @@ if (bellBtn) {
   refreshBell();
 }
 
+function toastSoundFor(text) {
+  const x = String(text || '').toLowerCase();
+  if (/gagal|tidak |nggak|maksimal|harus |diblokir|belum |ditolak|dihapus|coba lagi/.test(x)) return 'peringatan';
+  if (/berhasil|disimpan|terkirim|ditambahkan|diterbitkan|dibuat|sudah aktif|notifikasi aktif|ditandai|✅|✓/.test(x)) return 'sukses';
+  return null;
+}
 function showToast(text) {
+  const snd = toastSoundFor(text);
+  if (snd) playSound(snd);
   const t = document.getElementById('toast');
   document.getElementById('toast-text').textContent = text;
   t.classList.add('show');
@@ -1240,6 +1248,7 @@ function subscribeRealtime() {
         const wasActive = vendors[idx].active;
         vendors[idx] = updated;
         if (!wasActive && updated.active && followedIds.has(updated.id)) {
+          playSound('pedagang-buka');
           showToast(`${updated.name} baru saja mulai jualan!`);
         }
       }
@@ -1974,44 +1983,82 @@ function startGlobalChatWatch() {
   }, 8000);
 }
 
-// Browser modern nge-block AudioContext berbunyi kalau belum pernah ada interaksi user
-// SAMA SEKALI (autoplay policy) — konteksnya nyangkut "suspended" terus. Ini "membangunkan"-nya
-// sekali di sentuhan/klik pertama pengguna di mana pun dalam app, supaya nanti pas notifikasi
-// chat masuk sendiri (dipicu dari timer/network, bukan dari tap pengguna), suaranya sudah siap.
-let chatAudioUnlocked = false;
-function unlockChatAudioOnce() {
-  if (chatAudioUnlocked) return;
-  chatAudioUnlocked = true;
-  try {
-    chatAudioCtx = chatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (chatAudioCtx.state === 'suspended') chatAudioCtx.resume();
-  } catch (e) {}
-  document.removeEventListener('pointerdown', unlockChatAudioOnce);
-  document.removeEventListener('touchstart', unlockChatAudioOnce);
-}
-document.addEventListener('pointerdown', unlockChatAudioOnce, { once: true });
-document.addEventListener('touchstart', unlockChatAudioOnce, { once: true });
+// ---------- SUARA (file mp3 di root situs) ----------
+// Autoplay policy: audio baru boleh bunyi setelah ada interaksi pengguna. Semua file
+// "dibuka kuncinya" sekali di sentuhan pertama, supaya suara yang dipicu timer/realtime
+// (chat masuk, pedagang buka, dst.) tetap bisa bunyi. Mute: localStorage jd_sound_off = '1'.
+const JD_SOUND_FILES = {
+  'klik': 'klik.mp3',
+  'sukses': 'sukses.mp3',
+  'peringatan': 'peringatan.mp3',
+  'pesan-chat': 'pesan-chat.mp3',
+  'pedagang-buka': 'pedagang-buka.mp3',
+  'bel-mangkuk': 'bel-mangkuk.mp3',
+  'pesanan-masuk': 'pesanan-masuk.mp3',
+};
+const JD_SOUND_VOLUME = { 'klik': 0.4 };
+const jdSoundEls = {};
+let jdSoundUnlocked = false;
+let jdLastSoundAt = {};
 
-// Bunyi notifikasi chat — dibuat langsung dari kode (bukan file audio), jadi tetap
-// single-file dan tidak perlu hosting aset tambahan.
-let chatAudioCtx = null;
-function playChatDing() {
-  try {
-    chatAudioCtx = chatAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const ctx = chatAudioCtx;
-    if (ctx.state === 'suspended') ctx.resume(); // jaga-jaga kalau browser nyuspend lagi di tengah jalan
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + 0.35);
-  } catch (e) { /* browser tidak dukung Web Audio, diamkan */ }
+function jdSoundMuted() {
+  try { return localStorage.getItem('jd_sound_off') === '1'; } catch (e) { return false; }
 }
+function jdGetSound(name) {
+  if (!jdSoundEls[name] && JD_SOUND_FILES[name]) {
+    const el = new Audio(JD_SOUND_FILES[name]);
+    el.preload = 'auto';
+    el.volume = JD_SOUND_VOLUME[name] != null ? JD_SOUND_VOLUME[name] : 1;
+    jdSoundEls[name] = el;
+  }
+  return jdSoundEls[name];
+}
+function playSound(name) {
+  try {
+    if (jdSoundMuted()) return;
+    const now = Date.now();
+    if (now - (jdLastSoundAt[name] || 0) < 250) return; // cegah bunyi dobel beruntun
+    jdLastSoundAt[name] = now;
+    const el = jdGetSound(name);
+    if (!el) return;
+    el.currentTime = 0;
+    const pr = el.play();
+    if (pr && pr.catch) pr.catch(() => { /* diblokir browser / file belum ada, diamkan */ });
+  } catch (e) {}
+}
+window.__playSound = playSound;
+window.__setSoundOn = function (on) {
+  try { localStorage.setItem('jd_sound_off', on ? '0' : '1'); } catch (e) {}
+};
+
+function unlockSoundsOnce() {
+  if (jdSoundUnlocked) return;
+  jdSoundUnlocked = true;
+  Object.keys(JD_SOUND_FILES).forEach((name) => {
+    const el = jdGetSound(name);
+    if (!el) return;
+    const v = el.volume;
+    el.volume = 0;
+    const pr = el.play();
+    if (pr && pr.then) {
+      pr.then(() => { el.pause(); el.currentTime = 0; el.volume = v; })
+        .catch(() => { el.volume = v; });
+    } else { el.volume = v; }
+  });
+  document.removeEventListener('pointerdown', unlockSoundsOnce);
+  document.removeEventListener('touchstart', unlockSoundsOnce);
+}
+document.addEventListener('pointerdown', unlockSoundsOnce, { once: true });
+document.addEventListener('touchstart', unlockSoundsOnce, { once: true });
+
+// Bunyi klik untuk tombol/tautan/elemen yang bisa diketuk
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest && e.target.closest('button, a, [onclick], [role="button"], label.chip, .nav-item');
+  if (t && !t.disabled) playSound('klik');
+}, true);
+
+// Nama lama dipertahankan supaya pemanggil di chat tidak perlu diubah
+function playChatDing() { playSound('pesan-chat'); }
 
 async function getOrCreateChatThread(vendorId, buyerDeviceId) {
   const { data: existing } = await sb.from('chat_threads').select('id').eq('vendor_id', vendorId).eq('buyer_device_id', buyerDeviceId).maybeSingle();
@@ -5610,6 +5657,8 @@ async function renderAdminDashboard() {
       <button class="admin-tab" data-tab="tags" onclick="window.__adminSwitchTab('tags')">🏷️ Jenis Jualan</button>
       <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
       <button class="admin-tab" data-tab="banners" onclick="window.__adminSwitchTab('banners')">🖼️ Banner Slider</button>
+      <button class="admin-tab" data-tab="ojek" onclick="window.__adminSwitchTab('ojek')">🛵 Ojek</button>
+      <button class="admin-tab" data-tab="metrics" onclick="window.__adminSwitchTab('metrics')">📈 Metrik</button>
     </div>
 
     <div class="admin-panel" data-panel="stats">
@@ -5647,6 +5696,14 @@ async function renderAdminDashboard() {
     <div class="admin-panel" data-panel="tags" style="display:none;">
       <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Jenis jualan yang diketik pedagang sendiri. Tentukan kategorinya lalu setujui (jadi saran untuk semua pedagang) atau tolak (salah ketik, tidak pantas, atau duplikat).</div>
       <div id="admin-tags" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
+    </div>
+
+    <div class="admin-panel" data-panel="ojek" style="display:none;">
+      ${ojekPanelHtml()}
+    </div>
+
+    <div class="admin-panel" data-panel="metrics" style="display:none;">
+      ${metricsPanelHtml()}
     </div>
 
     <div class="admin-panel" data-panel="banners" style="display:none;">
@@ -5840,6 +5897,7 @@ async function renderAdminDashboard() {
   loadAdminBanners();
   loadAdminArticles();
   loadAdminTagSuggestions();
+  loadAdminOjek();
 
   adminVendorData = data;
   listEl.innerHTML = renderAdminVendorList(adminVendorData);
@@ -5848,6 +5906,7 @@ async function renderAdminDashboard() {
 window.__adminSwitchTab = function (tab) {
   document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
   document.querySelectorAll('.admin-panel').forEach(panel => { panel.style.display = panel.dataset.panel === tab ? '' : 'none'; });
+  if (tab === 'metrics' && !adminMetricsLoaded) loadAdminMetrics();
 };
 
 function renderAdminVendorList(list) {
@@ -7092,6 +7151,409 @@ window.__updateReportStatus = async function (reportId, status) {
   }
 };
 
+// ---------- ADMIN: OJEK SEKITAR + METRIK (lewat Edge Function admin-action) ----------
+// Ojek/grup yang ditambah di sini baru tampil ke pembeli kalau: ojek berstatus "verified" DAN persetujuan
+// tampil dicentang; grup harus aktif. Tombol "Titip beli via ojek" muncul di wilayah yang punya minimal satu.
+let adminOjekData = { drivers: [], groups: [], reports: [] };
+let adminMetricsDays = 30;
+let adminMetricsLoaded = false;
+
+function ojekRegionLabel(regionId) {
+  if (!regionId) return 'Semua wilayah?';
+  const chain = regionChain(regionId);
+  return chain.length ? chain.slice(0, 2).map(r => r.name).join(', ') : '(wilayah tidak dikenal)';
+}
+
+function ojekPanelHtml() {
+  const inp = 'width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin-top:6px;';
+  return `
+    <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;line-height:1.5;">Ojek tampil ke pembeli hanya kalau statusnya <b>Terverifikasi</b> dan persetujuan tampil sudah dicentang. Grup WhatsApp tampil kalau <b>Aktif</b>. Wilayah dipilih di tingkat kabupaten/kota atau kecamatan; pembeli di wilayah di bawahnya ikut melihat.</div>
+
+    <div id="oj-coord-result"></div>
+    <div class="section-label" style="margin-top:0;font-size:11px;color:var(--brand);">🛵 Tambah ojek</div>
+    <div class="vendor-hero" style="text-align:left;margin-bottom:12px;">
+      <input id="oj-name" type="text" maxlength="80" placeholder="Nama ojek" style="${inp}" />
+      <input id="oj-wa" type="tel" placeholder="Nomor WhatsApp (08xxxxxxxxxx)" style="${inp}" />
+      <input id="oj-plate" type="text" maxlength="15" placeholder="Plat nomor (opsional)" style="${inp}" />
+      <select id="oj-region" style="${inp}">${regionOptionsHtml('📍 Pilih wilayah')}</select>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:11.5px;color:var(--text-dim);line-height:1.4;">
+        <input id="oj-consent" type="checkbox" style="margin-top:2px;flex-shrink:0;" />
+        <span>Ojek ini sudah setuju nama &amp; nomor WhatsApp-nya ditampilkan ke pembeli.</span>
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text-dim);">
+        <input id="oj-verified" type="checkbox" style="flex-shrink:0;" /> Langsung tandai terverifikasi
+      </label>
+      <div id="oj-error" style="color:#f87171;font-size:11.5px;margin-top:6px;"></div>
+      <button class="follow-btn" style="width:100%;padding:10px;margin-top:8px;" onclick="window.__adminSaveOjek()">+ Simpan ojek</button>
+    </div>
+    <div id="admin-ojek-drivers" class="vendor-list" style="margin-bottom:16px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
+
+    <div class="section-label" style="font-size:11px;color:var(--brand);">💬 Tambah grup WhatsApp ojek</div>
+    <div class="vendor-hero" style="text-align:left;margin-bottom:12px;">
+      <input id="og-name" type="text" maxlength="80" placeholder="Nama grup" style="${inp}" />
+      <input id="og-link" type="url" placeholder="https://chat.whatsapp.com/xxxxxxxx" style="${inp}" />
+      <select id="og-region" style="${inp}">${regionOptionsHtml('📍 Pilih wilayah')}</select>
+      <input id="og-area" type="text" maxlength="120" placeholder="Area layanan, misal: Perum Griya Asri RW 05 (opsional)" style="${inp}" />
+      <input id="og-note" type="text" maxlength="300" placeholder="Catatan admin (opsional, tidak tampil ke pembeli)" style="${inp}" />
+      <div id="og-error" style="color:#f87171;font-size:11.5px;margin-top:6px;"></div>
+      <button class="follow-btn" style="width:100%;padding:10px;margin-top:8px;" onclick="window.__adminSaveOjekGroup()">+ Simpan grup</button>
+    </div>
+    <div id="admin-ojek-groups" class="vendor-list" style="margin-bottom:16px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
+
+    <div class="section-label" style="font-size:11px;color:var(--brand);">🚩 Laporan ojek &amp; grup</div>
+    <div id="admin-ojek-reports" class="vendor-list"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
+  `;
+}
+
+function metricsPanelHtml() {
+  const btn = (d) => `<button class="admin-tab ${d === adminMetricsDays ? 'active' : ''}" data-mdays="${d}" onclick="window.__adminMetricsPeriod(${d})">${d} hari</button>`;
+  return `
+    <div class="admin-tabs" style="margin-bottom:10px;">${btn(7)}${btn(30)}${btn(90)}</div>
+    <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;line-height:1.5;">Angka "perangkat" = perangkat unik (bukan orang; satu orang dengan dua HP terhitung dua). Hari dihitung menurut WIB.</div>
+    <div id="admin-metrics"><div style="color:var(--text-faint);font-size:11.5px;">Buka tab ini untuk memuat metrik...</div></div>
+  `;
+}
+
+const OJEK_STATUS_LABEL = { pending: 'Menunggu', verified: 'Terverifikasi', suspended: 'Ditangguhkan' };
+const OJEK_STATUS_COLOR = { pending: ['#FEF3C7', '#B45309'], verified: ['#DCFCE7', '#15803D'], suspended: ['#FEE2E2', '#DC2626'] };
+const OJEK_REASON_LABEL = { penipuan: 'Penipuan', link_mati: 'Tautan mati', spam: 'Spam', tidak_responsif: 'Tidak responsif', lainnya: 'Lainnya' };
+
+async function loadAdminOjek() {
+  const dEl = document.getElementById('admin-ojek-drivers');
+  if (!dEl) return;
+  const gEl = document.getElementById('admin-ojek-groups');
+  const rEl = document.getElementById('admin-ojek-reports');
+  try {
+    adminOjekData = await callAdminAction('list_ojek');
+  } catch (e) {
+    const msg = /Aksi tidak dikenal|action dan vendor_id/.test(e.message)
+      ? 'Edge function admin-action belum diperbarui (aksi list_ojek belum dikenal). Pasang ojek_metrics.ts dulu.'
+      : 'Gagal memuat: ' + escapeHtml(e.message);
+    const html = `<span style="color:#f87171;font-size:11.5px;">${msg}</span>`;
+    dEl.innerHTML = html; gEl.innerHTML = html; rEl.innerHTML = html;
+    return;
+  }
+  const { drivers = [], groups = [], reports = [] } = adminOjekData;
+  const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  const btn = 'class="follow-btn"';
+
+  dEl.innerHTML = drivers.length ? drivers.map(d => {
+    const [bg, fg] = OJEK_STATUS_COLOR[d.status] || OJEK_STATUS_COLOR.pending;
+    const tampil = d.status === 'verified' && d.consent_show_at;
+    return `
+    <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:12.5px;">🛵 ${escapeHtml(d.name)}</span>
+        <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${bg};color:${fg};white-space:nowrap;">${OJEK_STATUS_LABEL[d.status] || d.status}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);">📱 ${escapeHtml(d.whatsapp)}${d.plate_number ? ' · ' + escapeHtml(d.plate_number) : ''}</div>
+      <div style="font-size:10.5px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(d.region_id))} · dibuat ${fmt(d.created_at)}</div>
+      ${d.group_id ? `<div style="font-size:10.5px;color:var(--text-faint);">💬 Grup: ${escapeHtml((groups.find(x => x.id === d.group_id) || {}).name || '(grup dihapus)')}</div>` : ''}
+      <div style="font-size:10.5px;color:${d.consent_show_at ? 'var(--text-faint)' : '#B45309'};">${d.consent_show_at ? '✅ Setuju tampil (' + fmt(d.consent_show_at) + (d.consent_by ? ', dicatat ' + escapeHtml(d.consent_by) : '') + ')' : '⚠️ Belum ada persetujuan tampil'}${d.consent_note ? '<br>📝 ' + escapeHtml(d.consent_note) : ''}</div>
+      <div style="font-size:10.5px;font-weight:600;color:${tampil ? '#15803D' : 'var(--text-faint)'};">${tampil ? '👀 Tampil ke pembeli' : '🙈 Tidak tampil ke pembeli'}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">
+        ${d.status !== 'verified' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','verified')">✔ Verifikasi</button>` : ''}
+        ${d.status !== 'suspended' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','suspended')">⏸ Tangguhkan</button>` : ''}
+        ${d.status === 'suspended' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','pending')">↩ Ke Menunggu</button>` : ''}
+        <button ${btn} onclick="window.__adminOjekConsent('${d.id}', ${d.consent_show_at ? 'false' : 'true'})">${d.consent_show_at ? 'Cabut persetujuan' : 'Catat persetujuan'}</button>
+        <button ${btn} style="color:#f87171;" onclick="window.__adminOjekDelete('${d.id}')">🗑 Hapus</button>
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada ojek.</div>';
+
+  const coords = adminOjekData.coordinators || [];
+  gEl.innerHTML = groups.length ? groups.map(g => {
+    const co = coords.find(c => c.group_id === g.id);
+    const vs = g.verification_status || 'verified';
+    const [vbg, vfg] = OJEK_STATUS_COLOR[vs] || OJEK_STATUS_COLOR.pending;
+    const memberCount = drivers.filter(d => d.group_id === g.id).length;
+    return `
+    <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${g.active ? '' : 'opacity:.65;'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:12.5px;">💬 ${escapeHtml(g.name)}</span>
+        <span style="display:flex;gap:4px;">
+          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${vbg};color:${vfg};">${OJEK_STATUS_LABEL[vs] || vs}</span>
+          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${g.active ? '#DCFCE7' : '#F3F4F6'};color:${g.active ? '#15803D' : '#6B7280'};">${g.active ? 'Aktif' : 'Nonaktif'}</span>
+        </span>
+      </div>
+      ${g.service_area ? `<div style="font-size:10.5px;color:var(--text-dim);">🏘️ ${escapeHtml(g.service_area)}</div>` : ''}
+      <div style="font-size:10.5px;color:var(--text-faint);">👥 ${memberCount}/${g.max_drivers || 20} ojek tercatat di aplikasi</div>
+      <div style="font-size:10.5px;color:${co ? 'var(--text-dim)' : 'var(--text-faint)'};">${co
+        ? `🧑‍💼 Koordinator: <b>${escapeHtml(co.name)}</b> (${escapeHtml(co.whatsapp)}) · ${co.status === 'active' ? 'aktif' : '<span style="color:#DC2626;">ditangguhkan</span>'} · ${co.terms_accepted_at ? 'ketentuan disetujui' : '<span style="color:#B45309;">belum setuju ketentuan</span>'}${co.last_login_at ? ' · masuk terakhir ' + fmt(co.last_login_at) : ' · belum pernah masuk'}`
+        : 'Belum ada akun koordinator'}</div>
+      <div style="font-size:10.5px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(g.wa_link)}</div>
+      <div style="font-size:10.5px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(g.region_id))}</div>
+      ${g.admin_note ? `<div style="font-size:10.5px;color:var(--text-dim);">📝 ${escapeHtml(g.admin_note)}</div>` : ''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${vs !== 'verified' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','verified')">✔ Setujui grup</button>` : ''}
+        ${vs !== 'suspended' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','suspended')">⏸ Tangguhkan grup</button>` : ''}
+        ${!co ? `<button ${btn} onclick="window.__adminCreateCoord('${g.id}')">🔑 Buat akun koordinator</button>` : `
+          <button ${btn} onclick="window.__adminResetCoordPin('${co.id}')">🔑 Reset PIN</button>
+          <button ${btn} onclick="window.__adminCoordStatus('${co.id}','${co.status === 'active' ? 'suspended' : 'active'}')">${co.status === 'active' ? 'Nonaktifkan akun' : 'Aktifkan akun'}</button>`}
+        <button ${btn} onclick="window.__adminOjekGroupActive('${g.id}', ${g.active ? 'false' : 'true'})">${g.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
+        <button ${btn} style="color:#f87171;" onclick="window.__adminOjekGroupDelete('${g.id}')">🗑 Hapus</button>
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada grup.</div>';
+
+  const nameOf = (r) => {
+    if (r.ojek_id) { const d = drivers.find(x => x.id === r.ojek_id); return '🛵 ' + (d ? d.name : '(ojek dihapus)'); }
+    const g = groups.find(x => x.id === r.group_id); return '💬 ' + (g ? g.name : '(grup dihapus)');
+  };
+  rEl.innerHTML = reports.length ? reports.map(r => `
+    <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${r.status === 'baru' ? 'border-color:#f87171;' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:12.5px;">${escapeHtml(nameOf(r))}</span>
+        <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${r.status === 'baru' ? '#FEE2E2' : r.status === 'diproses' ? '#FEF3C7' : '#DCFCE7'};color:${r.status === 'baru' ? '#DC2626' : r.status === 'diproses' ? '#B45309' : '#15803D'};">${r.status}</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--brand);font-weight:600;">${OJEK_REASON_LABEL[r.reason] || escapeHtml(r.reason)}</div>
+      ${r.detail ? `<div style="font-size:11px;color:var(--text-dim);white-space:pre-wrap;">${escapeHtml(r.detail)}</div>` : ''}
+      <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+      ${r.status !== 'selesai' ? `<div style="display:flex;gap:6px;">
+        ${r.status === 'baru' ? `<button ${btn} onclick="window.__adminOjekReportStatus('${r.id}','diproses')">Tandai Diproses</button>` : ''}
+        <button ${btn} onclick="window.__adminOjekReportStatus('${r.id}','selesai')">Tandai Selesai</button>
+      </div>` : ''}
+    </div>`).join('') : '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada laporan ojek. 👍</div>';
+}
+
+window.__adminSaveOjek = async function () {
+  const errEl = document.getElementById('oj-error');
+  const name = document.getElementById('oj-name').value.trim();
+  const wa = document.getElementById('oj-wa').value.trim();
+  const plate = document.getElementById('oj-plate').value.trim();
+  const regionId = document.getElementById('oj-region').value || null;
+  const consent = document.getElementById('oj-consent').checked;
+  const verified = document.getElementById('oj-verified').checked;
+  if (!name || !wa) { errEl.textContent = 'Nama dan nomor WhatsApp wajib diisi.'; return; }
+  if (!regionId) { errEl.textContent = 'Pilih wilayah dulu supaya ojek muncul di tempat yang benar.'; return; }
+  if (verified && !consent) { errEl.textContent = 'Ojek baru tampil ke pembeli kalau persetujuan tampil juga dicentang.'; return; }
+  errEl.textContent = 'Menyimpan...';
+  try {
+    await callAdminAction('save_ojek_driver', undefined, {
+      driver: { name, whatsapp: wa, plate_number: plate, region_id: regionId, consent_confirmed: consent, status: verified ? 'verified' : 'pending' },
+    });
+    ['oj-name', 'oj-wa', 'oj-plate'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('oj-consent').checked = false;
+    document.getElementById('oj-verified').checked = false;
+    errEl.textContent = '';
+    showToast('Ojek disimpan 🛵');
+    ojekCache.ts = 0; // paksa muat ulang data ojek pembeli
+    await loadAdminOjek();
+  } catch (e) { errEl.textContent = 'Gagal menyimpan: ' + e.message; }
+};
+
+window.__adminOjekSetStatus = async function (id, status) {
+  const d = adminOjekData.drivers.find(x => x.id === id);
+  if (status === 'verified' && d && !d.consent_show_at) {
+    if (!confirm('Ojek ini belum tercatat setuju ditampilkan, jadi belum akan tampil ke pembeli. Tetap verifikasi?')) return;
+  }
+  try {
+    await callAdminAction('save_ojek_driver', undefined, { driver: { id, status } });
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal mengubah status: ' + e.message); }
+};
+
+window.__adminOjekConsent = async function (id, on) {
+  if (!on && !confirm('Cabut persetujuan tampil? Ojek ini langsung hilang dari pembeli.')) return;
+  try {
+    await callAdminAction('save_ojek_driver', undefined, { driver: { id, consent_confirmed: on } });
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal mengubah persetujuan: ' + e.message); }
+};
+
+window.__adminOjekDelete = async function (id) {
+  const d = adminOjekData.drivers.find(x => x.id === id);
+  if (!confirm(`Hapus ojek "${d ? d.name : ''}"? Tidak bisa dibatalkan.`)) return;
+  try {
+    await callAdminAction('delete_ojek_driver', undefined, { ojek_id: id });
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal menghapus: ' + e.message); }
+};
+
+window.__adminSaveOjekGroup = async function () {
+  const errEl = document.getElementById('og-error');
+  const name = document.getElementById('og-name').value.trim();
+  const link = document.getElementById('og-link').value.trim();
+  const regionId = document.getElementById('og-region').value || null;
+  const note = document.getElementById('og-note').value.trim();
+  const area = document.getElementById('og-area').value.trim();
+  if (!name || !link) { errEl.textContent = 'Nama dan tautan grup wajib diisi.'; return; }
+  if (!/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+(\?[A-Za-z0-9=&_.-]*)?$/.test(link)) {
+    errEl.textContent = 'Tautan harus berbentuk https://chat.whatsapp.com/kode-undangan'; return;
+  }
+  if (!regionId) { errEl.textContent = 'Pilih wilayah dulu.'; return; }
+  errEl.textContent = 'Menyimpan...';
+  try {
+    await callAdminAction('save_ojek_group', undefined, { group: { name, wa_link: link, region_id: regionId, admin_note: note, service_area: area, active: true } });
+    ['og-name', 'og-link', 'og-note', 'og-area'].forEach(id => { document.getElementById(id).value = ''; });
+    errEl.textContent = '';
+    showToast('Grup disimpan 💬');
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { errEl.textContent = 'Gagal menyimpan: ' + e.message; }
+};
+
+window.__adminOjekGroupActive = async function (id, active) {
+  try {
+    await callAdminAction('save_ojek_group', undefined, { group: { id, active } });
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal mengubah grup: ' + e.message); }
+};
+
+function showCoordPin(name, wa, pin, isReset) {
+  const el = document.getElementById('oj-coord-result');
+  if (!el) return;
+  const url = window.location.origin + '/koordinator.html';
+  const msg = `Halo ${name}, ini akun koordinator grup ojek di JajanDekat.\nBuka: ${url}\nNomor: ${wa}\nPIN: ${pin}\nSetelah masuk, segera ganti PIN. Jangan bagikan PIN ke siapa pun.`;
+  el.innerHTML = `
+    <div class="vendor-hero" style="text-align:left;margin-bottom:12px;border:1.5px solid var(--brand);">
+      <div style="font-weight:700;font-size:12.5px;">🔑 ${isReset ? 'PIN baru' : 'Akun koordinator dibuat'}: ${escapeHtml(name)}</div>
+      <div style="font-family:monospace;font-size:22px;letter-spacing:4px;margin:6px 0;color:var(--brand);">${escapeHtml(pin)}</div>
+      <div style="font-size:11px;color:#B45309;">PIN hanya tampil sekali. Kirim ke koordinator sekarang.</div>
+      <a class="follow-btn" style="display:block;text-align:center;text-decoration:none;padding:10px;margin-top:8px;" target="_blank" rel="noopener" href="https://wa.me/${escapeHtml(wa)}?text=${encodeURIComponent(msg)}">Kirim lewat WhatsApp</a>
+    </div>`;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+window.__adminGroupVerify = async function (id, status) {
+  const g = adminOjekData.groups.find(x => x.id === id);
+  const q = status === 'suspended'
+    ? `Tangguhkan grup "${g ? g.name : ''}"? Grup dan SEMUA ojek di dalamnya langsung hilang dari pembeli.`
+    : `Setujui grup "${g ? g.name : ''}" tampil ke pembeli?`;
+  if (!confirm(q)) return;
+  try {
+    await callAdminAction('save_ojek_group', undefined, { group: { id, verification_status: status } });
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal mengubah status grup: ' + e.message); }
+};
+
+window.__adminCreateCoord = async function (groupId) {
+  const g = adminOjekData.groups.find(x => x.id === groupId);
+  const name = (prompt(`Nama koordinator untuk grup "${g ? g.name : ''}":`) || '').trim();
+  if (!name) return;
+  const wa = (prompt('Nomor WhatsApp koordinator (08xxxxxxxxxx):') || '').trim();
+  if (!wa) return;
+  try {
+    const r = await callAdminAction('create_ojek_coordinator', undefined, { group_id: groupId, name, whatsapp: wa });
+    const waNorm = wa.replace(/\D/g, '').replace(/^0/, '62').replace(/^8/, '628');
+    showCoordPin(name, waNorm, r.new_pin, false);
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal membuat akun: ' + e.message); }
+};
+
+window.__adminResetCoordPin = async function (coordId) {
+  const c = (adminOjekData.coordinators || []).find(x => x.id === coordId);
+  if (!confirm(`Reset PIN koordinator "${c ? c.name : ''}"? PIN lama langsung tidak berlaku.`)) return;
+  try {
+    const r = await callAdminAction('reset_ojek_coordinator_pin', undefined, { coordinator_id: coordId });
+    showCoordPin(c ? c.name : '', c ? c.whatsapp : '', r.new_pin, true);
+  } catch (e) { alert('Gagal reset PIN: ' + e.message); }
+};
+
+window.__adminCoordStatus = async function (coordId, status) {
+  try {
+    await callAdminAction('set_ojek_coordinator_status', undefined, { coordinator_id: coordId, status });
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal mengubah status akun: ' + e.message); }
+};
+
+window.__adminOjekGroupDelete = async function (id) {
+  const g = adminOjekData.groups.find(x => x.id === id);
+  if (!confirm(`Hapus grup "${g ? g.name : ''}"? Tidak bisa dibatalkan.`)) return;
+  try {
+    await callAdminAction('delete_ojek_group', undefined, { group_id: id });
+    ojekCache.ts = 0;
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal menghapus: ' + e.message); }
+};
+
+window.__adminOjekReportStatus = async function (id, status) {
+  try {
+    await callAdminAction('update_ojek_report_status', undefined, { report_id: id, status });
+    await loadAdminOjek();
+  } catch (e) { alert('Gagal mengubah status laporan: ' + e.message); }
+};
+
+// ---- Metrik ----
+window.__adminMetricsPeriod = function (days) {
+  adminMetricsDays = days;
+  document.querySelectorAll('[data-mdays]').forEach(b => b.classList.toggle('active', Number(b.dataset.mdays) === days));
+  loadAdminMetrics();
+};
+
+async function loadAdminMetrics() {
+  const el = document.getElementById('admin-metrics');
+  if (!el) return;
+  adminMetricsLoaded = true;
+  el.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Memuat metrik...</div>';
+  let m;
+  try {
+    m = await callAdminAction('get_metrics', undefined, { days: adminMetricsDays });
+  } catch (e) {
+    adminMetricsLoaded = false;
+    const msg = /Aksi tidak dikenal|action dan vendor_id/.test(e.message)
+      ? 'Edge function admin-action belum diperbarui (aksi get_metrics belum dikenal). Pasang ojek_metrics.ts dulu.'
+      : 'Gagal memuat metrik: ' + escapeHtml(e.message);
+    el.innerHTML = `<span style="color:#f87171;font-size:11.5px;">${msg}</span>`;
+    return;
+  }
+  const n = (x) => Number(x || 0).toLocaleString('id-ID');
+  const t = m.totals || {};
+  const g = (k) => t[k] || { events: 0, devices: 0 };
+  const ojekOpen = g('ojek_button_click');
+  const reach = g('ojek_wa_open').events + g('ojek_group_click').events;
+  const rate = ojekOpen.events ? Math.round((reach / ojekOpen.events) * 100) : 0;
+
+  const card = (label, main, sub) => `
+    <div class="vendor-hero" style="padding:12px 8px;text-align:center;margin:0;">
+      <div style="font-family:'Poppins';font-weight:800;font-size:20px;color:var(--brand);">${main}</div>
+      <div style="font-size:10.5px;font-weight:600;margin-top:2px;">${label}</div>
+      ${sub ? `<div style="font-size:9.5px;color:var(--text-faint);margin-top:2px;">${sub}</div>` : ''}
+    </div>`;
+
+  const daily = m.daily || [];
+  const maxOpen = Math.max(1, ...daily.map(d => d.app_open || 0));
+  const bars = daily.map(d => `<div title="${d.date}: ${d.app_open} buka app, ${d.ojek_button_click} klik ojek" style="flex:1;min-width:2px;background:var(--brand);border-radius:2px 2px 0 0;height:${Math.max(3, Math.round((d.app_open / maxOpen) * 100))}%;opacity:${d.app_open ? 1 : .25};"></div>`).join('');
+
+  const listBlock = (title, rows, fmtRow, empty) => `
+    <div class="section-label" style="font-size:11px;color:var(--brand);">${title}</div>
+    <div class="vendor-hero" style="text-align:left;margin-bottom:12px;padding:10px 14px;">
+      ${rows.length ? rows.map((r, i) => `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;${i ? 'border-top:1px solid var(--stroke);' : ''}">${fmtRow(r)}</div>`).join('') : `<div style="color:var(--text-faint);font-size:11.5px;">${empty}</div>`}
+    </div>`;
+
+  const VK = { view: 'Profil dilihat', wa: 'Buka WhatsApp pedagang', chat: 'Chat', route: 'Rute' };
+  const vRows = Object.entries(m.vendor_events || {}).sort((a, b) => b[1].events - a[1].events);
+
+  el.innerHTML = `
+    ${m.truncated ? '<div style="font-size:11px;color:#B45309;background:#FEF3C7;border-radius:10px;padding:8px 10px;margin-bottom:10px;">Data sangat banyak, hanya sebagian yang dihitung. Pilih periode lebih pendek untuk angka akurat.</div>' : ''}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      ${card('Perangkat unik', n(m.unique_devices), m.days + ' hari')}
+      ${card('Buka app', n(g('app_open').events), n(g('app_open').devices) + ' perangkat')}
+      ${card('Dari push', n(g('push_open').events), n(g('push_open').devices) + ' perangkat')}
+      ${card('Klik 🛵 Ojek', n(ojekOpen.events), n(ojekOpen.devices) + ' perangkat')}
+      ${card('Buka WA ojek', n(g('ojek_wa_open').events), n(g('ojek_wa_open').devices) + ' perangkat')}
+      ${card('Klik grup', n(g('ojek_group_click').events), n(g('ojek_group_click').devices) + ' perangkat')}
+    </div>
+    <div style="font-size:11.5px;color:var(--text-dim);margin-bottom:12px;">Dari yang membuka lembar ojek, <b>${rate}%</b> lanjut menghubungi ojek atau grup. ${m.ojek_reports_baru ? `<b style="color:#DC2626;">${n(m.ojek_reports_baru)} laporan ojek baru</b> menunggu di tab Ojek.` : ''}</div>
+
+    <div class="section-label" style="font-size:11px;color:var(--brand);">📅 Buka app per hari</div>
+    <div class="vendor-hero" style="text-align:left;margin-bottom:12px;padding:12px 14px;">
+      <div style="display:flex;align-items:flex-end;gap:2px;height:80px;">${bars}</div>
+      <div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--text-faint);margin-top:4px;"><span>${daily[0] ? daily[0].date : ''}</span><span>puncak ${n(maxOpen === 1 && !daily.some(d => d.app_open) ? 0 : maxOpen)}/hari</span><span>${daily.length ? daily[daily.length - 1].date : ''}</span></div>
+    </div>
+
+    ${listBlock('📍 Wilayah teratas (perangkat)', m.top_regions || [], r => `<span>${escapeHtml(r.name)}</span><b>${n(r.devices)}</b>`, 'Belum ada data wilayah.')}
+    ${listBlock('🛵 Ojek paling sering dihubungi', m.top_ojek || [], r => `<span>${escapeHtml(r.name)}</span><b>${n(r.wa_opens)}×</b>`, 'Belum ada.')}
+    ${listBlock('💬 Grup paling sering diklik', m.top_groups || [], r => `<span>${escapeHtml(r.name)}</span><b>${n(r.clicks)}×</b>`, 'Belum ada.')}
+    ${listBlock('🏪 Interaksi pedagang', vRows, ([k, v]) => `<span>${VK[k] || escapeHtml(k)}</span><span><b>${n(v.events)}</b> <span style="color:var(--text-faint);font-size:10.5px;">(${n(v.devices)} perangkat)</span></span>`, 'Belum ada.')}
+  `;
+}
+
 async function callAdminAction(action, vendorId, extra = {}) {
   const { data, error } = await sb.functions.invoke('admin-action', {
     body: { password: adminPasswordCache, action, vendor_id: vendorId, ...extra },
@@ -7343,6 +7805,7 @@ setInterval(() => {
   if (localStorage.getItem(todayKey)) return;
   localStorage.setItem(todayKey, '1');
 
+  playSound('bel-mangkuk');
   showToast(`🔔 Sudah jam ${reminderHHMM} — saatnya buka lapak, ${v.name}!`);
   if ('Notification' in window && Notification.permission === 'granted') {
     try { new Notification('JajanDekat', { body: `Sudah jam ${reminderHHMM} — saatnya buka lapak, ${v.name}! 🔔`, icon: 'icons/lainnya.png' }); } catch (e) {}
