@@ -45,13 +45,22 @@ function toast(t, err) {
 }
 // Alamat halaman koordinator. Kosongkan = otomatis (satu folder dengan halaman ini).
 const KOORDINATOR_URL = '';
-function koordUrl() {
+function koordUrl(silent) {
   if (KOORDINATOR_URL) return KOORDINATOR_URL;
   if (/^https?:/.test(location.protocol)) return new URL('koordinator.html', location.href).href;
   let u = ''; try { u = localStorage.getItem('koordUrl') || ''; } catch (_) {}
-  if (!u) {
+  if (!u && !silent) {
     u = (prompt('Halaman ini dibuka dari file lokal. Tempel alamat halaman koordinator (contoh https://situsmu.id/koordinator.html):') || '').trim();
     if (/^https:\/\//.test(u)) { try { localStorage.setItem('koordUrl', u); } catch (_) {} } else u = '';
+  }
+  return u;
+}
+function adminUrl(silent) {
+  if (/^https?:/.test(location.protocol)) return location.origin + location.pathname;
+  let u = ''; try { u = localStorage.getItem('adminUrl') || ''; } catch (_) {}
+  if (!u && !silent) {
+    u = (prompt('Tempel alamat halaman admin ojek ini di situsmu (contoh https://situsmu.id/admin-ojek.html):') || '').trim();
+    if (/^https:\/\//.test(u)) { try { localStorage.setItem('adminUrl', u); } catch (_) {} } else u = '';
   }
   return u;
 }
@@ -122,6 +131,17 @@ function render() {
       ${d.status !== 'suspended' ? `<button data-a="dv" data-id="${d.id}" data-v="suspended">Tangguhkan</button>` : ''}
       ${sup ? `<button class="d" data-a="ddel" data-id="${d.id}">Hapus</button>` : ''}</div></div>`; }).join('') : '<p class="mu">Belum ada ojek.</p>'}</section>`;
   }
+  if (tab === 'bagikan' && sup) {
+    const ku = koordUrl(true), au = adminUrl(true);
+    body = `<section class="card"><h2>Tautan untuk koordinator</h2>
+      <p class="mu">Halaman masuk koordinator. PIN dikirim terpisah lewat tombol di tab Grup.</p>
+      <p style="word-break:break-all">${esc(ku || 'Alamat belum diisi. Klik salah satu tombol di bawah untuk mengisinya.')}</p>
+      <div class="row"><button class="p" data-a="sh" data-v="k-wa">Kirim lewat WhatsApp</button><button data-a="sh" data-v="k-cp">Salin tautan</button></div></section>
+    <section class="card"><h2>Tautan untuk admin ojek (staf)</h2>
+      <p class="mu">Halaman ini meminta password staf. Password tidak ikut dikirim di pesan, berikan lewat jalur terpisah.</p>
+      <p style="word-break:break-all">${esc(au || 'Alamat belum diisi. Klik salah satu tombol di bawah untuk mengisinya.')}</p>
+      <div class="row"><button class="p" data-a="sh" data-v="a-wa">Kirim lewat WhatsApp</button><button data-a="sh" data-v="a-cp">Salin tautan</button></div></section>`;
+  }
   if (tab === 'laporan') {
     body = `<section class="card">${D.reports.length ? D.reports.map(r => { const who = r.ojek_id ? (D.drivers.find(d => d.id === r.ojek_id) || {}).name || 'Ojek dihapus' : gName(r.group_id); return `
       <div class="it"><div class="top"><strong>${esc(r.reason.replace('_', ' '))} – ${esc(who)}</strong><span class="tag ${r.status === 'selesai' ? '' : 'w'}">${esc(r.status)}</span></div>
@@ -133,7 +153,7 @@ function render() {
   <p class="mu">Masuk sebagai ${sup ? 'super admin' : 'staf (tanpa hapus data dan kelola PIN koordinator)'}</p>
   ${pinBox ? `<div class="pin"><p>PIN untuk <strong>${esc(pinBox.who)}</strong> (hanya tampil sekali). Kirim lewat WhatsApp:</p><b>${esc(pinBox.pin)}</b>
     <div class="row"><button class="p" id="wp">Kirim lewat WhatsApp</button><button id="cm">Salin pesan</button><button id="cp">Salin PIN</button><button id="hp">Tutup</button></div></div>` : ''}
-  <div class="tabs" role="tablist">${tabBtn('grup', 'Grup', pendG)}${tabBtn('ojek', 'Ojek', pendD)}${tabBtn('laporan', 'Laporan', newR)}</div>${body}`;
+  <div class="tabs" role="tablist">${tabBtn('grup', 'Grup', pendG)}${tabBtn('ojek', 'Ojek', pendD)}${tabBtn('laporan', 'Laporan', newR)}${sup ? tabBtn('bagikan', 'Bagikan', 0) : ''}</div>${body}`;
 
   document.getElementById('out').onclick = () => { pw = null; D = null; pinBox = null; login(); };
   if (pinBox) {
@@ -174,6 +194,17 @@ app.addEventListener('click', async ev => {
   else if (a === 'kst') { if (await run(() => call('set_ojek_coordinator_status', {coordinator_id: id, status: v}), 'Status koordinator diperbarui.')) load(); }
   else if (a === 'dv') { if (await run(() => call('save_ojek_driver', {driver: {id, status: v}}), v === 'verified' ? 'Ojek diverifikasi.' : 'Ojek ditangguhkan.')) load(); }
   else if (a === 'ddel') { if (confirm('Hapus ojek ini?') && await run(() => call('delete_ojek_driver', {ojek_id: id}), 'Ojek dihapus.')) load(); }
+  else if (a === 'sh') {
+    const isK = v.startsWith('k'), url = isK ? koordUrl() : adminUrl();
+    if (!url) return toast('Alamat halaman belum diisi.', true);
+    if (v.endsWith('wa')) {
+      const msg = isK
+        ? `Halo, ini halaman koordinator grup ojek JajanDekat: ${url}\nMasuk dengan nomor WhatsApp dan PIN dari admin.`
+        : `Halo, ini halaman admin ojek JajanDekat: ${url}\nMasuk dengan password staf yang diberikan terpisah.`;
+      window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+    } else navigator.clipboard?.writeText(url).then(() => toast('Tautan disalin.'));
+    render();
+  }
   else if (a === 'rep') { if (await run(() => call('update_ojek_report_status', {report_id: id, status: v}), 'Status laporan diperbarui.')) load(); }
 });
 
