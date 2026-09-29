@@ -32,6 +32,30 @@ try {
 }
 let referralCodeFromLink = null;
 
+// ---------- PENCATATAN EVENT (ringan; server yang menyaring duplikat & membatasi laju) ----------
+// device di-hash di server (md5), jadi tidak ada data pribadi yang tersimpan di tabel event.
+function jdTrack(type, opts = {}) {
+  try {
+    if (!sb) return;
+    const r = sb.rpc('jd_log_event', {
+      p_type: type,
+      p_region_id: opts.regionId || null,
+      p_ojek_id: opts.ojekId || null,
+      p_group_id: opts.groupId || null,
+    });
+    if (r && r.then) r.then(() => {}, () => {});
+  } catch (e) {}
+}
+// kind: 'view' | 'wa' | 'chat' | 'route' (RPC jd_track_vendor_event sudah ada di server)
+function jdTrackVendor(vendorId, kind) {
+  try {
+    if (!sb || !vendorId) return;
+    const r = sb.rpc('jd_track_vendor_event', { p_vendor_id: vendorId, p_kind: kind });
+    if (r && r.then) r.then(() => {}, () => {});
+  } catch (e) {}
+}
+window.__jdTrackVendor = jdTrackVendor; // dipakai onclick di HTML string
+
 // Saklar fitur chat dalam app. false = disembunyikan dari tampilan (fokus ke chat WhatsApp).
 // Ubah ke true untuk menghidupkannya lagi. Di server (RLS Supabase) chat tetap dibatasi khusus pedagang Premium.
 const CHAT_DALAM_APP_AKTIF = false;
@@ -2351,7 +2375,7 @@ function renderVendorCardHtml(v, opts = {}) {
         ${vendorClosedTodayNote(v) ? `<div class="vp-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
-          ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
+          ${vendorChatEnabled(v) ? `<button class="vp-chat-btn" onclick="window.__openChatModal('${v.id}','${nameJs}')">${VP_ICON_CHAT}Chat</button>` : (vendorWaUrl(v) ? `<a class="vp-chat-btn" href="${vendorWaUrl(v)}" target="_blank" rel="noopener" onclick="window.__jdTrackVendor('${v.id}','wa')" style="text-decoration:none;background:#25D366;box-shadow:0 6px 12px -6px rgba(37,211,102,.7);"><img src="icons/icon_chat_wa.png" alt="" style="width:16px;height:16px;">WhatsApp</a>` : '')}
         </div>
       </div>
     </div>
@@ -2552,6 +2576,7 @@ window.__closeVendorSheet = function () {
 window.__openVendorSheet = function (vendorId, opts = {}) {
   const v = vendors.find(x => x.id === vendorId);
   if (!v) return;
+  if (!opts.still) jdTrackVendor(v.id, 'view');
   document.getElementById('vendor-sheet-overlay')?.remove();
 
   const following = followedIds.has(v.id);
@@ -2598,11 +2623,12 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
         ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
         <div class="vs-actions">
           ${vendorChatEnabled(v) ? `<button class="vs-btn primary wide" onclick="window.__vsAct('chat','${v.id}')">${VP_ICON_CHAT}Chat di JajanDekat</button>` : ''}
-          ${canWa ? `<a class="vs-btn wa${vendorChatEnabled(v) ? '' : ' wide'}" href="${waUrl}" target="_blank" rel="noopener"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
+          ${canWa ? `<a class="vs-btn wa${vendorChatEnabled(v) ? '' : ' wide'}" href="${waUrl}" target="_blank" rel="noopener" onclick="window.__jdTrackVendor('${v.id}','wa')"><img class="vs-ic" src="icons/icon_chat_wa.png" alt="">WhatsApp</a>` : ''}
           <button class="vs-btn" onclick="window.__vsAct('menu','${v.id}')"><span class="vs-emoji">🍽️</span>Lihat menu</button>
           ${canMap ? `<button class="vs-btn" onclick="window.__vsAct('map','${v.id}')"><img class="vs-ic" src="icons/icon_map.png" alt="">Lihat di peta</button>` : ''}
           <button class="vs-btn ${following ? 'on' : ''}" onclick="window.__vsAct('follow','${v.id}')">${following ? '<img class="vs-ic" src="icons/icon_check.png" alt="">Mengikuti' : '<span class="vs-emoji">➕</span>Ikuti'}</button>
           ${v.claim_status === 'unclaimed' ? `<button class="vs-btn ghost wide" onclick="window.__openClaimVendorModal('${v.id}')">🙋 Ini toko saya — Klaim</button>` : ''}
+          ${ojekAvailable() ? `<button class="vs-btn ghost wide" onclick="window.__openOjekSheet('${v.id}')">🛵 Titip beli via ojek</button>` : ''}
           <button class="vs-btn ghost wide" onclick="window.__vsAct('review','${v.id}')">💬 Beri ulasan atau masukan</button>
         </div>
       </div>
@@ -2620,6 +2646,8 @@ window.__vsAct = async function (kind, id) {
     return;
   }
   window.__closeVendorSheet();
+  if (kind === 'chat') jdTrackVendor(id, 'chat');
+  if (kind === 'map') jdTrackVendor(id, 'route');
   if (kind === 'chat') window.__openChatModal(id, v.name);
   else if (kind === 'menu') window.__openProductCatalog(id, v.name);
   else if (kind === 'review') window.__openReviewModal(id, v.name);
@@ -3206,7 +3234,7 @@ function renderMap() {
         💬 Chat di App
       </button>` : ''}
       ${v.whatsapp && v.show_whatsapp !== false ? `
-        <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank"
+        <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank" onclick="window.__jdTrackVendor('${v.id}','wa')"
            style="display:inline-block;margin-top:6px;margin-left:4px;background:#25D366;color:#fff;text-decoration:none;
            font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
           📱 WhatsApp
@@ -5309,6 +5337,116 @@ window.__openReportModal = function (vendorId, vendorName) {
   document.body.appendChild(overlay);
 };
 
+// ---------- OJEK SEKITAR ----------
+// Data dikelola admin (tabel ojek_groups / ojek_drivers); pembeli membaca lewat RPC.
+// Tombol hanya muncul kalau wilayah pembeli punya grup atau ojek terverifikasi.
+let ojekCache = { groups: [], drivers: [], ts: 0, regionId: null };
+
+async function jdLoadOjek(force = false) {
+  if (!sb) return;
+  const rid = buyerRegionId || null;
+  if (!force && ojekCache.ts && ojekCache.regionId === rid && Date.now() - ojekCache.ts < 10 * 60 * 1000) return;
+  try {
+    const [g, d] = await Promise.all([
+      sb.rpc('jd_get_ojek_groups', { p_region_id: rid }),
+      sb.rpc('jd_get_ojek', { p_region_id: rid }),
+    ]);
+    ojekCache = { groups: g.data || [], drivers: d.data || [], ts: Date.now(), regionId: rid };
+  } catch (e) { console.error('Gagal ambil data ojek:', e); }
+}
+function ojekAvailable() { return ojekCache.groups.length > 0 || ojekCache.drivers.length > 0; }
+
+window.__ojekClick = function (kind, ojekId, groupId) {
+  if (kind === 'wa') jdTrack('ojek_wa_open', { regionId: buyerRegionId, ojekId: ojekId || null });
+  else if (kind === 'group') jdTrack('ojek_group_click', { regionId: buyerRegionId, groupId: groupId || null });
+};
+
+window.__openOjekSheet = async function (vendorId) {
+  window.__closeVendorSheet();
+  jdTrack('ojek_button_click', { regionId: buyerRegionId });
+  await jdLoadOjek();
+  document.getElementById('ojek-sheet-overlay')?.remove();
+  const v = vendorId ? vendors.find(x => x.id === vendorId) : null;
+  const msg = v
+    ? `Halo, saya mau titip beli jajanan di ${v.name}${v.region ? ' (' + v.region + ')' : ''}. Bisa diantar? Berapa ongkirnya?`
+    : 'Halo, saya mau titip beli jajanan lewat JajanDekat. Bisa diantar? Berapa ongkirnya?';
+  const drivers = ojekCache.drivers.map(d => `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--stroke);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(d.name)}</div>
+        <div style="font-size:10.5px;color:var(--text-faint);">Ojek terverifikasi</div>
+      </div>
+      <a href="https://wa.me/${d.whatsapp}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener"
+         onclick="window.__ojekClick('wa','${d.id}','')"
+         style="background:#25D366;color:#fff;text-decoration:none;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;">Chat WA</a>
+      <button onclick="window.__openOjekReport('${d.id}','')" aria-label="Laporkan" style="background:transparent;border:none;font-size:14px;cursor:pointer;">🚩</button>
+    </div>`).join('');
+  const groups = ojekCache.groups.map(g => `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--stroke);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(g.name)}</div>
+        <div style="font-size:10.5px;color:var(--text-faint);">Grup WhatsApp ojek</div>
+      </div>
+      <a href="${g.wa_link}" target="_blank" rel="noopener"
+         onclick="window.__ojekClick('group','','${g.id}')"
+         style="background:#25D366;color:#fff;text-decoration:none;font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:8px;">Gabung</a>
+      <button onclick="window.__openOjekReport('','${g.id}')" aria-label="Laporkan" style="background:transparent;border:none;font-size:14px;cursor:pointer;">🚩</button>
+    </div>`).join('');
+  const overlay = document.createElement('div');
+  overlay.id = 'ojek-sheet-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:210;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;max-height:80vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <img src="icons/ojek-mascot.png" alt="" width="72" height="72" style="flex-shrink:0;object-fit:contain;" onerror="this.style.display='none'">
+        <div style="flex:1;min-width:0;font-family:'Poppins';font-weight:700;font-size:15px;">Titip beli via ojek</div>
+        <button onclick="document.getElementById('ojek-sheet-overlay').remove()" aria-label="Tutup" style="align-self:flex-start;background:transparent;border:none;font-size:16px;cursor:pointer;color:var(--text-dim);">✕</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">JajanDekat hanya menyediakan tautan. Ongkos dan pembayaran disepakati langsung dengan ojek; sebaiknya bayar saat pesanan diterima.</div>
+      ${drivers || groups ? '' : '<div style="font-size:12px;color:var(--text-dim);padding:12px 0;">Belum ada ojek di wilayahmu.</div>'}
+      ${drivers}${groups}
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.__openOjekReport = function (ojekId, groupId) {
+  document.getElementById('ojek-report-overlay')?.remove();
+  const reasons = [['penipuan', 'Penipuan'], ['spam', 'Spam atau iklan'], ['tidak_responsif', 'Tidak merespons'], ['link_mati', 'Tautan mati'], ['lainnya', 'Lainnya']];
+  const overlay = document.createElement('div');
+  overlay.id = 'ojek-report-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:220;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">🚩 Laporkan ojek atau grup</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">Laporan langsung ke admin untuk diperiksa.</div>
+      <select id="ojek-report-reason" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;">
+        ${reasons.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
+      </select>
+      <textarea id="ojek-report-detail" maxlength="500" placeholder="Ceritakan singkat kejadiannya (opsional)" style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="document.getElementById('ojek-report-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__submitOjekReport('${ojekId}','${groupId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:#f87171;color:#fff;font-weight:700;">Kirim laporan</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.__submitOjekReport = async function (ojekId, groupId) {
+  const reason = document.getElementById('ojek-report-reason')?.value;
+  const detail = document.getElementById('ojek-report-detail')?.value.trim();
+  try {
+    const { data, error } = await sb.rpc('jd_submit_ojek_report', {
+      p_ojek_id: ojekId || null, p_group_id: groupId || null, p_reason: reason, p_detail: detail || null,
+    });
+    if (error) throw error;
+    document.getElementById('ojek-report-overlay')?.remove();
+    showToast(data ? 'Laporan terkirim ke admin. Terima kasih! 🙏' : 'Laporan belum bisa dikirim. Coba lagi nanti.');
+  } catch (e) {
+    alert('Gagal mengirim laporan: ' + (e.message || e));
+  }
+};
+
 window.__submitReport = async function (vendorId) {
   const reason = document.getElementById('report-reason').value;
   const detail = document.getElementById('report-detail').value.trim();
@@ -7053,6 +7191,9 @@ async function init() {
     followedIds = new Set(followList);
     await fetchRegions();
     await getBuyerRegion().catch(() => {}); // wilayah pembeli dari cache (kalau ada), dipakai filter pengumuman
+    jdTrack('app_open', { regionId: buyerRegionId });
+    if (new URLSearchParams(location.search).get('src') === 'push') jdTrack('push_open', { regionId: buyerRegionId });
+    jdLoadOjek(); // tidak perlu ditunggu; tombol ojek baru muncul kalau wilayah ini punya data ojek
     announcements = await fetchAnnouncements();
     banners = (await fetchBanners()) || [];
     bannersFetchedAt = Date.now();
@@ -7062,6 +7203,7 @@ async function init() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'PUSH_NOTIFICATION_CLICK' && event.data.url) {
+          jdTrack('push_open', { regionId: buyerRegionId });
           openInternalLink(event.data.url);
         }
       });
@@ -7117,7 +7259,7 @@ async function init() {
       renderPembeli();
     }
 
-    if (wantMode || wantView || wantVendor || wantArtikel || wantAnn) {
+    if (wantMode || wantView || wantVendor || wantArtikel || wantAnn || urlParams.get('src')) {
       history.replaceState(null, '', location.pathname);
     }
 
