@@ -86,6 +86,7 @@ function login() {
 function render() {
   if (!pw) return login();
   if (!D) return app.innerHTML = '<p class="mu">Memuat…</p>';
+  const sup = D.role !== 'staff';
   const gName = id => (D.groups.find(g => g.id === id) || {}).name || 'Tanpa grup';
   const coordOf = gid => D.coordinators.find(k => k.group_id === gid);
   const pendG = D.groups.filter(g => g.verification_status === 'pending').length;
@@ -108,8 +109,8 @@ function render() {
       <div class="row">
         ${g.verification_status !== 'verified' ? `<button class="p" data-a="gv" data-id="${g.id}" data-v="verified">Verifikasi</button>` : ''}
         ${g.verification_status !== 'suspended' ? `<button data-a="gv" data-id="${g.id}" data-v="suspended">Tangguhkan</button>` : ''}
-        ${k ? `<button data-a="kpin" data-id="${k.id}">Reset PIN</button><button data-a="kst" data-id="${k.id}" data-v="${k.status === 'active' ? 'suspended' : 'active'}">${k.status === 'active' ? 'Nonaktifkan koordinator' : 'Aktifkan koordinator'}</button>` : `<button data-a="knew" data-id="${g.id}">Buat koordinator</button>`}
-        <button class="d" data-a="gdel" data-id="${g.id}">Hapus grup</button></div></section>`; }).join('') : '<p class="mu">Belum ada grup.</p>');
+        ${!sup ? '' : k ? `<button data-a="kpin" data-id="${k.id}">Reset PIN</button><button data-a="kst" data-id="${k.id}" data-v="${k.status === 'active' ? 'suspended' : 'active'}">${k.status === 'active' ? 'Nonaktifkan koordinator' : 'Aktifkan koordinator'}</button>` : `<button data-a="knew" data-id="${g.id}">Buat koordinator</button>`}
+        ${sup ? `<button class="d" data-a="gdel" data-id="${g.id}">Hapus grup</button>` : ''}</div></section>`; }).join('') : '<p class="mu">Belum ada grup.</p>');
   }
   if (tab === 'ojek') {
     const ds = [...D.drivers].sort((a, b) => (b.status === 'pending') - (a.status === 'pending'));
@@ -119,7 +120,7 @@ function render() {
       Persetujuan tampil: ${d.consent_show_at ? esc(d.consent_by || '-') + ' – ' + esc(d.consent_note || 'tanpa catatan') : 'belum ada'}${d.status === 'suspended' ? '<br>Disembunyikan oleh: ' + esc(d.suspended_by || '-') : ''}</div>
       <div class="row">${d.status !== 'verified' ? `<button class="p" data-a="dv" data-id="${d.id}" data-v="verified" ${d.consent_show_at ? '' : 'disabled title="Belum ada persetujuan tampil"'}>Verifikasi</button>` : ''}
       ${d.status !== 'suspended' ? `<button data-a="dv" data-id="${d.id}" data-v="suspended">Tangguhkan</button>` : ''}
-      <button class="d" data-a="ddel" data-id="${d.id}">Hapus</button></div></div>`; }).join('') : '<p class="mu">Belum ada ojek.</p>'}</section>`;
+      ${sup ? `<button class="d" data-a="ddel" data-id="${d.id}">Hapus</button>` : ''}</div></div>`; }).join('') : '<p class="mu">Belum ada ojek.</p>'}</section>`;
   }
   if (tab === 'laporan') {
     body = `<section class="card">${D.reports.length ? D.reports.map(r => { const who = r.ojek_id ? (D.drivers.find(d => d.id === r.ojek_id) || {}).name || 'Ojek dihapus' : gName(r.group_id); return `
@@ -129,6 +130,7 @@ function render() {
   }
 
   app.innerHTML = `<div class="top"><h1>Admin ojek</h1><button id="out">Keluar</button></div>
+  <p class="mu">Masuk sebagai ${sup ? 'super admin' : 'staf (tanpa hapus data dan kelola PIN koordinator)'}</p>
   ${pinBox ? `<div class="pin"><p>PIN untuk <strong>${esc(pinBox.who)}</strong> (hanya tampil sekali). Kirim lewat WhatsApp:</p><b>${esc(pinBox.pin)}</b>
     <div class="row"><button class="p" id="wp">Kirim lewat WhatsApp</button><button id="cm">Salin pesan</button><button id="cp">Salin PIN</button><button id="hp">Tutup</button></div></div>` : ''}
   <div class="tabs" role="tablist">${tabBtn('grup', 'Grup', pendG)}${tabBtn('ojek', 'Ojek', pendD)}${tabBtn('laporan', 'Laporan', newR)}</div>${body}`;
