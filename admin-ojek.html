@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin Ojek – JajanDekat</title>
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--tx:#17211c;--mu:#5d6b64;--ln:#dfe6e2;--ac:#0f7b4f;--ac2:#e6f4ed;--wn:#b45309;--wn2:#fef3e2;--er:#b3261e;--er2:#fdeceb;--onac:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#121816;--card:#1a2320;--tx:#e8efeb;--mu:#93a39a;--ln:#2b3833;--ac:#4cc38a;--ac2:#173a2a;--wn:#f0b25e;--wn2:#3a2b12;--er:#f28b82;--er2:#3b1a18;--onac:#0b1a12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px 16px 64px}
+h1{font-size:1.25rem;margin:8px 0}h2{font-size:1.05rem;margin:0 0 10px}h3{font-size:1rem;margin:0}
+.mu{color:var(--mu);font-size:.875rem}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px;margin:0 0 14px}
+label{display:block;font-size:.875rem;margin:10px 0 4px;font-weight:600}
+input{width:100%;padding:10px 12px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+input:focus-visible,button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+button{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--tx);cursor:pointer}
+button.p{background:var(--ac);border-color:var(--ac);color:var(--onac);font-weight:600}button.d{color:var(--er)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tabs{display:flex;gap:6px;margin:0 0 14px;overflow-x:auto}.tabs button[aria-selected=true]{background:var(--ac);border-color:var(--ac);color:var(--onac);font-weight:600}
+.tag{display:inline-block;font-size:.8rem;padding:2px 9px;border-radius:99px;background:var(--ac2);color:var(--ac);font-weight:600;white-space:nowrap}
+.tag.w{background:var(--wn2);color:var(--wn)}.tag.e{background:var(--er2);color:var(--er)}
+.it{border-top:1px solid var(--ln);padding:12px 0}.it:first-of-type{border-top:0}
+.msg{position:fixed;left:16px;right:16px;bottom:16px;max-width:688px;margin:0 auto;padding:12px 14px;border-radius:10px;background:var(--tx);color:var(--bg);z-index:9}.msg.e{background:var(--er);color:#fff}
+.pin{background:var(--wn2);border:1px solid var(--wn);border-radius:10px;padding:12px;margin:0 0 14px}
+.pin b{font-size:1.5rem;letter-spacing:.15em}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<div id="msg" class="msg" hidden role="status"></div>
+<script>
+const API = 'https://lzcvykadtpqiqaebmmbh.supabase.co/functions/v1/admin-action';
+const app = document.getElementById('app');
+let pw = null, D = null, tab = 'grup', pinBox = null;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t, err) {
+  const m = document.getElementById('msg'); m.textContent = t; m.className = 'msg' + (err ? ' e' : ''); m.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => m.hidden = true, 4500);
+}
+// Alamat halaman koordinator. Kosongkan = otomatis (satu folder dengan halaman ini).
+const KOORDINATOR_URL = '';
+function koordUrl() {
+  if (KOORDINATOR_URL) return KOORDINATOR_URL;
+  if (/^https?:/.test(location.protocol)) return new URL('koordinator.html', location.href).href;
+  let u = ''; try { u = localStorage.getItem('koordUrl') || ''; } catch (_) {}
+  if (!u) {
+    u = (prompt('Halaman ini dibuka dari file lokal. Tempel alamat halaman koordinator (contoh https://situsmu.id/koordinator.html):') || '').trim();
+    if (/^https:\/\//.test(u)) { try { localStorage.setItem('koordUrl', u); } catch (_) {} } else u = '';
+  }
+  return u;
+}
+function normWa(raw) { let d = String(raw || '').replace(/\D/g, ''); if (d.startsWith('0')) d = '62' + d.slice(1); else if (d.startsWith('8')) d = '62' + d; return d; }
+function pinMessage(p) {
+  const url = koordUrl(); if (!url) return null;
+  return `Halo ${p.who}, akun koordinator grup ojek JajanDekat sudah siap.\n\nBuka: ${url}\nNomor WhatsApp: ${p.wa}\nPIN: ${p.pin}\n\nPIN ini rahasia dan khusus koordinator, terpisah dari PIN penjual. Setelah masuk, ganti PIN lewat menu Ganti PIN.`;
+}
+async function call(action, extra = {}) {
+  const r = await fetch(API, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: pw, action, ...extra})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || 'Gagal terhubung. Coba lagi.'); e.status = r.status; throw e; }
+  return j;
+}
+async function run(fn, okText) {
+  try { const r = await fn(); if (okText) toast(okText); return r; } catch (e) { toast(e.message, true); return null; }
+}
+async function load() {
+  try { D = await call('list_ojek'); render(); }
+  catch (e) { if (e.status === 401) pw = null; toast(e.message, true); render(); }
+}
+
+const gTag = {pending:['Menunggu','w'], verified:['Terverifikasi',''], suspended:['Ditangguhkan','e']};
+const dTag = gTag;
+
+function login() {
+  app.innerHTML = `<h1>Admin ojek</h1><form class="card" id="lf"><label for="pw">Password admin</label>
+  <input id="pw" type="password" autocomplete="current-password" required><div class="row"><button class="p" type="submit">Masuk</button></div></form>`;
+  document.getElementById('lf').onsubmit = async ev => { ev.preventDefault(); pw = document.getElementById('pw').value; await load(); };
+}
+
+function render() {
+  if (!pw) return login();
+  if (!D) return app.innerHTML = '<p class="mu">Memuat…</p>';
+  const gName = id => (D.groups.find(g => g.id === id) || {}).name || 'Tanpa grup';
+  const coordOf = gid => D.coordinators.find(k => k.group_id === gid);
+  const pendG = D.groups.filter(g => g.verification_status === 'pending').length;
+  const pendD = D.drivers.filter(d => d.status === 'pending').length;
+  const newR = D.reports.filter(r => r.status === 'baru').length;
+  const tabBtn = (id, t, n) => `<button role="tab" data-tab="${id}" aria-selected="${tab === id}">${t}${n ? ' (' + n + ')' : ''}</button>`;
+
+  let body = '';
+  if (tab === 'grup') {
+    body = `<section class="card"><h2>Tambah grup</h2><form id="ngf">
+      <label for="ngn">Nama grup</label><input id="ngn" maxlength="80" required>
+      <label for="ngl">Tautan grup WhatsApp</label><input id="ngl" type="url" placeholder="https://chat.whatsapp.com/…" required>
+      <label for="nga">Area layanan</label><input id="nga" maxlength="120">
+      <div class="row"><button class="p" type="submit">Tambah grup</button></div></form></section>` +
+    (D.groups.length ? D.groups.map(g => { const k = coordOf(g.id), s = gTag[g.verification_status] || [g.verification_status, 'w'];
+      const n = D.drivers.filter(d => d.group_id === g.id).length; return `
+      <section class="card"><div class="top"><h3>${esc(g.name)}</h3><span class="tag ${s[1]}">${s[0]}</span></div>
+      <div class="mu">${esc(g.service_area || 'Area belum diisi')} · ${n}/${g.max_drivers} ojek · ${g.active ? 'aktif' : 'nonaktif'}<br>${esc(g.wa_link)}</div>
+      <div class="mu">${k ? `Koordinator: ${esc(k.name)} (${esc(k.whatsapp)}) · ${k.status === 'active' ? 'aktif' : 'dinonaktifkan'} · ${k.terms_accepted_at ? 'sudah setuju ketentuan' : 'belum setuju ketentuan'}` : 'Belum ada koordinator'}</div>
+      <div class="row">
+        ${g.verification_status !== 'verified' ? `<button class="p" data-a="gv" data-id="${g.id}" data-v="verified">Verifikasi</button>` : ''}
+        ${g.verification_status !== 'suspended' ? `<button data-a="gv" data-id="${g.id}" data-v="suspended">Tangguhkan</button>` : ''}
+        ${k ? `<button data-a="kpin" data-id="${k.id}">Reset PIN</button><button data-a="kst" data-id="${k.id}" data-v="${k.status === 'active' ? 'suspended' : 'active'}">${k.status === 'active' ? 'Nonaktifkan koordinator' : 'Aktifkan koordinator'}</button>` : `<button data-a="knew" data-id="${g.id}">Buat koordinator</button>`}
+        <button class="d" data-a="gdel" data-id="${g.id}">Hapus grup</button></div></section>`; }).join('') : '<p class="mu">Belum ada grup.</p>');
+  }
+  if (tab === 'ojek') {
+    const ds = [...D.drivers].sort((a, b) => (b.status === 'pending') - (a.status === 'pending'));
+    body = `<section class="card">${ds.length ? ds.map(d => { const s = dTag[d.status] || [d.status, 'w']; return `
+      <div class="it"><div class="top"><strong>${esc(d.name)}</strong><span class="tag ${s[1]}">${s[0]}</span></div>
+      <div class="mu">${esc(d.whatsapp)}${d.plate_number ? ' · ' + esc(d.plate_number) : ''} · ${esc(gName(d.group_id))}<br>
+      Persetujuan tampil: ${d.consent_show_at ? esc(d.consent_by || '-') + ' – ' + esc(d.consent_note || 'tanpa catatan') : 'belum ada'}${d.status === 'suspended' ? '<br>Disembunyikan oleh: ' + esc(d.suspended_by || '-') : ''}</div>
+      <div class="row">${d.status !== 'verified' ? `<button class="p" data-a="dv" data-id="${d.id}" data-v="verified" ${d.consent_show_at ? '' : 'disabled title="Belum ada persetujuan tampil"'}>Verifikasi</button>` : ''}
+      ${d.status !== 'suspended' ? `<button data-a="dv" data-id="${d.id}" data-v="suspended">Tangguhkan</button>` : ''}
+      <button class="d" data-a="ddel" data-id="${d.id}">Hapus</button></div></div>`; }).join('') : '<p class="mu">Belum ada ojek.</p>'}</section>`;
+  }
+  if (tab === 'laporan') {
+    body = `<section class="card">${D.reports.length ? D.reports.map(r => { const who = r.ojek_id ? (D.drivers.find(d => d.id === r.ojek_id) || {}).name || 'Ojek dihapus' : gName(r.group_id); return `
+      <div class="it"><div class="top"><strong>${esc(r.reason.replace('_', ' '))} – ${esc(who)}</strong><span class="tag ${r.status === 'selesai' ? '' : 'w'}">${esc(r.status)}</span></div>
+      <div class="mu">${new Date(r.created_at).toLocaleString('id-ID')}${r.detail ? '<br>' + esc(r.detail) : ''}</div>
+      ${r.status !== 'selesai' ? `<div class="row">${r.status === 'baru' ? `<button data-a="rep" data-id="${r.id}" data-v="diproses">Sedang diproses</button>` : ''}<button data-a="rep" data-id="${r.id}" data-v="selesai">Tandai selesai</button></div>` : ''}</div>`; }).join('') : '<p class="mu">Belum ada laporan.</p>'}</section>`;
+  }
+
+  app.innerHTML = `<div class="top"><h1>Admin ojek</h1><button id="out">Keluar</button></div>
+  ${pinBox ? `<div class="pin"><p>PIN untuk <strong>${esc(pinBox.who)}</strong> (hanya tampil sekali). Kirim lewat WhatsApp:</p><b>${esc(pinBox.pin)}</b>
+    <div class="row"><button class="p" id="wp">Kirim lewat WhatsApp</button><button id="cm">Salin pesan</button><button id="cp">Salin PIN</button><button id="hp">Tutup</button></div></div>` : ''}
+  <div class="tabs" role="tablist">${tabBtn('grup', 'Grup', pendG)}${tabBtn('ojek', 'Ojek', pendD)}${tabBtn('laporan', 'Laporan', newR)}</div>${body}`;
+
+  document.getElementById('out').onclick = () => { pw = null; D = null; pinBox = null; login(); };
+  if (pinBox) {
+    document.getElementById('hp').onclick = () => { pinBox = null; render(); };
+    document.getElementById('cp').onclick = () => navigator.clipboard?.writeText(pinBox.pin).then(() => toast('PIN disalin.'));
+    document.getElementById('wp').onclick = () => {
+      const m = pinMessage(pinBox); if (!m) return toast('Alamat halaman koordinator belum diisi.', true);
+      window.open('https://wa.me/' + pinBox.wa + '?text=' + encodeURIComponent(m), '_blank', 'noopener');
+    };
+    document.getElementById('cm').onclick = () => {
+      const m = pinMessage(pinBox); if (!m) return toast('Alamat halaman koordinator belum diisi.', true);
+      navigator.clipboard?.writeText(m).then(() => toast('Pesan disalin.'));
+    };
+  }
+  const nf = document.getElementById('ngf');
+  if (nf) nf.onsubmit = async ev => { ev.preventDefault();
+    if (await run(() => call('save_ojek_group', {group: {name: ngn.value, wa_link: ngl.value, service_area: nga.value}}), 'Grup ditambahkan.')) load(); };
+}
+
+app.addEventListener('click', async ev => {
+  const t = ev.target.closest('button[data-tab]');
+  if (t) { tab = t.dataset.tab; return render(); }
+  const b = ev.target.closest('button[data-a]'); if (!b) return;
+  const {a, id, v} = b.dataset;
+  if (a === 'gv') { if (await run(() => call('save_ojek_group', {group: {id, verification_status: v}}), v === 'verified' ? 'Grup diverifikasi.' : 'Grup ditangguhkan.')) load(); }
+  else if (a === 'gdel') { if (confirm('Hapus grup ini beserta koordinator dan ojek di dalamnya?') && await run(() => call('delete_ojek_group', {group_id: id}), 'Grup dihapus.')) load(); }
+  else if (a === 'knew') {
+    const name = prompt('Nama koordinator:'); if (!name) return;
+    const wa = prompt('Nomor WhatsApp koordinator:'); if (!wa) return;
+    const r = await run(() => call('create_ojek_coordinator', {group_id: id, name, whatsapp: wa}));
+    if (r) { pinBox = {who: name, pin: r.new_pin, wa: normWa(wa)}; load(); }
+  }
+  else if (a === 'kpin') {
+    if (!confirm('Buat PIN baru? PIN lama langsung tidak berlaku.')) return;
+    const r = await run(() => call('reset_ojek_coordinator_pin', {coordinator_id: id}));
+    if (r) { const k = D.coordinators.find(x => x.id === id) || {}; pinBox = {who: k.name || 'koordinator', pin: r.new_pin, wa: k.whatsapp || ''}; render(); }
+  }
+  else if (a === 'kst') { if (await run(() => call('set_ojek_coordinator_status', {coordinator_id: id, status: v}), 'Status koordinator diperbarui.')) load(); }
+  else if (a === 'dv') { if (await run(() => call('save_ojek_driver', {driver: {id, status: v}}), v === 'verified' ? 'Ojek diverifikasi.' : 'Ojek ditangguhkan.')) load(); }
+  else if (a === 'ddel') { if (confirm('Hapus ojek ini?') && await run(() => call('delete_ojek_driver', {ojek_id: id}), 'Ojek dihapus.')) load(); }
+  else if (a === 'rep') { if (await run(() => call('update_ojek_report_status', {report_id: id, status: v}), 'Status laporan diperbarui.')) load(); }
+});
+
+login();
+</script>
+</body>
+</html>

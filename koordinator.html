@@ -1,239 +1,193 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow">
-<title>Koordinator Ojek — JajanDekat</title>
-<meta name="theme-color" content="#FF6B4A">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Koordinator Ojek – JajanDekat</title>
 <style>
-  :root{ --bg:#FAF7F2; --surface:#fff; --stroke:#F0E9DF; --text:#2B2620; --dim:#6F665A; --brand:#FF6B4A; --soft:#FFF1EC; --ok:#15803D; --warn:#B45309; --bad:#DC2626; }
-  @media (prefers-color-scheme: dark){ :root{ --bg:#1B1815; --surface:#26221E; --stroke:#3A342E; --text:#F4EEE6; --dim:#B5AB9C; --soft:#33241F; } }
-  *{ box-sizing:border-box; }
-  body{ margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; font-size:14.5px; line-height:1.55; padding-bottom:env(safe-area-inset-bottom,0); }
-  .wrap{ max-width:560px; margin:0 auto; padding:calc(16px + env(safe-area-inset-top,0)) 16px 48px; }
-  h1{ font-size:20px; margin:0 0 4px; } h2{ font-size:15px; margin:22px 0 8px; color:var(--brand); }
-  .sub{ color:var(--dim); font-size:12.5px; margin-bottom:14px; }
-  .card{ background:var(--surface); border:1px solid var(--stroke); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
-  label{ display:block; font-size:12px; color:var(--dim); margin-top:10px; }
-  input[type=text],input[type=tel],input[type=password],input[type=url]{ width:100%; margin-top:4px; padding:11px; border:1px solid var(--stroke); border-radius:10px; background:var(--bg); color:var(--text); font-size:15px; }
-  .btn{ display:inline-block; border:0; border-radius:999px; padding:10px 16px; font-weight:600; font-size:13px; background:var(--brand); color:#fff; cursor:pointer; }
-  .btn.ghost{ background:var(--soft); color:var(--brand); } .btn.danger{ background:#FEE2E2; color:var(--bad); } .btn.full{ width:100%; margin-top:12px; padding:12px; }
-  .btn[disabled]{ opacity:.6; }
-  .row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-  .badge{ font-size:10.5px; padding:3px 9px; border-radius:999px; font-weight:600; white-space:nowrap; }
-  .b-ok{ background:#DCFCE7; color:var(--ok); } .b-warn{ background:#FEF3C7; color:var(--warn); } .b-bad{ background:#FEE2E2; color:var(--bad); } .b-mute{ background:#F3F4F6; color:#6B7280; }
-  .top{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
-  .small{ font-size:12px; color:var(--dim); } .err{ color:var(--bad); font-size:12.5px; min-height:18px; margin-top:8px; } .ok{ color:var(--ok); font-size:12.5px; }
-  .terms{ font-size:13px; } .terms li{ margin-bottom:6px; }
-  .check{ display:flex; gap:8px; align-items:flex-start; margin-top:10px; font-size:13px; color:var(--text); }
-  .check input{ margin-top:3px; flex-shrink:0; }
-  .hidden{ display:none; }
-  a{ color:var(--brand); }
+:root{--bg:#f4f6f5;--card:#fff;--tx:#17211c;--mu:#5d6b64;--ln:#dfe6e2;--ac:#0f7b4f;--ac2:#e6f4ed;--wn:#b45309;--wn2:#fef3e2;--er:#b3261e;--er2:#fdeceb}
+@media(prefers-color-scheme:dark){:root{--bg:#121816;--card:#1a2320;--tx:#e8efeb;--mu:#93a39a;--ln:#2b3833;--ac:#4cc38a;--ac2:#173a2a;--wn:#f0b25e;--wn2:#3a2b12;--er:#f28b82;--er2:#3b1a18}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:16px 16px 64px}
+h1{font-size:1.25rem;margin:8px 0 4px}h2{font-size:1.05rem;margin:0 0 10px}
+p{margin:0 0 10px}.mu{color:var(--mu);font-size:.875rem}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px;margin:0 0 14px}
+label{display:block;font-size:.875rem;margin:10px 0 4px;font-weight:600}
+input[type=text],input[type=tel],input[type=password],input[type=url]{width:100%;padding:10px 12px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+input:focus-visible,button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:12px 0}.chk input{margin-top:4px;width:18px;height:18px}
+button{font:inherit;padding:9px 14px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--tx);cursor:pointer}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+[data-theme]{}
+button.p{color:#fff}@media(prefers-color-scheme:dark){button.p{color:#0b1a12}}
+button.d{color:var(--er)}button:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tag{display:inline-block;font-size:.8rem;padding:2px 9px;border-radius:99px;background:var(--ac2);color:var(--ac);font-weight:600}
+.tag.w{background:var(--wn2);color:var(--wn)}.tag.e{background:var(--er2);color:var(--er)}
+.it{border-top:1px solid var(--ln);padding:12px 0}.it:first-of-type{border-top:0}
+.msg{position:fixed;left:16px;right:16px;bottom:16px;max-width:528px;margin:0 auto;padding:12px 14px;border-radius:10px;background:var(--tx);color:var(--bg);z-index:9}
+.msg.e{background:var(--er);color:#fff}
+ul.t{padding-left:20px;margin:0 0 10px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <a class="small" href="/">← JajanDekat</a>
-  <h1>🛵 Koordinator Grup Ojek</h1>
-  <div class="sub">Kelola grup dan anggota ojek di JajanDekat.</div>
-
-  <!-- MASUK -->
-  <div id="v-login">
-    <div class="card">
-      <label>Nomor WhatsApp
-        <input id="l-wa" type="tel" inputmode="tel" autocomplete="username" placeholder="08xxxxxxxxxx"></label>
-      <label>PIN (6 digit)
-        <input id="l-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="••••••"></label>
-      <div id="l-err" class="err"></div>
-      <button id="l-btn" class="btn full" onclick="login()">Masuk</button>
-      <div class="small" style="margin-top:10px;">Belum punya akun? Akun dibuat admin JajanDekat setelah grupmu disetujui.</div>
-    </div>
-  </div>
-
-  <!-- KETENTUAN -->
-  <div id="v-terms" class="hidden">
-    <div class="card terms">
-      <b>Ketentuan Koordinator</b>
-      <ul style="padding-left:18px;margin:8px 0 0;">
-        <li>Saya bertanggung jawab atas ojek yang saya daftarkan dan atas tautan grup yang saya berikan.</li>
-        <li>Saya hanya mendaftarkan ojek yang <b>sendiri</b> sudah setuju nama dan nomor WhatsApp-nya ditampilkan ke pembeli, dan saya mencatat cara persetujuannya.</li>
-        <li>Saya akan menyembunyikan atau menghapus ojek yang keluar dari grup atau meminta datanya dihapus.</li>
-        <li>JajanDekat hanya menyediakan tautan. Ongkos, pembayaran, dan kesepakatan terjadi antara pembeli dan ojek.</li>
-        <li>Saya tidak membagikan PIN, dan admin dapat menangguhkan grup bila ada laporan penipuan atau penyalahgunaan.</li>
-        <li>Data diproses sesuai <a href="privacy.html" target="_blank" rel="noopener">Kebijakan Privasi</a>.</li>
-      </ul>
-      <label class="check"><input id="t-ok" type="checkbox"> <span>Saya sudah membaca dan menyetujui ketentuan di atas.</span></label>
-      <div id="t-err" class="err"></div>
-      <button class="btn full" onclick="acceptTerms()">Setuju &amp; lanjut</button>
-    </div>
-  </div>
-
-  <!-- DASBOR -->
-  <div id="v-app" class="hidden">
-    <div class="top"><div class="small" id="a-hi"></div><button class="btn ghost" onclick="logout()">Keluar</button></div>
-
-    <h2>Grup</h2>
-    <div class="card" id="a-group"></div>
-
-    <h2>Ojek di grup ini</h2>
-    <div id="a-drivers"></div>
-
-    <div class="card" id="a-add">
-      <b>+ Tambah ojek</b>
-      <label>Nama<input id="d-name" type="text" maxlength="80"></label>
-      <label>Nomor WhatsApp<input id="d-wa" type="tel" inputmode="tel" placeholder="08xxxxxxxxxx"></label>
-      <label>Plat nomor (opsional)<input id="d-plate" type="text" maxlength="15"></label>
-      <label>Catatan persetujuan<input id="d-note" type="text" maxlength="200" placeholder="Contoh: setuju lewat chat WA, 29/9"></label>
-      <label class="check"><input id="d-consent" type="checkbox"> <span>Ojek ini <b>sendiri</b> sudah setuju nama &amp; nomor WhatsApp-nya ditampilkan ke pembeli.</span></label>
-      <div id="d-err" class="err"></div>
-      <button class="btn full" onclick="addDriver()">Simpan ojek</button>
-    </div>
-
-    <h2>Laporan dari pembeli</h2>
-    <div id="a-reports"></div>
-
-    <h2>Ganti PIN</h2>
-    <div class="card">
-      <label>PIN baru (6 digit)<input id="p-new" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></label>
-      <div id="p-msg" class="err"></div>
-      <button class="btn ghost full" onclick="changePin()">Simpan PIN baru</button>
-    </div>
-  </div>
-</div>
-
-<script src="js/config.js?v=43"></script>
+<main id="app"></main>
+<div id="msg" class="msg" hidden role="status"></div>
 <script>
-const FN_URL = SUPABASE_URL + '/functions/v1/koordinator-action';
-let cred = null;   // { whatsapp, pin } hanya di memori halaman ini; hilang saat ditutup
-let data = null;
+const API = 'https://lzcvykadtpqiqaebmmbh.supabase.co/functions/v1/koordinator-action';
+const app = document.getElementById('app');
+let cred = null, D = null, editId = null;
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-const show = (v) => ['login', 'terms', 'app'].forEach(x => $('v-' + x).classList.toggle('hidden', x !== v));
-
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = iso => new Date(iso).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
+function toast(t, err) {
+  const m = document.getElementById('msg');
+  m.textContent = t; m.className = 'msg' + (err ? ' e' : ''); m.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => m.hidden = true, 4500);
+}
 async function call(action, extra = {}) {
-  const res = await fetch(FN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-    body: JSON.stringify({ action, whatsapp: cred.whatsapp, pin: cred.pin, ...extra }),
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) { const e = new Error(j.error || 'Gagal (' + res.status + ')'); e.code = j.code; e.status = res.status; throw e; }
+  const r = await fetch(API, {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({whatsapp: cred.wa, pin: cred.pin, action, ...extra})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || 'Gagal terhubung. Coba lagi.'); e.code = j.code; e.status = r.status; throw e; }
   return j;
 }
-
-async function login() {
-  const wa = $('l-wa').value.trim(), pin = $('l-pin').value.trim();
-  $('l-err').textContent = '';
-  if (!wa || !/^\d{6}$/.test(pin)) { $('l-err').textContent = 'Isi nomor WhatsApp dan PIN 6 digit.'; return; }
-  $('l-btn').disabled = true;
-  cred = { whatsapp: wa, pin };
-  try {
-    data = await call('overview');
-    $('l-pin').value = '';
-    render();
-  } catch (e) { cred = null; $('l-err').textContent = e.message; }
-  $('l-btn').disabled = false;
+async function run(fn, okText) {
+  try { const r = await fn(); if (okText) toast(okText); return r; }
+  catch (e) { toast(e.message, true); return null; }
+}
+async function load() {
+  try { D = await call('overview'); render(); }
+  catch (e) { if (e.status === 401 || e.status === 429) { cred = null; sessionStorage.removeItem('kc'); } toast(e.message, true); render(); }
 }
 
-function logout() { cred = null; data = null; $('l-wa').value = ''; show('login'); }
+function login() {
+  app.innerHTML = `<h1>Masuk koordinator</h1><p class="mu">Gunakan nomor WhatsApp dan PIN 6 digit dari admin JajanDekat.</p>
+  <form class="card" id="lf">
+    <label for="wa">Nomor WhatsApp</label><input id="wa" type="tel" inputmode="numeric" autocomplete="username" placeholder="081234567890" required>
+    <label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" required>
+    <div class="row"><button class="p" type="submit">Masuk</button></div>
+  </form>`;
+  document.getElementById('lf').onsubmit = async ev => {
+    ev.preventDefault();
+    cred = {wa: document.getElementById('wa').value.trim(), pin: document.getElementById('pin').value.trim()};
+    sessionStorage.setItem('kc', JSON.stringify(cred));
+    await load();
+  };
+}
 
-async function acceptTerms() {
-  if (!$('t-ok').checked) { $('t-err').textContent = 'Centang persetujuan dulu.'; return; }
-  try { await call('accept_terms'); data = await call('overview'); render(); }
-  catch (e) { $('t-err').textContent = e.message; }
+function terms() {
+  app.innerHTML = `<h1>Ketentuan koordinator</h1><div class="card">
+  <p>Sebelum mengelola grup, baca dan setujui hal berikut:</p>
+  <ul class="t">
+    <li>Kamu hanya mendaftarkan ojek yang sendiri setuju nama dan nomor WhatsApp-nya ditampilkan ke pembeli.</li>
+    <li>Kamu mencatat cara persetujuan itu diberikan, misalnya lewat chat WhatsApp.</li>
+    <li>Ojek baru tampil ke pembeli setelah diperiksa admin JajanDekat.</li>
+    <li>Admin dapat menangguhkan grup atau ojek yang dilaporkan bermasalah.</li>
+    <li>PIN bersifat rahasia dan tidak dibagikan ke orang lain.</li>
+  </ul>
+  <div class="row"><button class="p" id="ok">Saya setuju</button><button id="out">Keluar</button></div></div>`;
+  document.getElementById('ok').onclick = async () => { if (await run(() => call('accept_terms'))) load(); };
+  document.getElementById('out').onclick = logout;
+}
+
+function logout() { cred = null; D = null; sessionStorage.removeItem('kc'); login(); }
+
+const gStatus = {pending:['Menunggu pemeriksaan admin','w'], verified:['Terverifikasi',''], suspended:['Ditangguhkan admin','e']};
+function dStatus(d) {
+  if (d.status === 'verified') return ['Tampil ke pembeli', ''];
+  if (d.status === 'pending') return ['Menunggu admin', 'w'];
+  return d.suspended_by === 'koordinator' ? ['Disembunyikan', 'w'] : ['Ditangguhkan admin', 'e'];
 }
 
 function render() {
-  if (!data.coordinator.terms_accepted) { show('terms'); return; }
-  show('app');
-  const g = data.group;
-  $('a-hi').textContent = 'Halo, ' + data.coordinator.name;
-  const vs = { pending: ['b-warn', 'Menunggu persetujuan admin'], verified: ['b-ok', 'Disetujui'], suspended: ['b-bad', 'Ditangguhkan admin'] }[g.verification_status] || ['b-mute', g.verification_status];
-  $('a-group').innerHTML = `
-    <div class="top"><b>💬 ${esc(g.name)}</b><span class="badge ${vs[0]}">${vs[1]}</span></div>
-    <div class="small" style="margin-top:6px;">${g.verification_status === 'verified' ? (g.active ? '👀 Grup tampil ke pembeli.' : '🙈 Grup dinonaktifkan, tidak tampil.') : 'Grup dan ojek belum tampil ke pembeli.'} · ${data.drivers.length}/${g.max_drivers} ojek</div>
-    <label>Tautan grup WhatsApp<input id="g-link" type="url" value="${esc(g.wa_link)}"></label>
-    <label>Area layanan<input id="g-area" type="text" maxlength="120" value="${esc(g.service_area || '')}" placeholder="Contoh: Perum Griya Asri RW 05"></label>
-    <div id="g-err" class="err"></div>
-    <div class="row">
-      <button class="btn" onclick="saveGroup()">Simpan</button>
-      <button class="btn ghost" onclick="toggleGroup(${g.active ? 'false' : 'true'})">${g.active ? 'Nonaktifkan grup' : 'Aktifkan grup'}</button>
-    </div>`;
+  if (!cred) return login();
+  if (!D) return app.innerHTML = '<p class="mu">Memuat…</p>';
+  if (!D.coordinator.terms_accepted) return terms();
+  const g = D.group, gs = gStatus[g.verification_status] || [g.verification_status, 'w'];
+  const locked = g.verification_status === 'suspended';
+  const open = D.reports.filter(r => r.status !== 'selesai');
+  app.innerHTML = `
+  <div class="top"><h1>Halo, ${esc(D.coordinator.name)}</h1><button id="out">Keluar</button></div>
 
-  $('a-drivers').innerHTML = data.drivers.length ? data.drivers.map(d => {
-    const st = d.status === 'verified' ? ['b-ok', 'Tampil'] : d.status === 'suspended' ? ['b-bad', d.suspended_by === 'admin' ? 'Ditangguhkan admin' : 'Disembunyikan'] : ['b-warn', 'Menunggu admin'];
-    const lockedByAdmin = d.status === 'suspended' && d.suspended_by === 'admin';
-    return `<div class="card">
-      <div class="top"><b>🛵 ${esc(d.name)}</b><span class="badge ${st[0]}">${st[1]}</span></div>
-      <div class="small">📱 ${esc(d.whatsapp)}${d.plate_number ? ' · ' + esc(d.plate_number) : ''}</div>
-      <div class="small">📝 ${esc(d.consent_note || '—')} (${d.consent_show_at ? fmt(d.consent_show_at) : 'belum'})</div>
+  <section class="card"><div class="top"><h2>${esc(g.name)}</h2><span class="tag ${gs[1]}">${gs[0]}</span></div>
+    ${g.verification_status === 'pending' ? '<p class="mu">Grup belum tampil ke pembeli sampai admin memeriksanya.</p>' : ''}
+    ${locked ? '<p class="mu">Hubungi admin JajanDekat untuk mengaktifkan lagi.</p>' : ''}
+    <form id="gf">
+      <label for="gn">Nama grup</label><input id="gn" type="text" maxlength="80" value="${esc(g.name)}">
+      <label for="gl">Tautan grup WhatsApp</label><input id="gl" type="url" value="${esc(g.wa_link)}">
+      <p class="mu">Mengganti tautan membuat grup diperiksa ulang admin.</p>
+      <label for="ga">Area layanan</label><input id="ga" type="text" maxlength="120" value="${esc(g.service_area)}" placeholder="Contoh: Sangatta Selatan dan sekitarnya">
+      <label class="chk"><input id="gact" type="checkbox" ${g.active ? 'checked' : ''}>Grup aktif</label>
+      <button class="p" type="submit" ${locked ? 'disabled' : ''}>Simpan grup</button>
+    </form></section>
+
+  <section class="card"><h2>Ojek di grup (${D.drivers.length}/${g.max_drivers})</h2>
+    ${D.drivers.length ? D.drivers.map(d => { const s = dStatus(d); const mine = d.status !== 'suspended' || d.suspended_by === 'koordinator'; return `
+    <div class="it"><div class="top"><strong>${esc(d.name)}</strong><span class="tag ${s[1]}">${s[0]}</span></div>
+      <div class="mu">${esc(d.whatsapp)}${d.plate_number ? ' · ' + esc(d.plate_number) : ''}<br>Persetujuan: ${esc(d.consent_note || '-')} (${fmt(d.created_at)})</div>
       <div class="row">
-        ${lockedByAdmin ? '' : `<button class="btn ghost" onclick="hideDriver('${d.id}', ${d.status === 'verified' ? 'true' : 'false'})">${d.status === 'verified' ? 'Sembunyikan' : 'Tampilkan lagi'}</button>`}
-        <button class="btn danger" onclick="delDriver('${d.id}')">Hapus</button>
-      </div></div>`;
-  }).join('') : '<div class="small">Belum ada ojek. Tambahkan di bawah.</div>';
+        <button data-a="edit" data-id="${d.id}" ${locked ? 'disabled' : ''}>Ubah</button>
+        ${d.status === 'suspended' ? `<button data-a="show" data-id="${d.id}" ${!mine || locked ? 'disabled' : ''}>Tampilkan lagi</button>` : `<button data-a="hide" data-id="${d.id}" ${locked ? 'disabled' : ''}>Sembunyikan</button>`}
+        <button class="d" data-a="del" data-id="${d.id}" ${locked ? 'disabled' : ''}>Hapus</button>
+      </div></div>`; }).join('') : '<p class="mu">Belum ada ojek. Tambahkan yang pertama di bawah.</p>'}
+  </section>
 
-  const nameOf = (r) => r.ojek_id ? '🛵 ' + esc((data.drivers.find(d => d.id === r.ojek_id) || {}).name || 'ojek') : '💬 Grup';
-  const REASON = { penipuan: 'Penipuan', link_mati: 'Tautan mati', spam: 'Spam', tidak_responsif: 'Tidak responsif', lainnya: 'Lainnya' };
-  $('a-reports').innerHTML = data.reports.length ? data.reports.map(r => `
-    <div class="card" style="${r.status === 'baru' ? 'border-color:var(--bad);' : ''}">
-      <div class="top"><b>${nameOf(r)}</b><span class="badge ${r.status === 'baru' ? 'b-bad' : r.status === 'diproses' ? 'b-warn' : 'b-ok'}">${esc(r.status)}</span></div>
-      <div style="color:var(--brand);font-weight:600;font-size:13px;">${esc(REASON[r.reason] || r.reason)}</div>
-      ${r.detail ? `<div class="small" style="white-space:pre-wrap;">${esc(r.detail)}</div>` : ''}
-      <div class="small">${fmt(r.created_at)}</div>
-      ${r.status !== 'selesai' ? `<div class="row">${r.status === 'baru' ? `<button class="btn ghost" onclick="setReport('${r.id}','diproses')">Diproses</button>` : ''}<button class="btn ghost" onclick="setReport('${r.id}','selesai')">Selesai</button></div>` : ''}
-    </div>`).join('') : '<div class="small">Belum ada laporan. 👍</div>';
+  <section class="card"><h2>${editId ? 'Ubah ojek' : 'Tambah ojek'}</h2>
+    <form id="df">
+      <label for="dn">Nama ojek</label><input id="dn" type="text" maxlength="80" required>
+      <label for="dw">Nomor WhatsApp ojek</label><input id="dw" type="tel" inputmode="numeric" placeholder="081234567890" required>
+      <label for="dp">Plat motor (boleh kosong)</label><input id="dp" type="text" maxlength="15">
+      <label class="chk"><input id="dc" type="checkbox">Ojek ini sendiri setuju nama dan nomornya tampil ke pembeli.</label>
+      <label for="dnote">Catatan persetujuan</label><input id="dnote" type="text" maxlength="200" placeholder="Contoh: setuju lewat chat WA 29/9">
+      <div class="row"><button class="p" type="submit" ${locked ? 'disabled' : ''}>${editId ? 'Simpan perubahan' : 'Tambah ojek'}</button>${editId ? '<button type="button" id="cx">Batal</button>' : ''}</div>
+    </form></section>
+
+  <section class="card"><h2>Laporan (${open.length} belum selesai)</h2>
+    ${D.reports.length ? D.reports.map(r => `<div class="it"><div class="top"><strong>${esc(r.reason.replace('_', ' '))}</strong><span class="tag ${r.status === 'selesai' ? '' : 'w'}">${esc(r.status)}</span></div>
+      <div class="mu">${fmt(r.created_at)}${r.detail ? '<br>' + esc(r.detail) : ''}</div>
+      ${r.status !== 'selesai' ? `<div class="row">${r.status === 'baru' ? `<button data-a="rep" data-st="diproses" data-id="${r.id}">Sedang diproses</button>` : ''}<button data-a="rep" data-st="selesai" data-id="${r.id}">Tandai selesai</button></div>` : ''}</div>`).join('') : '<p class="mu">Belum ada laporan untuk grupmu.</p>'}
+  </section>
+
+  <section class="card"><h2>Ganti PIN</h2>
+    <form id="pf"><label for="np">PIN baru (6 digit)</label><input id="np" type="password" inputmode="numeric" maxlength="6" required>
+    <div class="row"><button type="submit">Ganti PIN</button></div></form></section>`;
+
+  document.getElementById('out').onclick = logout;
+  document.getElementById('gf').onsubmit = async ev => {
+    ev.preventDefault();
+    const r = await run(() => call('update_group', {group: {name: gn.value, wa_link: gl.value, service_area: ga.value, active: gact.checked}}));
+    if (r) { toast(r.needs_reverify ? 'Tersimpan. Tautan baru akan diperiksa ulang admin.' : 'Grup tersimpan.'); load(); }
+  };
+  const df = document.getElementById('df');
+  if (editId) { const d = D.drivers.find(x => x.id === editId); if (d) { dn.value = d.name; dw.value = d.whatsapp; dp.value = d.plate_number || ''; } }
+  df.onsubmit = async ev => {
+    ev.preventDefault();
+    const driver = {name: dn.value, whatsapp: dw.value, plate_number: dp.value, consent_confirmed: dc.checked, consent_note: dnote.value};
+    if (editId) { driver.id = editId; const cur = D.drivers.find(x => x.id === editId); if (cur && dw.value.replace(/\D/g, '').replace(/^0/, '62') === cur.whatsapp) { delete driver.consent_confirmed; delete driver.consent_note; } }
+    if (await run(() => call('save_driver', {driver}), editId ? 'Perubahan tersimpan.' : 'Ojek ditambahkan. Menunggu pemeriksaan admin.')) { editId = null; load(); }
+  };
+  const cx = document.getElementById('cx'); if (cx) cx.onclick = () => { editId = null; render(); };
+  document.getElementById('pf').onsubmit = async ev => {
+    ev.preventDefault();
+    const np = document.getElementById('np').value.trim();
+    if (await run(() => call('change_pin', {new_pin: np}), 'PIN diganti.')) { cred.pin = np; sessionStorage.setItem('kc', JSON.stringify(cred)); ev.target.reset(); }
+  };
+  app.onclick = async ev => {
+    const b = ev.target.closest('button[data-a]'); if (!b) return;
+    const id = b.dataset.id, a = b.dataset.a;
+    if (a === 'edit') { editId = id; render(); document.getElementById('df').scrollIntoView({behavior: 'smooth'}); }
+    else if (a === 'hide' || a === 'show') { if (await run(() => call('set_driver_hidden', {ojek_id: id, hidden: a === 'hide'}), a === 'hide' ? 'Ojek disembunyikan.' : 'Ojek ditampilkan lagi.')) load(); }
+    else if (a === 'del') { if (confirm('Hapus ojek ini dari grup? Tindakan ini tidak bisa dibatalkan.') && await run(() => call('delete_driver', {ojek_id: id}), 'Ojek dihapus.')) load(); }
+    else if (a === 'rep') { if (await run(() => call('update_report_status', {report_id: id, status: b.dataset.st}), 'Status laporan diperbarui.')) load(); }
+  };
 }
 
-async function refresh() { data = await call('overview'); render(); }
-async function act(fn, errEl) {
-  try { await fn(); await refresh(); if (errEl) errEl.textContent = ''; }
-  catch (e) {
-    if (e.status === 401) { logout(); $('l-err').textContent = e.message; return; }
-    if (e.code === 'terms_required') { await refresh(); return; }
-    (errEl || { set textContent(v) { alert(v); } }).textContent = e.message;
-  }
-}
-
-function saveGroup() {
-  const link = $('g-link').value.trim();
-  if (!/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+(\?[A-Za-z0-9=&_.-]*)?$/.test(link)) { $('g-err').textContent = 'Tautan harus berbentuk https://chat.whatsapp.com/kode-undangan'; return; }
-  const area = $('g-area').value.trim();
-  return act(() => call('update_group', { group: { wa_link: link, service_area: area } }), $('g-err'));
-}
-function toggleGroup(active) {
-  if (!active && !confirm('Nonaktifkan grup? Grup tidak akan tampil ke pembeli.')) return;
-  return act(() => call('update_group', { group: { active } }));
-}
-async function addDriver() {
-  const err = $('d-err'); err.textContent = '';
-  const driver = { name: $('d-name').value.trim(), whatsapp: $('d-wa').value.trim(), plate_number: $('d-plate').value.trim(), consent_note: $('d-note').value.trim(), consent_confirmed: $('d-consent').checked };
-  if (!driver.name || !driver.whatsapp) { err.textContent = 'Nama dan nomor WhatsApp wajib diisi.'; return; }
-  if (!driver.consent_confirmed) { err.textContent = 'Centang bahwa ojek ini sendiri sudah setuju ditampilkan.'; return; }
-  if (!driver.consent_note) { err.textContent = 'Isi catatan persetujuan.'; return; }
-  await act(async () => {
-    await call('save_driver', { driver });
-    ['d-name', 'd-wa', 'd-plate', 'd-note'].forEach(id => $(id).value = '');
-    $('d-consent').checked = false;
-  }, err);
-}
-function hideDriver(id, hidden) { return act(() => call('set_driver_hidden', { ojek_id: id, hidden })); }
-function delDriver(id) { if (confirm('Hapus ojek ini dari aplikasi? Tidak bisa dibatalkan.')) return act(() => call('delete_driver', { ojek_id: id })); }
-function setReport(id, status) { return act(() => call('update_report_status', { report_id: id, status })); }
-async function changePin() {
-  const np = $('p-new').value.trim(), m = $('p-msg');
-  m.className = 'err'; m.textContent = '';
-  if (!/^\d{6}$/.test(np)) { m.textContent = 'PIN baru harus 6 digit angka.'; return; }
-  try {
-    await call('change_pin', { new_pin: np });
-    cred.pin = np; $('p-new').value = '';
-    m.className = 'ok'; m.textContent = 'PIN berhasil diganti.';
-  } catch (e) { m.textContent = e.message; }
-}
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && !$('v-login').classList.contains('hidden')) login(); });
+try { cred = JSON.parse(sessionStorage.getItem('kc') || 'null'); } catch (_) { cred = null; }
+cred ? load() : login();
 </script>
 </body>
 </html>
