@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v6';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -30,6 +30,7 @@ const APP_SHELL = [
   '/icon-512.png',
   '/icon-maskable-192.png',
   '/icon-maskable-512.png',
+  // Suara
   '/pesanan-masuk.mp3',
   '/pesan-chat.mp3',
   '/pedagang-buka.mp3',
@@ -43,6 +44,30 @@ const APP_SHELL = [
   '/icons/onboarding-point.png',
   '/icons/onboarding-thumbsup.png',
   '/icons/ojek-mascot.png',
+  // Halaman & portal koordinator ojek
+  '/privacy.html',
+  '/terms.html',
+  '/koordinator.html',
+  // Ikon browser/iOS yang dirujuk index.html
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/apple-touch-icon.png',
+  // Gambar statis yang dirujuk langsung di app.js
+  '/icons/maskot.png',
+  '/icons/maskot-daftar.png',
+  '/icons/maskot-jualan.png',
+  '/icons/avatar-pembeli.png',
+  '/icons/banner-pedagang.png',
+  '/icons/icon_chat_wa.png',
+  '/icons/icon_check.png',
+  '/icons/icon_map.png',
+  '/icons/bakso.png',
+  '/icons/lainnya.png',
+  '/icons/kat-berat.webp',
+  '/icons/kat-fast.webp',
+  '/icons/kat-jajanan.webp',
+  '/icons/kat-manis.webp',
+  '/icons/kat-minuman.webp',
 ];
 
 // Library pihak ketiga (CDN) yang dipakai app — kita cache runtime
@@ -104,19 +129,26 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // 1) Navigasi halaman (buka app / refresh) -> network-first,
-  //    fallback ke index.html dari cache, fallback terakhir offline.html.
+  // 1) Navigasi halaman (buka app / refresh) -> network-first.
+  //    Hanya halaman utama ('/' atau /index.html) yang disimpan sebagai app shell.
+  //    Halaman lain (privacy.html, terms.html, koordinator.html) tidak boleh menimpa
+  //    cache /index.html, kalau tidak, saat offline yang muncul bukan app.
   if (request.mode === 'navigate') {
+    const isShell = url.pathname === '/' || url.pathname === '/index.html';
     event.respondWith(
       (async () => {
         try {
           const networkResp = await fetch(request);
-          const cache = await caches.open(STATIC_CACHE);
-          cache.put('/index.html', networkResp.clone());
+          if (networkResp && networkResp.ok) {
+            const cache = await caches.open(STATIC_CACHE);
+            cache.put(isShell ? '/index.html' : request, networkResp.clone());
+          }
           return networkResp;
         } catch (err) {
-          const cachedShell = await matchIgnoringVersion(new Request('/index.html'));
-          if (cachedShell) return cachedShell;
+          const cached = isShell
+            ? await matchIgnoringVersion(new Request('/index.html'))
+            : await matchIgnoringVersion(request);
+          if (cached) return cached;
           const cache = await caches.open(STATIC_CACHE);
           return cache.match(offlineFallbackPage);
         }

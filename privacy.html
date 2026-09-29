@@ -4,200 +4,157 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kebijakan Privasi — JajanDekat</title>
-<meta name="description" content="Kebijakan Privasi JajanDekat: data apa yang kami kumpulkan, untuk apa, dan bagaimana Anda mengendalikannya.">
-<meta name="theme-color" content="#FF6B4A">
+<meta name="description" content="Kebijakan Privasi JajanDekat: data apa yang kami kumpulkan, untuk apa, siapa yang bisa melihat, dan bagaimana cara menghapusnya.">
 <link rel="canonical" href="https://jajandekat.my.id/privacy.html">
+<meta name="theme-color" content="#FF6B4A">
 <link rel="icon" href="icon-192.png">
 <style>
-  :root{ --bg:#FFF8F3; --card:#fff; --text:#2A2118; --soft:#5F5447; --line:#EADFD3; --brand:#FF6B4A; --brand-dim:#FFE9E1; --mark:#FFF1A8; }
+  :root{
+    --bg:#FAF7F2; --surface:#FFFFFF; --stroke:#F0E9DF; --text:#2B2620; --dim:#6F665A; --brand:#FF6B4A; --soft:#FFF1EC;
+  }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#17130F; --card:#221C16; --text:#F4ECE4; --soft:#BDB0A2; --line:#3A3027; --brand:#FF8466; --brand-dim:#3A2219; --mark:#5A4B10; }
+    :root{ --bg:#1B1815; --surface:#26221E; --stroke:#3A342E; --text:#F4EEE6; --dim:#B5AB9C; --soft:#33241F; }
   }
   *{ box-sizing:border-box; }
-  html{ scroll-behavior:smooth; }
-  body{ margin:0; background:var(--bg); color:var(--text); font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-  header{ background:linear-gradient(135deg,#FF8A5B,#FF6B4A); color:#fff; padding:22px 18px 26px; }
-  .wrap{ max-width:760px; margin:0 auto; padding:0 18px; }
-  header .wrap{ padding:0; }
-  header a.back{ color:#fff; text-decoration:none; font-weight:600; font-size:14px; opacity:.95; }
-  header h1{ margin:10px 0 4px; font-size:26px; line-height:1.25; }
-  header p{ margin:0; font-size:14px; opacity:.95; }
-  main{ padding-top:18px; padding-bottom:48px; }
-  .summary{ background:var(--brand-dim); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin:0 0 18px; }
-  .summary b.t{ display:block; margin-bottom:6px; }
-  .summary ul{ margin:0; padding-left:20px; }
-  nav.toc{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 16px; margin-bottom:8px; }
-  nav.toc b{ display:block; margin-bottom:4px; }
-  nav.toc ol{ margin:0; padding-left:22px; columns:1; font-size:15px; }
-  nav.toc a{ color:var(--brand); text-decoration:none; }
-  h2{ font-size:19px; margin:30px 0 8px; scroll-margin-top:12px; }
-  h2 span.n{ color:var(--brand); margin-right:6px; }
-  p, li{ color:var(--text); }
-  ul{ padding-left:22px; margin:8px 0; }
-  li{ margin:5px 0; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:15px; line-height:1.65;
+  }
+  .wrap{ max-width:720px; margin:0 auto; padding:20px 18px 56px; }
+  .back{ display:inline-block; margin-bottom:14px; color:var(--brand); text-decoration:none; font-weight:600; font-size:14px; }
+  h1{ font-size:24px; line-height:1.25; margin:0 0 6px; }
+  .updated{ color:var(--dim); font-size:13px; margin-bottom:18px; }
+  h2{ font-size:17px; margin:28px 0 8px; padding-top:4px; }
+  p{ margin:0 0 10px; }
+  ul{ margin:0 0 10px; padding-left:20px; }
+  li{ margin-bottom:5px; }
   a{ color:var(--brand); }
-  mark{ background:var(--mark); color:inherit; padding:0 3px; border-radius:4px; }
-  .note{ font-size:14px; color:var(--soft); }
-  table{ width:100%; border-collapse:collapse; font-size:14.5px; margin:8px 0; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:block; overflow-x:auto; }
-  th,td{ text-align:left; vertical-align:top; padding:9px 12px; border-bottom:1px solid var(--line); min-width:130px; }
-  th{ background:var(--brand-dim); }
-  footer{ border-top:1px solid var(--line); padding:18px 0 40px; font-size:14px; color:var(--soft); }
+  .card{ background:var(--surface); border:1px solid var(--stroke); border-radius:14px; padding:14px 16px; margin:10px 0 14px; }
+  .lead{ background:var(--soft); border:1px solid var(--stroke); border-radius:14px; padding:14px 16px; margin-bottom:8px; }
+  .lead b{ color:var(--brand); }
+  .scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; min-width:520px; }
+  th,td{ text-align:left; vertical-align:top; padding:8px 10px; border-bottom:1px solid var(--stroke); }
+  th{ color:var(--dim); font-weight:600; font-size:12.5px; }
+  footer{ margin-top:30px; color:var(--dim); font-size:13px; }
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap">
-    <a class="back" href="./">← Kembali ke JajanDekat</a>
-    <h1>Kebijakan Privasi</h1>
-    <p>Versi 2 · berlaku sejak 21 September 2026</p>
-  </div>
-</header>
+<div class="wrap">
+  <a class="back" href="/">← Kembali ke JajanDekat</a>
 
-<main class="wrap">
-  <div class="summary">
-    <b class="t">Ringkasnya</b>
-    <ul>
-      <li>Pembeli tidak perlu akun, nama, atau email. Kami memakai ID perangkat acak, bukan identitas Anda.</li>
-      <li>Lokasi pembeli dipakai di perangkat untuk jarak dan peta. Kami tidak menyimpan titik koordinat pembeli.</li>
-      <li>Pedagang: lokasi saat "Sedang Jualan" tampil ke publik. Foto KTP hanya untuk verifikasi dan disimpan privat.</li>
-      <li>Kami tidak menjual data dan tidak memasang iklan pelacak.</li>
-    </ul>
+  <h1>Kebijakan Privasi</h1>
+  <div class="updated">Terakhir diperbarui: 29 September 2026</div>
+
+  <div class="lead">
+    <b>Ringkasnya:</b> pembeli bisa memakai JajanDekat tanpa akun, nama, atau nomor telepon. Kami tidak menjual data pribadi. Lokasi hanya dipakai kalau kamu mengizinkan. Foto KTP pedagang (kalau mengajukan verifikasi) dihapus setelah pemeriksaan selesai.
   </div>
 
-  <nav class="toc" aria-label="Daftar isi">
-    <b>Isi</b>
-    <ol>
-      <li><a href="#siapa">Siapa kami</a></li>
-      <li><a href="#data">Data yang kami kumpulkan</a></li>
-      <li><a href="#tujuan">Untuk apa data dipakai</a></li>
-      <li><a href="#bagi">Dengan siapa data dibagikan</a></li>
-      <li><a href="#simpan">Berapa lama data disimpan</a></li>
-      <li><a href="#aman">Keamanan</a></li>
-      <li><a href="#hak">Hak Anda</a></li>
-      <li><a href="#anak">Anak-anak</a></li>
-      <li><a href="#ubah">Perubahan kebijakan</a></li>
-      <li><a href="#kontak">Kontak</a></li>
-    </ol>
-  </nav>
+  <h2>1. Siapa kami</h2>
+  <p>JajanDekat (<a href="https://jajandekat.my.id/">jajandekat.my.id</a>) adalah layanan yang membantu pembeli menemukan pedagang keliling yang sedang berjualan di sekitarnya. Kebijakan ini menjelaskan data apa yang diproses saat kamu memakai situs dan aplikasi web JajanDekat, sebagai pembeli, pedagang, maupun ojek.</p>
+  <p>Pertanyaan atau permintaan terkait data bisa dikirim lewat <a href="https://wa.me/6285245174728" rel="noopener">WhatsApp admin JajanDekat</a>.</p>
 
-  <h2 id="siapa"><span class="n">1.</span>Siapa kami</h2>
-  <p>JajanDekat dikelola oleh <mark>[isi nama pengelola / badan usaha]</mark> ("kami"), pengendali data untuk data yang dijelaskan di sini. Kebijakan ini berlaku bersama <a href="terms.html">Ketentuan Layanan</a> dan mengacu pada Undang-Undang Pelindungan Data Pribadi (UU No. 27 Tahun 2022).</p>
+  <h2>2. Data yang kami proses</h2>
 
-  <h2 id="data"><span class="n">2.</span>Data yang kami kumpulkan</h2>
+  <h3 style="font-size:15px;margin:14px 0 6px;">Pembeli (tanpa akun)</h3>
+  <div class="card scroll">
+    <table>
+      <thead><tr><th>Data</th><th>Untuk apa</th><th>Disimpan di</th></tr></thead>
+      <tbody>
+        <tr><td>ID perangkat acak (dibuat otomatis, bukan nomor HP atau IMEI)</td><td>Mengenali perangkat yang sama untuk fitur ikuti, ulasan, laporan, dan notifikasi</td><td>HP kamu dan server</td></tr>
+        <tr><td>Lokasi (hanya bila kamu mengizinkan)</td><td>Mengurutkan pedagang terdekat dan menghitung jarak. Perhitungan jarak dilakukan di perangkatmu</td><td>Perangkatmu</td></tr>
+        <tr><td>Wilayah (kota/kecamatan) hasil deteksi lokasi</td><td>Menampilkan pedagang, pengumuman, dan ojek di wilayahmu. Koordinat dikirim ke layanan geocoding OpenStreetMap (Nominatim) untuk mendapatkan nama wilayah</td><td>Perangkatmu (cache), dan server sebagai wilayah bila berlangganan notifikasi</td></tr>
+        <tr><td>Pedagang yang kamu ikuti</td><td>Mengirim notifikasi saat pedagang buka atau promo</td><td>Server</td></tr>
+        <tr><td>Ulasan dan rating (bintang, komentar)</td><td>Rating pedagang. Komentar dan rating ditampilkan sesuai aturan moderasi</td><td>Server</td></tr>
+        <tr><td>Laporan (pedagang, ojek, atau grup)</td><td>Ditinjau admin untuk menjaga keamanan</td><td>Server</td></tr>
+        <tr><td>Langganan notifikasi (bila kamu izinkan)</td><td>Mengirim notifikasi lewat layanan push milik browser</td><td>Server</td></tr>
+        <tr><td>Statistik penggunaan: buka aplikasi, ketuk tombol ojek, buka WhatsApp ojek atau grup, buka dari notifikasi, dan interaksi dengan profil pedagang</td><td>Memahami fitur mana yang dipakai. ID perangkat diacak (di-hash) di server, dan kami tidak menyimpan koordinat pada catatan ini</td><td>Server</td></tr>
+        <tr><td>Nama panggilan (opsional), penanda "sudah lihat panduan", dan preferensi tampilan</td><td>Kenyamanan pemakaian</td><td>Hanya di perangkatmu</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-  <p><b>A. Pembeli dan pengunjung</b></p>
-  <table>
-    <tr><th>Data</th><th>Keterangan</th></tr>
-    <tr><td>ID perangkat acak</td><td>Dibuat otomatis dan disimpan di browser Anda. Dipakai untuk fitur Ikuti toko, ulasan, laporan, langganan notifikasi, chat dalam aplikasi (bila diaktifkan), dan membatasi pencatatan aktivitas. Bukan nama atau nomor telepon.</td></tr>
-    <tr><td>Lokasi (bila Anda izinkan)</td><td>Dipakai di perangkat untuk menghitung jarak dan memusatkan peta. Kami tidak menyimpan koordinat pembeli di server. Untuk mengetahui wilayah Anda, koordinat dikirim ke layanan pencarian alamat OpenStreetMap (Nominatim). Yang kami simpan hanya wilayahnya (misalnya kecamatan), itu pun hanya bersama langganan notifikasi dan cache di browser.</td></tr>
-    <tr><td>Toko yang diikuti</td><td>Pasangan ID perangkat dan toko, plus penanda bila Anda ikut lewat tautan atau QR referral.</td></tr>
-    <tr><td>Ulasan dan rating</td><td>Rating, komentar, waktu, dan ID perangkat. Pedagang hanya melihat rating, komentar, dan waktu, tanpa identitas pengulas.</td></tr>
-    <tr><td>Laporan</td><td>Alasan, keterangan tambahan, dan ID perangkat pelapor. Hanya dapat dilihat admin.</td></tr>
-    <tr><td>Langganan notifikasi</td><td>Alamat langganan dan kunci enkripsi dari browser Anda, plus wilayah. Diberikan hanya bila Anda mengizinkan notifikasi.</td></tr>
-    <tr><td>Aktivitas ke toko</td><td>Saat Anda membuka halaman toko atau mengetuk WhatsApp atau Rute (dan chat dalam aplikasi bila diaktifkan), kami mencatat jenis ketukan, toko, waktu, dan hasil samaran (hash) dari ID perangkat. Tidak ada lokasi dan tidak ada isi pesan. Pedagang hanya melihat jumlah total 7 hari terakhir. Satu perangkat dihitung sekali per toko dalam selang waktu tertentu.</td></tr>
-    <tr><td>Tayangan dan klik banner</td><td>Jumlah tayangan dan klik banner secara agregat, tanpa identitas.</td></tr>
-    <tr><td>Chat dalam aplikasi</td><td>Fitur ini saat ini dinonaktifkan; komunikasi dilakukan lewat WhatsApp. Bila diaktifkan kembali (khusus pedagang Premium), isi pesan dan ID perangkat pembeli disimpan di server dan hanya dapat dilihat pembeli dan pedagang yang bersangkutan, serta admin bila diperlukan untuk moderasi.</td></tr>
-  </table>
-
-  <p><b>B. Pedagang</b></p>
-  <table>
-    <tr><th>Data</th><th>Keterangan</th></tr>
-    <tr><td>Profil toko</td><td>Nama usaha, kategori, tag, menu, jam dan hari buka, catatan lokasi, teks promo, dan foto toko atau dagangan. <b>Tampil ke publik.</b></td></tr>
-    <tr><td>Nomor WhatsApp</td><td>Tampil ke publik sebagai tombol WhatsApp, kecuali pedagang memilih menyembunyikannya di pengaturan toko (nomor lalu tidak dibuka ke publik dan hanya dapat dilihat admin). Nomor tetap tersimpan sebagai penanda akun. Pedagang yang menampilkan nomor memahami bahwa nomor tersebut dapat dilihat dan dihubungi siapa saja.</td></tr>
-    <tr><td>PIN 6 angka</td><td>Dipakai untuk aksi penting (mulai jualan, verifikasi, membuka ulasan). Disimpan dalam bentuk terenkripsi satu arah (hash), sehingga tidak dapat dibaca kembali dan tidak pernah ditampilkan. Jangan memakai PIN yang sama dengan akun penting lain.</td></tr>
-    <tr><td>Lokasi saat Sedang Jualan</td><td>Titik GPS diperbarui sekitar tiap 5 menit selama aplikasi terbuka dan <b>tampil ke publik</b> saat status aktif. Kami hanya menyimpan titik terbaru, bukan riwayat perjalanan. Saat Anda menekan Selesai Jualan atau waktu jualan habis, titik tersebut dihapus dari sistem.</td></tr>
-    <tr><td>Lokasi mangkal tetap</td><td>Opsional. Tampil ke publik sesuai jam buka.</td></tr>
-    <tr><td>Verifikasi</td><td>Foto KTP (wajib untuk verifikasi), nomor NIB dan nama usaha resmi (opsional). Foto KTP disimpan di penyimpanan privat dan hanya dapat dilihat admin lewat tautan sementara. Tidak tampil ke publik. Pengajuan verifikasi bersifat opsional dan hanya berjalan bila pedagang mencentang persetujuan pada formulir verifikasi.</td></tr>
-    <tr><td>Catatan persetujuan</td><td>Waktu dan versi Ketentuan/Kebijakan yang Anda setujui saat mendaftar dan saat mengajukan verifikasi, sebagai bukti persetujuan.</td></tr>
-    <tr><td>Data teknis akun</td><td>Perangkat pemilik toko, waktu aktivitas terakhir, kode referral, status Premium dan verifikasi, serta pesan galat teknis bila lokasi gagal diperbarui.</td></tr>
-  </table>
-
-  <p><b>C. Otomatis</b></p>
+  <h3 style="font-size:15px;margin:14px 0 6px;">Pedagang</h3>
   <ul>
-    <li><b>Penyimpanan lokal browser:</b> ID perangkat, penanda toko yang Anda kelola, cache wilayah, dan preferensi tampilan (misalnya panduan yang sudah dibaca). Kami tidak memakai cookie iklan atau pelacak pihak ketiga.</li>
-    <li><b>Log teknis</b> (misalnya alamat IP dan jenis browser) dicatat oleh penyedia hosting dan database saat aplikasi diakses, untuk keamanan dan pemeliharaan.</li>
+    <li><b>Data akun:</b> nama usaha, nomor WhatsApp, kategori dan jenis jualan, wilayah, foto, dan PIN. PIN disimpan dalam bentuk ter-hash, bukan teks asli.</li>
+    <li><b>Lokasi jualan:</b> posisi saat kamu menyalakan status berjualan (atau lokasi tetap bila kamu mengaturnya) ditampilkan kepada pembeli agar mereka bisa menemukanmu. Matikan status berjualan untuk berhenti membagikan lokasi.</li>
+    <li><b>Nomor WhatsApp</b> dipakai agar pembeli dapat menghubungimu lewat WhatsApp, sesuai pengaturan tampil yang kamu pilih. Admin juga dapat melihatnya di dashboard untuk keperluan bantuan dan moderasi.</li>
+    <li><b>Verifikasi (opsional):</b> nama bisnis, NIB, foto KTP, serta waktu, titik lokasi, dan ID perangkat saat foto diambil. Data ini hanya dilihat admin untuk memastikan pemilik usaha. Foto KTP disimpan di penyimpanan privat dan <b>dihapus setelah pemeriksaan selesai</b> (disetujui maupun ditolak).</li>
+    <li><b>Catatan persetujuan:</b> versi ketentuan yang kamu setujui dan waktunya, dicatat saat mendaftar.</li>
+    <li><b>Permintaan premium/promo</b> dan riwayat penanganannya oleh admin.</li>
   </ul>
 
-  <h2 id="tujuan"><span class="n">3.</span>Untuk apa data dipakai</h2>
+  <h3 style="font-size:15px;margin:14px 0 6px;">Ojek dan grup ojek</h3>
   <ul>
-    <li>Menampilkan pedagang yang sedang jualan, jarak, dan rute.</li>
-    <li>Menjalankan fitur Ikuti, notifikasi, ulasan, dan laporan.</li>
-    <li>Memverifikasi toko, memoderasi konten, dan mencegah penyalahgunaan (akun palsu, ulasan palsu, spam).</li>
-    <li>Menunjukkan kepada pedagang seberapa sering tokonya dilihat dan diketuk.</li>
-    <li>Menjalankan Premium, promosi, dan referral, serta memperbaiki layanan.</li>
-  </ul>
-  <p>Dasar pemrosesan: persetujuan Anda (izin lokasi dan notifikasi, yang bisa dicabut kapan saja; bagi pedagang, kotak centang saat mendaftar dan saat mengajukan verifikasi), pelaksanaan layanan yang Anda minta, dan kepentingan sah kami menjaga keamanan layanan.</p>
-  <p>Data pedagang yang diperlukan untuk menjalankan akun (nomor WhatsApp, PIN, profil toko) tidak dapat dipisahkan dari akunnya. Bila pedagang menarik persetujuan atas data tersebut, akun akan ditutup dan datanya dihapus.</p>
-
-  <h2 id="bagi"><span class="n">4.</span>Dengan siapa data dibagikan</h2>
-  <p>Kami tidak menjual data. Data dapat diakses pihak berikut sebatas yang perlu:</p>
-  <ul>
-    <li><b>Publik:</b> data profil, lokasi live atau mangkal, dan rating rata-rata pedagang.</li>
-    <li><b>Admin JajanDekat:</b> untuk verifikasi, moderasi laporan, dan dukungan.</li>
-    <li><b>Penyedia database dan hosting</b> (Supabase dan penyedia hosting situs) yang menyimpan data atas nama kami. Server penyedia dapat berada di luar Indonesia; kami memilih penyedia yang menerapkan pelindungan data yang memadai.</li>
-    <li><b>OpenStreetMap:</b> menerima alamat IP Anda saat memuat peta, dan koordinat saat pencarian wilayah.</li>
-    <li><b>WhatsApp dan Google Maps:</b> saat Anda mengetuk tombol WhatsApp atau Rute, Anda berpindah ke layanan tersebut dan berlaku kebijakan privasi mereka.</li>
-    <li><b>Layanan notifikasi browser</b> (misalnya milik Google, Apple, atau Mozilla) untuk mengirim notifikasi ke perangkat Anda.</li>
-    <li><b>Penegak hukum atau instansi berwenang</b> bila diwajibkan oleh hukum.</li>
+    <li>Data ojek (nama, nomor WhatsApp, plat nomor bila ada, foto bila ada, dan wilayah) dimasukkan dan dikelola oleh admin. Ojek <b>hanya ditampilkan ke pembeli setelah terverifikasi dan menyetujui</b> nama serta nomornya ditampilkan.</li>
+    <li>Tautan grup WhatsApp ojek ditampilkan sebagai tautan saja; kami tidak membaca isi grup.</li>
+    <li>Ojek dapat meminta perubahan atau penghapusan datanya kapan saja (lihat bagian Hak kamu).</li>
+    <li>Kami hanya menyediakan tautan. Ongkos, pembayaran, dan kesepakatan dilakukan langsung antara pembeli dan ojek.</li>
   </ul>
 
-  <h2 id="simpan"><span class="n">5.</span>Berapa lama data disimpan</h2>
-  <table>
-    <tr><th>Data</th><th>Lama penyimpanan</th></tr>
-    <tr><td>Catatan aktivitas ke toko</td><td>90 hari, lalu dihapus otomatis setiap hari.</td></tr>
-    <tr><td>Ikuti toko dan langganan notifikasi</td><td>Sampai Anda berhenti mengikuti atau mencabut izin notifikasi.</td></tr>
-    <tr><td>Ulasan dan laporan</td><td>Selama diperlukan untuk moderasi dan selama toko terkait masih ada.</td></tr>
-    <tr><td>Data akun pedagang</td><td>Sampai Anda meminta akun dihapus. Saat itu kami menghapus data akun beserta foto KTP dan foto tokonya dari penyimpanan.</td></tr>
-    <tr><td>Foto KTP dan data verifikasi</td><td>Disimpan privat hanya selama diperlukan untuk verifikasi, lalu fotonya dihapus dari penyimpanan setelah pemeriksaan selesai. Anda juga dapat meminta penghapusannya kapan saja lewat kontak di bawah. Status verifikasi tetap tersimpan selama akun aktif.</td></tr>
-    <tr><td>Titik lokasi jualan pedagang</td><td>Dihapus saat Selesai Jualan atau waktu jualan habis. Lokasi mangkal tetap (bila diisi) tersimpan sampai Anda mengubahnya atau akun dihapus.</td></tr>
-    <tr><td>Catatan persetujuan pedagang</td><td>Selama akun aktif; dihapus bersama akun.</td></tr>
-    <tr><td>Pesan chat dalam aplikasi</td><td>Hanya bila fitur diaktifkan: selama toko terkait masih ada atau sampai dihapus atas permintaan.</td></tr>
-    <tr><td>Data di browser Anda</td><td>Sampai Anda menghapus data situs di pengaturan browser.</td></tr>
-  </table>
+  <h3 style="font-size:15px;margin:14px 0 6px;">Klaim toko</h3>
+  <p>Bila kamu mengklaim toko yang didaftarkan orang lain, kami menyimpan nomor WhatsApp pengklaim, catatan yang kamu tulis, dan ID perangkat untuk ditinjau admin.</p>
 
-  <h2 id="aman"><span class="n">6.</span>Keamanan</h2>
+  <h2>3. Untuk apa data dipakai</h2>
   <ul>
-    <li>Akses ke data pembeli dan data sensitif pedagang (PIN, foto KTP, NIB, perangkat pemilik) dibatasi lewat aturan basis data.</li>
-    <li>Foto KTP berada di penyimpanan privat, PIN disimpan dalam bentuk hash, dan percobaan PIN yang salah berulang dikunci sementara. Koneksi memakai HTTPS.</li>
-    <li>Tidak ada sistem yang sepenuhnya aman. Bila terjadi kegagalan pelindungan data yang berdampak pada Anda, kami akan memberitahu sesuai ketentuan hukum yang berlaku.</li>
+    <li>Menjalankan fitur inti: menemukan pedagang, ikuti, ulasan, notifikasi, dan ojek sekitar.</li>
+    <li>Menjaga keamanan: memeriksa laporan, mencegah penyalahgunaan, memverifikasi pedagang, dan membatasi percobaan masuk yang berulang.</li>
+    <li>Memahami dan memperbaiki layanan lewat statistik penggunaan.</li>
+  </ul>
+  <p>Kami tidak menjual data pribadi dan tidak memakai data kamu untuk profil iklan.</p>
+
+  <h2>4. Siapa yang bisa melihat data</h2>
+  <ul>
+    <li><b>Publik/pembeli:</b> profil pedagang (nama usaha, kategori, foto, status jualan, lokasi saat berjualan, rating), serta ojek terverifikasi yang sudah menyetujui dan grup ojek aktif di wilayahmu.</li>
+    <li><b>Admin JajanDekat:</b> data akun, laporan, permintaan, dan berkas verifikasi yang diperlukan untuk tugas moderasi.</li>
+    <li><b>Penyedia layanan teknis</b> yang menjalankan JajanDekat (lihat bagian berikut).</li>
+    <li><b>Pihak berwenang</b>, bila diwajibkan oleh hukum yang berlaku.</li>
   </ul>
 
-  <h2 id="hak"><span class="n">7.</span>Hak Anda</h2>
-  <p>Sesuai UU Pelindungan Data Pribadi, Anda berhak mengakses, memperbaiki, meminta penghapusan, menarik persetujuan, dan mengajukan keberatan atas pemrosesan data Anda.</p>
+  <h2>5. Layanan pihak ketiga</h2>
   <ul>
-    <li><b>Memperbaiki:</b> pedagang dapat mengubah data toko sendiri di Edit Profil Toko.</li>
-    <li><b>Menarik persetujuan:</b> cabut izin lokasi dan notifikasi di pengaturan browser, atau berhenti mengikuti toko. Pedagang dapat menyembunyikan nomor WhatsApp dan menekan Selesai Jualan.</li>
-    <li><b>Menghapus akun, foto KTP, atau meminta salinan data:</b> hubungi kami lewat kontak di bawah. Untuk permintaan atas nama akun toko, kami dapat meminta bukti Anda pemilik akun. Penarikan persetujuan kami tanggapi paling lambat 3 × 24 jam.</li>
+    <li><b>Supabase</b> — basis data, penyimpanan berkas, dan fungsi server tempat data di atas disimpan.</li>
+    <li><b>OpenStreetMap</b> — peta dan pencarian nama wilayah dari koordinat (Nominatim). Permintaan peta memperlihatkan alamat IP dan area yang sedang dilihat kepada penyedia peta.</li>
+    <li><b>Penyedia pustaka dan font (unpkg, jsDelivr, cdnjs, Google Fonts)</b> — memuat pustaka peta, koneksi data, pembuat QR, dan font. Alamat IP kamu terlihat oleh mereka saat file dimuat.</li>
+    <li><b>Layanan push milik browser</b> (misalnya Google, Mozilla, atau Apple) — mengantarkan notifikasi ke perangkatmu bila kamu mengizinkan.</li>
+    <li><b>WhatsApp</b> — saat kamu mengetuk tombol chat, nomor, atau tautan grup, kamu berpindah ke WhatsApp yang tunduk pada kebijakan privasinya sendiri.</li>
   </ul>
 
-  <h2 id="anak"><span class="n">8.</span>Anak-anak</h2>
-  <p>Kami tidak meminta nama, kontak, atau identitas dari pembeli. Pembeli di bawah 18 tahun hanya boleh memakai JajanDekat dengan izin dan pendampingan orang tua atau wali, yang dengan itu ikut menyetujui kebijakan ini. Akun pedagang hanya untuk usia 18 tahun ke atas. Bila kami mengetahui ada data anak yang diberikan tanpa izin orang tua atau wali, data tersebut akan kami hapus.</p>
+  <h2>6. Penyimpanan di perangkat dan izin</h2>
+  <p>JajanDekat menyimpan sedikit data di browser (penyimpanan lokal, cache layanan offline, dan basis data lokal untuk antrean aksi saat offline) supaya aplikasi bisa dibuka tanpa sinyal. Izin <b>lokasi</b>, <b>notifikasi</b>, dan <b>kamera</b> (untuk foto) hanya diminta saat fitur terkait dipakai dan bisa kamu cabut kapan saja lewat pengaturan browser atau HP.</p>
 
-  <h2 id="ubah"><span class="n">9.</span>Perubahan kebijakan</h2>
-  <p>Kami dapat memperbarui kebijakan ini. Tanggal berlaku ada di bagian atas halaman, dan perubahan penting akan diumumkan di aplikasi. Bila perubahan mengubah jenis data atau tujuan pemrosesan, kami meminta persetujuan Anda kembali.</p>
+  <h2>7. Berapa lama data disimpan</h2>
+  <ul>
+    <li>Data akun pedagang disimpan selama akun aktif, sampai kamu meminta penghapusan.</li>
+    <li>Foto KTP dihapus setelah pemeriksaan verifikasi selesai.</li>
+    <li>Saat akun pedagang dihapus, berkas fotonya di penyimpanan ikut dihapus.</li>
+    <li>Langganan notifikasi berhenti bila kamu mencabut izin notifikasi atau meminta penghapusan.</li>
+    <li>Statistik penggunaan disimpan untuk keperluan analisis layanan dan tidak memuat nama atau nomor telepon.</li>
+  </ul>
 
-  <h2 id="kontak"><span class="n">10.</span>Kontak</h2>
-  <p><b>Admin:</b> <span id="kontak-wa"><mark>[isi nomor WhatsApp admin]</mark></span></p>
+  <h2>8. Keamanan</h2>
+  <p>Situs dilayani lewat koneksi terenkripsi (HTTPS). PIN pedagang disimpan ter-hash, berkas verifikasi disimpan di penyimpanan privat yang hanya bisa dibuka admin, dan dashboard admin dilindungi kata sandi dengan pembatasan percobaan gagal. Tidak ada sistem yang benar-benar bebas risiko; jaga kerahasiaan PIN kamu dan jangan membagikannya.</p>
+
+  <h2>9. Hak kamu</h2>
+  <p>Sesuai peraturan perlindungan data pribadi di Indonesia (termasuk UU No. 27 Tahun 2022), kamu berhak untuk mengetahui data yang kami simpan, memperbaikinya, menarik persetujuan, dan meminta penghapusan. Caranya:</p>
+  <ul>
+    <li><b>Pembeli:</b> hapus data situs JajanDekat di pengaturan browser untuk menghapus ID perangkat dan cache lokal. Untuk menghapus data ikuti, ulasan, laporan, atau langganan notifikasi di server, hubungi admin.</li>
+    <li><b>Pedagang:</b> hubungi admin untuk memperbaiki data, mengganti PIN, atau menghapus akun berikut foto dan berkas verifikasinya.</li>
+    <li><b>Ojek:</b> hubungi admin untuk mengubah atau menghapus data, atau mencabut persetujuan tampil (data langsung disembunyikan dari pembeli).</li>
+  </ul>
+  <p>Kami berusaha menanggapi permintaan dalam waktu wajar.</p>
+
+  <h2>10. Anak-anak</h2>
+  <p>JajanDekat tidak ditujukan bagi anak-anak untuk mendaftar sebagai pedagang atau ojek. Bila kamu orang tua atau wali dan menemukan data anak di layanan kami, hubungi admin agar kami hapus.</p>
+
+  <h2>11. Perubahan kebijakan</h2>
+  <p>Kebijakan ini dapat diperbarui, misalnya saat ada fitur baru. Tanggal pembaruan terbaru tertulis di bagian atas halaman. Untuk perubahan yang penting, kami akan meminta persetujuan ulang bila diperlukan.</p>
 
   <footer>
-    <a href="terms.html">Ketentuan Layanan</a> · <a href="./">Kembali ke aplikasi</a>
+    <a href="terms.html">Ketentuan Layanan</a> · <a href="/">Beranda</a>
   </footer>
-</main>
-
-<script src="js/config.js"></script>
-<script>
-  // Isi tautan WhatsApp admin dari js/config.js bila tersedia (tetap aman kalau tidak ada).
-  try {
-    if (typeof ADMIN_WHATSAPP !== 'undefined' && ADMIN_WHATSAPP) {
-      var el = document.getElementById('kontak-wa');
-      var a = document.createElement('a');
-      a.href = 'https://wa.me/' + String(ADMIN_WHATSAPP).replace(/\D/g, '');
-      a.textContent = '+' + String(ADMIN_WHATSAPP).replace(/\D/g, '');
-      a.rel = 'noopener';
-      el.textContent = '';
-      el.appendChild(a);
-    }
-  } catch (e) { /* biarkan placeholder */ }
-</script>
+</div>
 </body>
 </html>
