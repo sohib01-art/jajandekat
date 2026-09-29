@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -33,6 +33,7 @@ const APP_SHELL = [
   '/icons/onboarding-wave.png',
   '/icons/onboarding-point.png',
   '/icons/onboarding-thumbsup.png',
+  '/icons/ojek-mascot.png',
 ];
 
 // Library pihak ketiga (CDN) yang dipakai app — kita cache runtime
@@ -249,7 +250,10 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || '/';
-  const fullUrl = new URL(targetUrl, self.location.origin).href;
+  // ?src=push dipakai app untuk mencatat "notifikasi dibuka" saat app dibuka dari keadaan tertutup
+  const fullUrlObj = new URL(targetUrl, self.location.origin);
+  fullUrlObj.searchParams.set('src', 'push');
+  const fullUrl = fullUrlObj.href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
