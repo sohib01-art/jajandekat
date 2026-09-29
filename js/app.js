@@ -5559,6 +5559,7 @@ window.__submitReview = async function (vendorId) {
 let tapCount = 0;
 let tapTimer = null;
 let isSuperAdmin = false;
+let adminRole = 'super'; // 'super' = password admin utama, 'staff' = password staf (tanpa hapus & kelola koordinator)
 let adminPasswordCache = null;
 let adminVendorData = [];
 
@@ -5583,6 +5584,7 @@ if (brandTapZone) {
         }
         isSuperAdmin = true;
         adminPasswordCache = pw;
+        adminRole = data.role === 'staff' ? 'staff' : 'super';
         renderAdminDashboard();
       } catch (e) {
         console.error(e);
@@ -7170,6 +7172,22 @@ function ojekPanelHtml() {
     <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;line-height:1.5;">Ojek tampil ke pembeli hanya kalau statusnya <b>Terverifikasi</b> dan persetujuan tampil sudah dicentang. Grup WhatsApp tampil kalau <b>Aktif</b>. Wilayah dipilih di tingkat kabupaten/kota atau kecamatan; pembeli di wilayah di bawahnya ikut melihat.</div>
 
     <div id="oj-coord-result"></div>
+    ${adminRole === 'staff' ? '' : `
+    <div class="section-label" style="margin-top:0;font-size:11px;color:var(--brand);">🔗 Bagikan tautan</div>
+    <div class="vendor-hero" style="text-align:left;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:12.5px;">Untuk koordinator grup</div>
+      <div style="font-size:11px;color:var(--text-faint);margin:2px 0 6px;">Halaman masuk koordinator. PIN dikirim terpisah lewat tombol "Buat akun koordinator" atau "Reset PIN" di kartu grup.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="follow-btn" onclick="window.__ojekShare('koordinator','wa')">Kirim lewat WhatsApp</button>
+        <button class="follow-btn" onclick="window.__ojekShare('koordinator','copy')">Salin tautan</button>
+      </div>
+      <div style="font-weight:700;font-size:12.5px;margin-top:12px;">Untuk admin ojek (staf)</div>
+      <div style="font-size:11px;color:var(--text-faint);margin:2px 0 6px;">Staf masuk lewat dashboard ini dengan password staf. Password tidak ikut di pesan, berikan lewat jalur terpisah.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="follow-btn" onclick="window.__ojekShare('staf','wa')">Kirim lewat WhatsApp</button>
+        <button class="follow-btn" onclick="window.__ojekShare('staf','copy')">Salin pesan</button>
+      </div>
+    </div>`}
     <div class="section-label" style="margin-top:0;font-size:11px;color:var(--brand);">🛵 Tambah ojek</div>
     <div class="vendor-hero" style="text-align:left;margin-bottom:12px;">
       <input id="oj-name" type="text" maxlength="80" placeholder="Nama ojek" style="${inp}" />
@@ -7236,6 +7254,7 @@ async function loadAdminOjek() {
   const { drivers = [], groups = [], reports = [] } = adminOjekData;
   const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   const btn = 'class="follow-btn"';
+  const sup = adminRole !== 'staff';
 
   dEl.innerHTML = drivers.length ? drivers.map(d => {
     const [bg, fg] = OJEK_STATUS_COLOR[d.status] || OJEK_STATUS_COLOR.pending;
@@ -7256,7 +7275,7 @@ async function loadAdminOjek() {
         ${d.status !== 'suspended' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','suspended')">⏸ Tangguhkan</button>` : ''}
         ${d.status === 'suspended' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','pending')">↩ Ke Menunggu</button>` : ''}
         <button ${btn} onclick="window.__adminOjekConsent('${d.id}', ${d.consent_show_at ? 'false' : 'true'})">${d.consent_show_at ? 'Cabut persetujuan' : 'Catat persetujuan'}</button>
-        <button ${btn} style="color:#f87171;" onclick="window.__adminOjekDelete('${d.id}')">🗑 Hapus</button>
+        ${sup ? `<button ${btn} style="color:#f87171;" onclick="window.__adminOjekDelete('${d.id}')">🗑 Hapus</button>` : ''}
       </div>
     </div>`;
   }).join('') : '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada ojek.</div>';
@@ -7287,11 +7306,11 @@ async function loadAdminOjek() {
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         ${vs !== 'verified' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','verified')">✔ Setujui grup</button>` : ''}
         ${vs !== 'suspended' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','suspended')">⏸ Tangguhkan grup</button>` : ''}
-        ${!co ? `<button ${btn} onclick="window.__adminCreateCoord('${g.id}')">🔑 Buat akun koordinator</button>` : `
+        ${!sup ? '' : !co ? `<button ${btn} onclick="window.__adminCreateCoord('${g.id}')">🔑 Buat akun koordinator</button>` : `
           <button ${btn} onclick="window.__adminResetCoordPin('${co.id}')">🔑 Reset PIN</button>
           <button ${btn} onclick="window.__adminCoordStatus('${co.id}','${co.status === 'active' ? 'suspended' : 'active'}')">${co.status === 'active' ? 'Nonaktifkan akun' : 'Aktifkan akun'}</button>`}
         <button ${btn} onclick="window.__adminOjekGroupActive('${g.id}', ${g.active ? 'false' : 'true'})">${g.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
-        <button ${btn} style="color:#f87171;" onclick="window.__adminOjekGroupDelete('${g.id}')">🗑 Hapus</button>
+        ${sup ? `<button ${btn} style="color:#f87171;" onclick="window.__adminOjekGroupDelete('${g.id}')">🗑 Hapus</button>` : ''}
       </div>
     </div>`;
   }).join('') : '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada grup.</div>';
@@ -7402,6 +7421,17 @@ window.__adminOjekGroupActive = async function (id, active) {
     ojekCache.ts = 0;
     await loadAdminOjek();
   } catch (e) { alert('Gagal mengubah grup: ' + e.message); }
+};
+
+window.__ojekShare = function (kind, mode) {
+  const origin = window.location.origin;
+  const text = kind === 'koordinator'
+    ? `Halo, ini halaman koordinator grup ojek JajanDekat: ${origin}/koordinator.html\nMasuk dengan nomor WhatsApp dan PIN dari admin.`
+    : `Halo, ini dashboard admin JajanDekat: ${origin}\nCara masuk: ketuk logo JajanDekat 5 kali, lalu masukkan password staf (diberikan terpisah). Buka tab Ojek.`;
+  if (mode === 'wa') { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener'); return; }
+  const done = () => showToast('Disalin 📋');
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => prompt('Salin teks ini:', text));
+  else prompt('Salin teks ini:', text);
 };
 
 function showCoordPin(name, wa, pin, isReset) {
