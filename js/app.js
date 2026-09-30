@@ -2964,6 +2964,10 @@ async function flushVendorQueue(silent) {
             await sb.rpc('set_unclaimed_vendor_photo', { p_vendor_id: newId, p_photo_url: `${pub.publicUrl}?t=${Date.now()}` });
           } catch (photoErr) { console.error('Foto dari antrean offline gagal diupload:', photoErr); }
         }
+        if (item.details && newId) {
+          try { await baSaveDetails(newId, item.deviceId, item.details); }
+          catch (detErr) { console.error('Jam buka/menu dari antrean offline gagal disimpan:', detErr); }
+        }
         await offlineQueueRemove(item.localId);
         vendors = (await fetchVendors()).map(normalizeExpiry);
         if (!silent) showToast(`"${item.name}" dari antrean offline berhasil terkirim! 🎉`);
@@ -3005,9 +3009,10 @@ let baLng = null;
 let baLocationNote = '';
 let baPhotoFile = null;
 let baBusy = false;
+let baMenu = [{ name: '', price: '' }];
 
 window.__openAddVendorModal = function () {
-  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baPhotoFile = null; baBusy = false;
+  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baPhotoFile = null; baBusy = false; baMenu = [{ name: '', price: '' }];
   document.getElementById('addvendor-modal-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'addvendor-modal-overlay';
@@ -3028,10 +3033,55 @@ window.__openAddVendorModal = function () {
       <input id="ba-whatsapp" type="tel" value="" oninput="window.__baUpdate('whatsapp', this.value)" placeholder="Nomor WhatsApp toko (contoh: 6281234567890)" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:6px;box-sizing:border-box;" />
       <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Nggak yakin nomornya? Isi saja nomor WhatsApp kamu sendiri sementara — pemilik toko bisa menggantinya lewat menu Edit Profil setelah klaim disetujui.</div>
 
-      <button type="button" id="ba-loc-btn" onclick="window.__baCaptureLocation()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;margin-bottom:4px;">📍 Pakai lokasi saya sekarang</button>
-      <div id="ba-loc-status" style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Berdiri dekat toko/lapaknya, lalu tekan tombol di atas.</div>
+      <style>
+        #ba-pin-svg{position:absolute;left:-18px;top:-46px;transition:transform .18s ease;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));}
+        #ba-pin-shadow{position:absolute;left:-7px;top:-3px;width:14px;height:6px;border-radius:50%;background:rgba(0,0,0,.28);transition:transform .18s ease,opacity .18s;}
+        #ba-pin.lift #ba-pin-svg{transform:translateY(-12px);}
+        #ba-pin.lift #ba-pin-shadow{transform:scale(.6);opacity:.6;}
+        @media (prefers-reduced-motion:reduce){#ba-pin-svg,#ba-pin-shadow{transition:none;}}
+      </style>
+      <div style="font-size:11.5px;font-weight:700;margin-bottom:2px;">Lokasi toko</div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Geser peta sampai pin tepat di lokasi toko/lapaknya. Cubit atau tekan + / − untuk memperbesar.</div>
+      <div id="ba-map-wrap" style="position:relative;isolation:isolate;height:240px;border-radius:12px;overflow:hidden;border:1px solid var(--stroke);margin-bottom:6px;">
+        <div id="ba-map" style="position:absolute;inset:0;"></div>
+        <div id="ba-pin" aria-hidden="true" style="position:absolute;left:50%;top:50%;width:0;height:0;z-index:500;pointer-events:none;">
+          <div id="ba-pin-shadow"></div>
+          <svg id="ba-pin-svg" width="36" height="46" viewBox="0 0 36 46"><path d="M18 45C18 45 3 28 3 17a15 15 0 1 1 30 0c0 11-15 28-15 28z" style="fill:var(--brand,#FF6B35);stroke:#fff;stroke-width:2;"/><circle cx="18" cy="17" r="6" fill="#fff"/></svg>
+        </div>
+        <button type="button" id="ba-loc-btn" aria-label="Pakai lokasi saya" onclick="window.__baCaptureLocation()" style="position:absolute;right:8px;bottom:8px;z-index:600;width:40px;height:40px;border-radius:50%;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:19px;cursor:pointer;">🎯</button>
+      </div>
+      <div id="ba-loc-status" style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;min-height:14px;">Mencari lokasimu… atau geser peta ke lokasi toko.</div>
+
 
       <input id="ba-note" type="text" value="" oninput="window.__baUpdate('note', this.value)" placeholder="Catatan lokasi (opsional), misal: sebelah warung Bu Siti" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
+
+      <div style="font-size:11.5px;font-weight:700;margin-bottom:2px;">Hari &amp; jam buka (opsional)</div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Isi kalau kamu tahu. Pemilik toko bisa memperbaikinya nanti.</div>
+      <div class="jd-days" id="ba-hari-row" role="group" aria-label="Hari buka">
+        ${HARI_URUTAN.map(d => `<button type="button" class="jd-day" data-d="${d}" aria-pressed="true" onclick="window.__toggleHari('ba', ${d})">${HARI_SINGKAT[d]}</button>`).join('')}
+      </div>
+      <div class="jd-presets" style="margin:6px 0 8px;">
+        <button type="button" class="jd-preset" onclick="window.__setHariPreset('ba', 'semua')">Setiap hari</button>
+        <button type="button" class="jd-preset" onclick="window.__setHariPreset('ba', 'sen-sab')">Sen–Sab</button>
+        <button type="button" class="jd-preset" onclick="window.__setHariPreset('ba', 'sen-jum')">Sen–Jum</button>
+      </div>
+      <label class="jd-switch-row">
+        <span class="jd-switch-text"><b>Buka 24 jam</b><small>Tanpa jam tutup</small></span>
+        <input id="ba-buka24" class="jd-switch" type="checkbox" role="switch" onchange="window.__baToggle24(this.checked)" />
+      </label>
+      <div class="jd-time-row" id="ba-jam-wrap">
+        <div class="jd-field"><label class="jd-label" for="ba-jam-buka">Jam buka</label><input id="ba-jam-buka" type="time" /></div>
+        <div class="jd-field"><label class="jd-label" for="ba-jam-tutup">Jam tutup</label><input id="ba-jam-tutup" type="time" /></div>
+      </div>
+      <label class="jd-switch-row">
+        <span class="jd-switch-text"><b>Tutup saat tanggal merah</b><small>Libur nasional saja</small></span>
+        <input id="ba-libur" class="jd-switch" type="checkbox" role="switch" />
+      </label>
+
+      <div style="font-size:11.5px;font-weight:700;margin:14px 0 2px;">Menu hidangan (opsional)</div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Tulis menu andalannya beserta harga. Maksimal 10 menu.</div>
+      <div id="ba-menu-list"></div>
+      <button type="button" id="ba-menu-add" onclick="window.__baMenuAdd()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;margin-bottom:12px;">+ Tambah menu</button>
 
       <div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">Foto toko (opsional)</div>
       <input type="file" id="ba-photo-input" accept="image/*" style="display:none;" onchange="window.__baPhotoPick(this)" />
@@ -3047,6 +3097,8 @@ window.__openAddVendorModal = function () {
     </div>
   `;
   document.body.appendChild(overlay);
+  baRenderMenu();
+  baInitMap();
 };
 
 window.__baUpdate = function (field, value) {
@@ -3054,6 +3106,49 @@ window.__baUpdate = function (field, value) {
   if (field === 'whatsapp') baWhatsapp = value;
   if (field === 'note') baLocationNote = value;
 };
+
+function baRenderMenu() {
+  const list = document.getElementById('ba-menu-list');
+  if (!list) return;
+  const st = 'width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;';
+  list.innerHTML = baMenu.map((m, i) => `
+    <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
+      <input type="text" maxlength="80" value="${escapeHtml(m.name)}" placeholder="Nama menu, misal: Bakso urat" oninput="window.__baMenuSet(${i}, 'name', this.value)" style="${st}flex:2;min-width:0;" />
+      <input type="number" inputmode="numeric" min="0" value="${escapeHtml(m.price)}" placeholder="Harga (Rp)" oninput="window.__baMenuSet(${i}, 'price', this.value)" style="${st}flex:1;min-width:0;" />
+      <button type="button" aria-label="Hapus menu" onclick="window.__baMenuRemove(${i})" style="flex-shrink:0;width:34px;height:40px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);">✕</button>
+    </div>`).join('');
+  const add = document.getElementById('ba-menu-add');
+  if (add) add.style.display = baMenu.length >= 10 ? 'none' : '';
+}
+window.__baMenuAdd = function () { if (baMenu.length < 10) { baMenu.push({ name: '', price: '' }); baRenderMenu(); } };
+window.__baMenuRemove = function (i) { baMenu.splice(i, 1); if (!baMenu.length) baMenu.push({ name: '', price: '' }); baRenderMenu(); };
+window.__baMenuSet = function (i, field, value) { if (baMenu[i]) baMenu[i][field] = value; };
+window.__baToggle24 = function (checked) {
+  const wrap = document.getElementById('ba-jam-wrap');
+  if (wrap) wrap.style.display = checked ? 'none' : '';
+};
+function baCollectDetails() {
+  const buka24 = !!document.getElementById('ba-buka24')?.checked;
+  const jb = document.getElementById('ba-jam-buka')?.value || '';
+  const jt = document.getElementById('ba-jam-tutup')?.value || '';
+  const libur = !!document.getElementById('ba-libur')?.checked;
+  const hari = readHariFromDom('ba') || [0, 1, 2, 3, 4, 5, 6];
+  if (!buka24 && ((jb && !jt) || (!jb && jt))) return { error: 'Isi jam buka dan jam tutup keduanya, atau kosongkan dua-duanya.' };
+  const products = baMenu.map(m => ({ name: String(m.name || '').trim(), price: String(m.price || '').trim() })).filter(m => m.name);
+  for (const m of products) {
+    if (m.price && !/^\d{1,8}$/.test(m.price)) return { error: `Harga "${m.name}" tidak valid. Isi angka saja, misal 15000.` };
+  }
+  const hasSchedule = buka24 || !!(jb && jt);
+  return { hasAny: hasSchedule || products.length > 0, buka24, jamBuka: hasSchedule && !buka24 ? jb : null, jamTutup: hasSchedule && !buka24 ? jt : null, hari, libur, products };
+}
+async function baSaveDetails(vendorId, deviceIdVal, det) {
+  const { error } = await sb.rpc('set_unclaimed_vendor_details', {
+    p_vendor_id: vendorId, p_device_id: deviceIdVal,
+    p_buka_24jam: det.buka24, p_jam_buka: det.jamBuka, p_jam_tutup: det.jamTutup,
+    p_hari_buka: det.hari, p_tutup_libur_nasional: det.libur, p_products: det.products,
+  });
+  if (error) throw error;
+}
 
 window.__baSelectCategory = function (k) {
   baCategoryKey = baCategoryKey === k ? null : k;
@@ -3083,16 +3178,66 @@ window.__baRemovePhoto = function () {
   if (wrap) wrap.innerHTML = `<button type="button" id="ba-photo-btn" onclick="window.__openPhotoChooser('ba-photo-input')" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;">📷 Pilih Foto Toko</button>`;
 };
 
-window.__baCaptureLocation = function () {
-  const statusEl = document.getElementById('ba-loc-status');
-  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
-  if (statusEl) statusEl.textContent = 'Mengambil lokasi…';
+let baMap = null;
+let baGeoTimer = null;
+let baTouched = false; // pin baru dianggap dipilih setelah peta digeser/di-zoom pembeli atau GPS berhasil
+
+function baSetStatus(t) { const el = document.getElementById('ba-loc-status'); if (el) el.textContent = t; }
+
+// Alamat perkiraan dari titik pin (layanan gratis OpenStreetMap); gagal = tampilkan koordinat saja.
+function baReverse(lat, lng) {
+  clearTimeout(baGeoTimer);
+  baSetStatus('📍 Lokasi dipilih…');
+  baGeoTimer = setTimeout(async () => {
+    try {
+      const res = await withTimeout(fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`), 8000, 'timeout');
+      const j = await res.json();
+      const a = j.address || {};
+      const parts = [a.road || a.pedestrian || a.neighbourhood, a.suburb || a.village || a.city_district, a.city || a.county || a.town].filter(Boolean);
+      if (baLat === lat && baLng === lng) baSetStatus('📍 ' + (parts.length ? parts.join(', ') : `${lat.toFixed(5)}, ${lng.toFixed(5)}`));
+    } catch (_) {
+      if (baLat === lat && baLng === lng) baSetStatus(`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    }
+  }, 700);
+}
+
+function baInitMap() {
+  if (baMap) { try { baMap.remove(); } catch (_) {} baMap = null; }
+  const el = document.getElementById('ba-map');
+  if (!el) return;
+  if (typeof L === 'undefined') { baSetStatus('Peta belum termuat. Periksa sinyal lalu buka lagi form ini.'); return; }
+  const hasBuyer = typeof buyerLoc !== 'undefined' && buyerLoc && buyerLoc.lat != null;
+  const center = hasBuyer ? [buyerLoc.lat, buyerLoc.lng] : (typeof DEFAULT_MAP_CENTER !== 'undefined' ? DEFAULT_MAP_CENTER : [-2.5, 118]);
+  const zoom = hasBuyer ? 17 : (typeof DEFAULT_MAP_ZOOM !== 'undefined' ? DEFAULT_MAP_ZOOM : 14);
+  baTouched = hasBuyer;
+  baMap = L.map(el, { zoomControl: false }).setView(center, zoom);
+  L.control.zoom({ position: 'topright' }).addTo(baMap);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(baMap);
+  setTimeout(() => { if (baMap) baMap.invalidateSize({ pan: false }); }, 60);
+  const pin = document.getElementById('ba-pin');
+  baMap.on('dragstart zoomstart', () => { baTouched = true; });
+  baMap.on('movestart', () => pin && pin.classList.add('lift'));
+  baMap.on('moveend', () => {
+    pin && pin.classList.remove('lift');
+    if (!baTouched) return;
+    const c = baMap.getCenter();
+    baLat = c.lat; baLng = c.lng;
+    baReverse(baLat, baLng);
+  });
+  if (hasBuyer) { baLat = buyerLoc.lat; baLng = buyerLoc.lng; baReverse(baLat, baLng); }
+  else window.__baCaptureLocation(true);
+}
+
+window.__baCaptureLocation = function (silent) {
+  if (!navigator.geolocation) { baSetStatus('Browser ini tidak mendukung lokasi. Geser peta ke lokasi toko.'); return; }
+  if (!silent) baSetStatus('Mengambil lokasi…');
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      baLat = pos.coords.latitude; baLng = pos.coords.longitude;
-      if (statusEl) statusEl.textContent = '✅ Lokasi tersimpan dari posisi sekarang.';
+      if (!baMap) return;
+      baTouched = true;
+      baMap.setView([pos.coords.latitude, pos.coords.longitude], 17); // moveend akan mengisi baLat/baLng
     },
-    () => { if (statusEl) statusEl.textContent = 'Gagal mengambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    () => baSetStatus(silent ? 'Geser peta ke lokasi toko sampai pin tepat.' : 'Gagal mengambil lokasi. Izinkan akses lokasi, atau geser peta ke lokasi toko.'),
     { enableHighAccuracy: true, timeout: 10000 }
   );
 };
@@ -3107,10 +3252,12 @@ window.__submitAddVendor = async function () {
   if (!name || name.length < 2) { errEl.textContent = 'Nama toko wajib diisi.'; return; }
   if (!cat) { errEl.textContent = 'Pilih jenis dagangan dulu.'; return; }
   if (!whatsapp || whatsapp.length < 8) { errEl.textContent = 'Nomor WhatsApp wajib diisi.'; return; }
-  if (baLat == null || baLng == null) { errEl.textContent = 'Ambil lokasi dulu — tekan tombol "Pakai lokasi saya sekarang".'; return; }
+  if (baLat == null || baLng == null) { errEl.textContent = 'Tentukan lokasi dulu — geser peta sampai pin tepat di lokasi toko.'; return; }
 
   const dupe = vendors.find(v => v.whatsapp === whatsapp);
   if (dupe) { errEl.textContent = `Nomor ini sudah terdaftar sebagai "${dupe.name}".`; return; }
+  const det = baCollectDetails();
+  if (det.error) { errEl.textContent = det.error; return; }
 
   if (baBusy) return;
   baBusy = true;
@@ -3132,6 +3279,16 @@ window.__submitAddVendor = async function () {
     const { data: fullRow } = await sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
 
     vendors.push(fullRow || rows[0]);
+
+    if (det.hasAny) {
+      try {
+        await baSaveDetails(newId, deviceId, det);
+        vendors = (await fetchVendors()).map(normalizeExpiry);
+      } catch (detErr) {
+        console.error('Gagal simpan jam buka/menu:', detErr);
+        showToast('Toko tersimpan, tapi jam buka/menu belum masuk. Pemilik bisa melengkapinya nanti.');
+      }
+    }
 
     if (baPhotoFile) {
       try {
@@ -3157,7 +3314,7 @@ window.__submitAddVendor = async function () {
           localId: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
           name, category: cat.label, categories: [cat.label], emoji: cat.e,
           whatsapp, lat: baLat, lng: baLng, locationNote: note || null,
-          photoBlob, deviceId, savedAt: Date.now(),
+          photoBlob, deviceId, savedAt: Date.now(), details: det.hasAny ? det : null,
         });
         document.getElementById('addvendor-modal-overlay')?.remove();
         showToast('Nggak ada sinyal — toko disimpan dulu di HP, otomatis terkirim begitu ada sinyal. 📦');
