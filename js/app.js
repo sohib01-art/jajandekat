@@ -5059,6 +5059,14 @@ function detectRegion() {
   return Promise.race([detection, hardTimeout]);
 }
 
+// Batasi lama tunggu proses jaringan supaya layar tidak diam tanpa kabar kalau sinyal buruk.
+function withTimeout(promise, ms, message) {
+  let t;
+  const timer = new Promise((_, reject) => { t = setTimeout(() => reject(new Error(message)), ms); });
+  return Promise.race([promise, timer]).finally(() => clearTimeout(t));
+}
+const REG_SLOW_MSG = 'Koneksi lambat atau terputus. Cek sinyal lalu coba lagi. Kalau sebelumnya sudah menekan Daftar, coba Masuk dengan nomor WhatsApp dan PIN tadi';
+
 function normalizeWhatsapp(raw) {
   if (!raw) return raw;
   let n = raw.replace(/[^\d]/g, ''); // buang spasi, strip, tanda +, dll
@@ -5128,7 +5136,7 @@ window.__registerVendor = async function () {
 
     // PIN WAJIB lewat RPC register_vendor: fungsi ini yang hash PIN (bcrypt) sebelum disimpan.
     // JANGAN pernah insert kolom "pin" langsung dari client -- itu menyimpannya polos & membuat PIN tidak pernah cocok saat login.
-    const { data: rows, error } = await sb.rpc('register_vendor', {
+    const { data: rows, error } = await withTimeout(sb.rpc('register_vendor', {
       p_name: name, p_category: category, p_categories: categories, p_emoji: emoji, p_mode_icon: modeIcon,
       p_whatsapp: whatsapp, p_pin: pin, p_referred_by_vendor_id: referredByVendorId, p_region: region,
       p_reminder_time: reminderTime || null, p_custom_tags: customTags,
@@ -5138,7 +5146,7 @@ window.__registerVendor = async function () {
       p_jam_tutup: regBuka24Value ? null : (regJamTutupValue || null),
       p_hari_buka: normalizeHariBuka(regHariBukaValue), p_tutup_libur_nasional: regTutupLiburValue,
       p_consent_version: CONSENT_VERSION,
-    });
+    }), 25000, REG_SLOW_MSG);
     const data = rows && rows[0];
 
     if (customTags.length) logTagSuggestions(customTags.join(', '), foodMainSel[0]); // tidak ditunggu, jangan blokir alur pendaftaran
@@ -5153,7 +5161,7 @@ window.__registerVendor = async function () {
 
     if (regPhotoFile) {
       try {
-        const photoUrl = await uploadVendorPhoto(data.id, regPhotoFile);
+        const photoUrl = await withTimeout(uploadVendorPhoto(data.id, regPhotoFile), 30000, 'Unggah foto terlalu lama');
         // PIN baru saja dibuat saat register_vendor di atas, jadi dipakai langsung di sini.
         await sb.rpc('update_vendor_settings', {
           p_vendor_id: data.id, p_pin: pin,
