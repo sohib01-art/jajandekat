@@ -995,7 +995,7 @@ function withTimeout(promise, ms, label) {
 }
 
 async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
+  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
   if (error) { console.error(error); throw error; }
   return data;
 }
@@ -2397,7 +2397,7 @@ function renderVendorCardHtml(v, opts = {}) {
   const showable = vendorIsShowable(v);
   const cats = v.categories || [];
   const catLabel = cats.length ? escapeHtml(cats[0]) + (cats.length > 1 ? ` +${cats.length - 1}` : '') : '';
-  const locLabel = distanceLabel || (v.region ? escapeHtml(v.region) : '');
+  const locLabel = distanceLabel || (v.wilayah_label ? escapeHtml(v.wilayah_label) : (v.region ? escapeHtml(v.region) : ''));
   const nameJs = v.name.replace(/'/g, "\\'");
   return `
     <div class="vp-card ${compact ? 'vp-card-compact' : ''} ${isPromoActive(v) ? 'vp-card-promo' : ''}" onclick="if(!event.target.closest('button,a')) window.__openVendorSheet('${v.id}')">
@@ -2664,7 +2664,7 @@ window.__openVendorSheet = function (vendorId, opts = {}) {
         ${vendorScheduleLabel(v) ? `<div class="vs-line">🕐 <span>${escapeHtml(vendorScheduleLabel(v))}</span></div>` : ''}
         ${vendorClosedTodayNote(v) ? `<div class="vs-line vs-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
         ${distanceLabel ? `<div class="vs-line">${VP_ICON_PIN}<span>${distanceLabel} dari kamu</span></div>` : ''}
-        ${v.region ? `<div class="vs-line">${VP_ICON_PIN}<span>${escapeHtml(v.region)}</span></div>` : ''}
+        ${(v.wilayah_label || v.region) ? `<div class="vs-line">${VP_ICON_PIN}<span>${escapeHtml(v.wilayah_label || v.region)}</span></div>` : ''}
         ${v.location_note ? `<div class="vs-line vs-muted">📍 ${escapeHtml(v.location_note)}</div>` : ''}
         ${!canMap ? '<div class="vs-line vs-muted">Lokasi belum tersedia</div>' : ''}
         ${isPromoActive(v) && v.promo_text ? `<div class="vs-promo">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
@@ -3276,7 +3276,7 @@ window.__submitAddVendor = async function () {
 
     // Ambil ulang baris lengkap (kolom sama seperti loadVendors) supaya field lain
     // (rating, is_premium, dst) konsisten dengan default kolomnya, bukan cuma yang dikembalikan RPC.
-    const { data: fullRow } = await sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
+    const { data: fullRow } = await sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
 
     vendors.push(fullRow || rows[0]);
 
@@ -3483,6 +3483,7 @@ let regReminderValue = '';
 let regTagsValue = '';
 let regScheduleValue = '';
 let regLocationNoteValue = '';
+let regWilProv = '', regWilKota = '', regWilKec = '', regWilKel = '';
 let regFixedLat = null;
 let regFixedLng = null;
 let regJamBukaValue = '08:00';
@@ -3674,6 +3675,56 @@ window.__regWizardGo = function (delta) {
     d.classList.toggle('done', i < regStep);
   });
 };
+
+// ---------- PILIHAN WILAYAH BERTINGKAT (tabel wilayah: 1 provinsi, 2 kota/kab, 3 kecamatan, 4 kelurahan/desa) ----------
+// Data diambil per tingkat saat dipilih (total ±91 ribu baris, jadi tidak diunduh sekaligus).
+const wilayahCache = {}; // parent_kode ('' = provinsi) -> [{kode,nama}]
+async function fetchWilayahChildren(parent) {
+  const key = parent || '';
+  if (wilayahCache[key]) return wilayahCache[key];
+  try {
+    let q = sb.from('wilayah').select('kode,nama').order('nama');
+    q = parent ? q.eq('parent_kode', parent) : q.eq('level', 1);
+    const { data, error } = await withTimeout(q, 10000, 'Ambil daftar wilayah');
+    if (error) throw error;
+    wilayahCache[key] = data || [];
+  } catch (e) {
+    console.error('Gagal ambil wilayah:', e);
+    return [];
+  }
+  return wilayahCache[key];
+}
+function wilSelectHtml(id, label, options, value, disabled) {
+  const opts = options.map(o => `<option value="${escapeHtml(o.kode)}"${o.kode === value ? ' selected' : ''}>${escapeHtml(o.nama)}</option>`).join('');
+  return `<select id="${id}" ${disabled ? 'disabled' : ''} onchange="window.__wilPick('${id}', this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:13px;margin-top:6px;"><option value="">${label}</option>${opts}</select>`;
+}
+function wilayahPickerHtml() {
+  if (!wilayahCache['']) fetchWilayahChildren('').then(() => { const el = document.getElementById('wil-box'); if (el) el.innerHTML = wilayahPickerInner(); });
+  return `<div id="wil-box">${wilayahPickerInner()}</div>`;
+}
+function wilayahPickerInner() {
+  const prov = wilayahCache[''] || [];
+  const kota = regWilProv ? (wilayahCache[regWilProv] || []) : [];
+  const kec = regWilKota ? (wilayahCache[regWilKota] || []) : [];
+  const kel = regWilKec ? (wilayahCache[regWilKec] || []) : [];
+  return `
+    ${wilSelectHtml('wil-prov', prov.length ? 'Pilih provinsi' : 'Memuat provinsi…', prov, regWilProv, !prov.length)}
+    ${wilSelectHtml('wil-kota', 'Pilih kota / kabupaten', kota, regWilKota, !regWilProv)}
+    ${wilSelectHtml('wil-kec', 'Pilih kecamatan', kec, regWilKec, !regWilKota)}
+    ${wilSelectHtml('wil-kel', 'Pilih kelurahan / desa (opsional)', kel, regWilKel, !regWilKec)}
+    <div class="food-hint" style="margin-top:6px;">Opsional. Dipakai untuk menampilkan wilayah di kartu tokomu.</div>`;
+}
+window.__wilPick = async function (id, val) {
+  if (id === 'wil-prov') { regWilProv = val; regWilKota = regWilKec = regWilKel = ''; }
+  if (id === 'wil-kota') { regWilKota = val; regWilKec = regWilKel = ''; }
+  if (id === 'wil-kec') { regWilKec = val; regWilKel = ''; }
+  if (id === 'wil-kel') { regWilKel = val; }
+  const next = id === 'wil-prov' ? regWilProv : id === 'wil-kota' ? regWilKota : id === 'wil-kec' ? regWilKec : null;
+  if (next) await fetchWilayahChildren(next);
+  const box = document.getElementById('wil-box');
+  if (box) box.innerHTML = wilayahPickerInner();
+};
+
 let isRegistering = false;
 
 window.__updateRegField = function (field, value) {
@@ -4325,6 +4376,8 @@ function renderPedagang() {
             <div class="reg-step">
               <div class="reg-step-title">5. Lokasi &amp; jam buka</div>
               <div class="reg-step-sub">Semua bagian ini opsional dan bisa diubah nanti di Edit Profil Toko.</div>
+              <div class="reg-step-sub" style="margin-top:10px;">Wilayah tempat berjualan</div>
+              ${wilayahPickerHtml()}
               ${renderJadwalFields({ p: 'reg', track: true, reminder: regReminderValue, hasLoc: !!regFixedLat, buka24: regBuka24Value, jamBuka: regJamBukaValue, jamTutup: regJamTutupValue, hari: regHariBukaValue, tutupLibur: regTutupLiburValue, schedule: regScheduleValue, locationNote: regLocationNoteValue, onToggle: 'window.__toggleRegBuka24', onCapture: 'window.__captureRegLocation' })}
               <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:14px;cursor:pointer;text-align:left;">
                 <input id="reg-terms-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
@@ -5296,6 +5349,7 @@ window.__registerVendor = async function () {
     const { data: rows, error } = await withTimeout(sb.rpc('register_vendor', {
       p_name: name, p_category: category, p_categories: categories, p_emoji: emoji, p_mode_icon: modeIcon,
       p_whatsapp: whatsapp, p_pin: pin, p_referred_by_vendor_id: referredByVendorId, p_region: region,
+      p_wilayah_kode: regWilKel || regWilKec || regWilKota || regWilProv || null,
       p_reminder_time: reminderTime || null, p_custom_tags: customTags,
       p_fixed_lat: regFixedLat, p_fixed_lng: regFixedLng,
       p_schedule_text: regScheduleValue.trim() || null, p_location_note: regLocationNoteValue.trim() || null,
@@ -5342,6 +5396,7 @@ window.__registerVendor = async function () {
     regNameValue = ''; regWhatsappValue = ''; regPinValue = ''; regReminderValue = ''; regTagsValue = ''; regStep = 0;
     regPhotoFile = null; regPhotoPreview = null;
     regFixedLat = null; regFixedLng = null; regScheduleValue = ''; regLocationNoteValue = '';
+    regWilProv = regWilKota = regWilKec = regWilKel = '';
     regJamBukaValue = '08:00'; regJamTutupValue = '21:00'; regBuka24Value = false;
     regHariBukaValue = [0, 1, 2, 3, 4, 5, 6]; regTutupLiburValue = false;
     Promise.resolve(sb.rpc('link_owner_device', { p_vendor_id: data.id, p_pin: pin, p_device_id: deviceId })).catch(() => {});
