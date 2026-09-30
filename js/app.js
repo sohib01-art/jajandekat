@@ -2758,6 +2758,7 @@ function openInternalLink(link) {
     if (page === 'promo') { // halaman pedagang, langsung sorot kartu "Promosi Lokal Harian" (kalau sudah login)
       goToPedagangDashboard();
       const focus = () => {
+        if (window.__pdTab && document.getElementById('pd-tabs')) window.__pdTab('promosi', true);
         const el = document.getElementById('vendor-promo-card');
         if (!el) return false;
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4034,6 +4035,50 @@ window.__openRegister = function () {
   const sec = document.getElementById('reg-section'); if (sec) { sec.hidden = false; sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   const btn = document.getElementById('lg-reg-btn'); if (btn) btn.hidden = true;
 };
+// ---------- BERANDA PEDAGANG: TAB ----------
+let pdTab = 'toko';
+(function injectPdTabCss() {
+  if (document.getElementById('pd-tabs-css')) return;
+  const st = document.createElement('style');
+  st.id = 'pd-tabs-css';
+  st.textContent = `
+  .pd-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0 4px;padding:6px;background:var(--surface-2);border-radius:20px}
+  .pd-tab{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px 8px;border:0;border-radius:15px;background:transparent;color:var(--text-dim);font:600 11px/1.1 'Poppins',system-ui,sans-serif;cursor:pointer;transition:transform .25s cubic-bezier(.3,1.4,.5,1),background .25s,color .2s,box-shadow .3s;-webkit-tap-highlight-color:transparent}
+  .pd-tab-ic{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--tcs);font-size:16px;transition:background .25s}
+  .pd-tab:active{transform:scale(.95)}
+  .pd-tab.on{background:linear-gradient(135deg,var(--tc),var(--tc2));color:#fff;transform:translateY(-2px);box-shadow:0 8px 18px -6px var(--tcg);animation:pdGlow 2.6s ease-in-out infinite}
+  .pd-tab.on .pd-tab-ic{background:rgba(255,255,255,.26);animation:pdPop .5s cubic-bezier(.3,1.4,.5,1)}
+  .pd-tab.on::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(110deg,transparent 32%,rgba(255,255,255,.55) 50%,transparent 68%);transform:translateX(-130%);animation:pdShine 3s ease-in-out infinite}
+  .pd-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+  .pd-tab-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#EF4444;color:#fff;font-size:9.5px;line-height:16px;text-align:center}
+  .pd-tab-badge[hidden]{display:none}
+  .pd-panel[hidden]{display:none}
+  .pd-panel.pd-in{animation:pdIn .32s ease-out}
+  @keyframes pdShine{0%,50%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
+  @keyframes pdGlow{0%,100%{box-shadow:0 8px 18px -6px var(--tcg)}50%{box-shadow:0 10px 24px -4px var(--tcg)}}
+  @keyframes pdPop{0%{transform:scale(.55) rotate(-14deg)}60%{transform:scale(1.22) rotate(6deg)}100%{transform:scale(1) rotate(0)}}
+  @keyframes pdIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.pd-tab,.pd-tab.on,.pd-tab.on::after,.pd-tab.on .pd-tab-ic,.pd-panel.pd-in{animation:none!important;transition:none}}
+  `;
+  document.head.appendChild(st);
+})();
+
+window.__pdTab = function (t, scroll) {
+  pdTab = t;
+  document.querySelectorAll('.pd-tab').forEach(b => {
+    const on = b.dataset.tab === t;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.pd-panel').forEach(p => {
+    const on = p.dataset.tab === t;
+    p.hidden = !on;
+    p.classList.remove('pd-in');
+    if (on) { void p.offsetWidth; p.classList.add('pd-in'); }
+  });
+  if (!scroll) { const bar = document.getElementById('pd-tabs'); if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+};
+
 function renderPedagang() {
   { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = ''; }
   if (!myVendorId) {
@@ -4240,10 +4285,13 @@ function renderPedagang() {
       ` : ''}
     </div>
 
-    <button type="button" class="pd-share" onclick="var b=document.getElementById('vendor-qr-box'); if(b) b.scrollIntoView({behavior:'smooth',block:'center'})">
-      <span class="pd-share-ic">▦</span>
-      <span class="pd-share-text"><b>Bagikan Toko</b><small>Tingkatkan jangkauan toko kamu lewat QR &amp; link</small></span><span class="pd-chev">›</span>
-    </button>
+    <div class="pd-tabs" id="pd-tabs" role="tablist">
+      <button type="button" class="pd-tab ${pdTab === 'toko' ? 'on' : ''}" data-tab="toko" role="tab" aria-selected="${pdTab === 'toko'}" style="--tc:#FF6B35;--tc2:#FF9A3D;--tcs:rgba(255,107,53,.14);--tcg:rgba(255,107,53,.55);" onclick="window.__pdTab('toko')"><span class="pd-tab-ic">🏪</span><span class="pd-tab-lb">Toko</span></button>
+      <button type="button" class="pd-tab ${pdTab === 'promosi' ? 'on' : ''}" data-tab="promosi" role="tab" aria-selected="${pdTab === 'promosi'}" style="--tc:#F43F5E;--tc2:#FB7185;--tcs:rgba(244,63,94,.13);--tcg:rgba(244,63,94,.5);" onclick="window.__pdTab('promosi')"><span class="pd-tab-ic">🎯</span><span class="pd-tab-lb">Promosi</span></button>
+      <button type="button" class="pd-tab ${pdTab === 'pesan' ? 'on' : ''}" data-tab="pesan" role="tab" aria-selected="${pdTab === 'pesan'}" style="--tc:#0EA5A4;--tc2:#2DD4BF;--tcs:rgba(14,165,164,.14);--tcg:rgba(14,165,164,.5);" onclick="window.__pdTab('pesan')"><span class="pd-tab-ic">💬</span><span class="pd-tab-lb">${CHAT_DALAM_APP_AKTIF ? 'Pesan' : 'Ulasan'}</span><span class="pd-tab-badge" id="pd-badge-pesan" hidden></span></button>
+      <button type="button" class="pd-tab ${pdTab === 'bantuan' ? 'on' : ''}" data-tab="bantuan" role="tab" aria-selected="${pdTab === 'bantuan'}" style="--tc:#3B82F6;--tc2:#60A5FA;--tcs:rgba(59,130,246,.14);--tcg:rgba(59,130,246,.5);" onclick="window.__pdTab('bantuan')"><span class="pd-tab-ic">🧭</span><span class="pd-tab-lb">Bantuan</span></button>
+    </div>
+    <div class="pd-panel" data-tab="toko" ${pdTab === 'toko' ? '' : 'hidden'} role="tabpanel">
     <div class="pd-sec"><h2>Kelola Toko</h2></div>
     <div class="pd-tiles">
       <button type="button" class="pd-tile" onclick="window.__openProductManager('${v.id}')"><span class="pd-tile-ic">📦</span><span class="pd-tile-lbl">Produk</span></button>
@@ -4252,6 +4300,43 @@ function renderPedagang() {
       <button type="button" class="pd-tile ${v.verification_status === 'verified' ? 'ok' : ''}" onclick="window.__openVerificationForm('${v.id}')"><span class="pd-tile-ic">🛡️</span><span class="pd-tile-lbl">Verifikasi</span>${v.verification_status === 'verified' ? '<span class="pd-tile-sub">Terverifikasi</span>' : ''}</button>
     </div>
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;color:var(--navy);">✓</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Verifikasi Toko</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge navy dan lebih dipercaya pembeli</div>
+        </div>
+      </div>
+      ${v.verification_status === 'verified' ? `
+        <div style="background:var(--navy-dim);border:1px solid #B9C4DA;border-radius:12px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:700;">✓ Toko Anda sudah terverifikasi</div>
+      ` : v.verification_status === 'pending' ? `
+        <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;font-size:12px;color:#8A6D00;">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
+      ` : `
+        ${v.verification_status === 'rejected' ? `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:12px;padding:10px 12px;font-size:11.5px;color:#991B1B;margin-bottom:10px;">Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.</div>` : ''}
+        <button onclick="window.__openVerificationForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
+          ✅ Ajukan Verifikasi Toko
+        </button>
+      `}
+    </div>
+
+<div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📖</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ceritakan Kisah Dagangan Anda</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Kisah, perjuangan, atau momen berkesan selama berjualan — bisa ditampilkan di halaman Artikel JajanDekat setelah ditinjau admin</div>
+        </div>
+      </div>
+      <button onclick="window.__openVendorStoryForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
+        ✍️ Ajukan Cerita Dagangan
+      </button>
+    </div>
+
+    <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
+
+    </div>
+    <div class="pd-panel" data-tab="promosi" ${pdTab === 'promosi' ? '' : 'hidden'} role="tabpanel">
+<div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">📱</span>
         <div>
@@ -4265,20 +4350,7 @@ function renderPedagang() {
       </button>
     </div>
 
-    ${CHAT_DALAM_APP_AKTIF ? `
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">💬</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Pesan Pembeli</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">${vendorChatEnabled(v) ? 'Chat langsung dari pembeli lewat app, gratis, tanpa perlu nomor WA Anda.' : 'Chat dalam app khusus pedagang Premium. Upgrade Premium untuk menerima pesan langsung dari pembeli.'}</div>
-        </div>
-      </div>
-      ${vendorChatEnabled(v) ? `<div id="vendor-chat-inbox"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pesan...</div></div>` : ''}
-    </div>
-    ` : ''}
-
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+<div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">🎯</span>
         <div>
@@ -4341,40 +4413,7 @@ function renderPedagang() {
       `}
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">📦</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kelola Produk</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Tambahkan menu/dagangan Anda supaya pembeli bisa lihat sebelum datang</div>
-        </div>
-      </div>
-      <button onclick="window.__openProductManager('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;border:none;">
-        📦 Kelola Produk Saya
-      </button>
-    </div>
-
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;color:var(--navy);">✓</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Verifikasi Toko</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge navy dan lebih dipercaya pembeli</div>
-        </div>
-      </div>
-      ${v.verification_status === 'verified' ? `
-        <div style="background:var(--navy-dim);border:1px solid #B9C4DA;border-radius:12px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:700;">✓ Toko Anda sudah terverifikasi</div>
-      ` : v.verification_status === 'pending' ? `
-        <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;font-size:12px;color:#8A6D00;">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
-      ` : `
-        ${v.verification_status === 'rejected' ? `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:12px;padding:10px 12px;font-size:11.5px;color:#991B1B;margin-bottom:10px;">Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.</div>` : ''}
-        <button onclick="window.__openVerificationForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
-          ✅ Ajukan Verifikasi Toko
-        </button>
-      `}
-    </div>
-
-    <div class="vendor-hero" id="vendor-promo-card" style="margin-top:14px; text-align:left;">
+        <div class="vendor-hero" id="vendor-promo-card" style="margin-top:14px; text-align:left;">
       ${isPromoActive(v) ? `
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:20px;">🔥</span>
@@ -4406,6 +4445,22 @@ function renderPedagang() {
       </div>
     </div>
 
+    
+    </div>
+    <div class="pd-panel" data-tab="pesan" ${pdTab === 'pesan' ? '' : 'hidden'} role="tabpanel">
+    ${CHAT_DALAM_APP_AKTIF ? `
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">💬</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Pesan Pembeli</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">${vendorChatEnabled(v) ? 'Chat langsung dari pembeli lewat app, gratis, tanpa perlu nomor WA Anda.' : 'Chat dalam app khusus pedagang Premium. Upgrade Premium untuk menerima pesan langsung dari pembeli.'}</div>
+        </div>
+      </div>
+      ${vendorChatEnabled(v) ? `<div id="vendor-chat-inbox"><div style="color:var(--text-faint);font-size:11.5px;">Memuat pesan...</div></div>` : ''}
+    </div>
+    ` : ''}
+
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">💬</span>
@@ -4417,25 +4472,15 @@ function renderPedagang() {
       <div id="my-reviews-list" style="font-size:12px;color:var(--text-faint);">Memuat ulasan...</div>
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">📖</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ceritakan Kisah Dagangan Anda</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Kisah, perjuangan, atau momen berkesan selama berjualan — bisa ditampilkan di halaman Artikel JajanDekat setelah ditinjau admin</div>
-        </div>
-      </div>
-      <button onclick="window.__openVendorStoryForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
-        ✍️ Ajukan Cerita Dagangan
-      </button>
+    
     </div>
-
-    <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
+    <div class="pd-panel" data-tab="bantuan" ${pdTab === 'bantuan' ? '' : 'hidden'} role="tabpanel">
     <button type="button" class="pd-help" onclick="window.__openGuideModal('pedagang')"><span class="pd-help-ic">🧭</span><span class="pd-share-text"><b>Panduan Penggunaan</b><small>Pelajari cara pakai aplikasi</small></span><span class="pd-chev">›</span></button>
     <button type="button" class="pd-help" onclick="window.__openFaqModal()"><span class="pd-help-ic">?</span><span class="pd-share-text"><b>Butuh Bantuan?</b><small>Lihat FAQ atau hubungi kami</small></span><span class="pd-chev">›</span></button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
+    </div>
   `;
 
   initAnnSlider();
@@ -4465,6 +4510,7 @@ async function loadVendorChatInbox(vendorId) {
   const { data: unreadRows } = await sb.from('chat_messages').select('thread_id').eq('sender', 'buyer').is('read_at', null).in('thread_id', threadIds);
   const unreadCount = {};
   (unreadRows || []).forEach(r => { unreadCount[r.thread_id] = (unreadCount[r.thread_id] || 0) + 1; });
+  { const tot = Object.values(unreadCount).reduce((x, y) => x + y, 0), bd = document.getElementById('pd-badge-pesan'); if (bd) { bd.textContent = tot > 9 ? '9+' : tot; bd.hidden = !tot; } }
 
   el.innerHTML = threads.map(t => {
     const label = 'Pembeli #' + t.buyer_device_id.slice(-5).toUpperCase();
