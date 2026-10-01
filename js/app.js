@@ -7903,7 +7903,7 @@ function showCoordPin(name, wa, pin, isReset) {
   const el = document.getElementById('oj-coord-result');
   if (!el) return;
   const url = window.location.origin + '/koordinator.html';
-  const msg = `Halo ${name}, ini akun pengelola mitra ojek di JajanDekat.\nBuka: ${url}\nNomor: ${wa}\nPIN: ${pin}\nSetelah masuk, segera ganti PIN. Jangan bagikan PIN ke siapa pun.`;
+  const msg = `Halo ${name}, ini akun pengelola mitra ojek di JajanDekat.\nBuka: ${url}\nNomor: ${wa}\nPIN: ${pin}\nSetelah masuk, segera ganti PIN. Jangan bagikan PIN ke siapa pun.\nAdmin JajanDekat tidak akan pernah meminta PIN-mu. Saat pertama masuk, kamu akan diminta menyetujui ketentuan pengelola.`;
   el.innerHTML = `
     <div class="vendor-hero" style="text-align:left;margin-bottom:12px;border:1.5px solid var(--brand);">
       <div style="font-weight:700;font-size:12.5px;">🔑 ${isReset ? 'PIN baru' : 'Akun koordinator dibuat'}: ${escapeHtml(name)}</div>
