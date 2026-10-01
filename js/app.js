@@ -7439,6 +7439,40 @@ function ojekRegionLabel(regionId) {
   return chain.length ? chain.slice(0, 2).map(r => r.name).join(', ') : '(wilayah tidak dikenal)';
 }
 
+// ---------- Pemilih wilayah baku untuk form mitra (tabel wilayah; state & id terpisah dari form pedagang) ----------
+let mitraWil = { prov: '', kota: '', kec: '', kel: '' };
+function mitraWilSelect(id, label, options, value, disabled) {
+  const opts = options.map(o => `<option value="${escapeHtml(o.kode)}"${o.kode === value ? ' selected' : ''}>${escapeHtml(o.nama)}</option>`).join('');
+  return `<select id="${id}" ${disabled ? 'disabled' : ''} onchange="window.__mitraWilPick('${id}', this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin-top:6px;"><option value="">${label}</option>${opts}</select>`;
+}
+function mitraWilayahInner() {
+  if (!wilayahCache['']) fetchWilayahChildren('').then(() => { const el = document.getElementById('mt-wil-box'); if (el) el.innerHTML = mitraWilayahInner(); });
+  const prov = wilayahCache[''] || [];
+  const kota = mitraWil.prov ? (wilayahCache[mitraWil.prov] || []) : [];
+  const kec = mitraWil.kota ? (wilayahCache[mitraWil.kota] || []) : [];
+  const kel = mitraWil.kec ? (wilayahCache[mitraWil.kec] || []) : [];
+  return `
+    ${mitraWilSelect('mt-prov', prov.length ? 'Pilih provinsi' : 'Memuat provinsi…', prov, mitraWil.prov, !prov.length)}
+    ${mitraWilSelect('mt-kota', 'Pilih kota / kabupaten', kota, mitraWil.kota, !mitraWil.prov)}
+    ${mitraWilSelect('mt-kec', 'Pilih kecamatan', kec, mitraWil.kec, !mitraWil.kota)}
+    ${mitraWilSelect('mt-kel', 'Pilih kelurahan / desa (opsional)', kel, mitraWil.kel, !mitraWil.kec)}`;
+}
+window.__mitraWilPick = async function (id, val) {
+  if (id === 'mt-prov') { mitraWil.prov = val; mitraWil.kota = mitraWil.kec = mitraWil.kel = ''; }
+  if (id === 'mt-kota') { mitraWil.kota = val; mitraWil.kec = mitraWil.kel = ''; }
+  if (id === 'mt-kec') { mitraWil.kec = val; mitraWil.kel = ''; }
+  if (id === 'mt-kel') { mitraWil.kel = val; }
+  const next = id === 'mt-prov' ? mitraWil.prov : id === 'mt-kota' ? mitraWil.kota : id === 'mt-kec' ? mitraWil.kec : null;
+  if (next) await fetchWilayahChildren(next);
+  const box = document.getElementById('mt-wil-box');
+  if (box) box.innerHTML = mitraWilayahInner();
+};
+window.__mitraJenisChanged = function () {
+  const j = document.getElementById('og-jenis').value;
+  const h = document.getElementById('og-link-hint');
+  if (h) h.textContent = j === 'grup' ? 'Wajib untuk jenis grup.' : 'Opsional untuk jenis ini (kosongkan kalau tidak ada grup WhatsApp).';
+};
+
 function ojekPanelHtml() {
   const inp = 'width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin-top:6px;';
   return `
@@ -7479,11 +7513,23 @@ function ojekPanelHtml() {
     </div>
     <div id="admin-ojek-drivers" class="vendor-list" style="margin-bottom:16px;"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
 
-    <div class="section-label" style="font-size:11px;color:var(--brand);">💬 Tambah grup WhatsApp ojek</div>
+    <div class="section-label" style="font-size:11px;color:var(--brand);">🤝 Tambah mitra</div>
     <div class="vendor-hero" style="text-align:left;margin-bottom:12px;">
-      <input id="og-name" type="text" maxlength="80" placeholder="Nama grup" style="${inp}" />
+      <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;">Mitra bisa RT, RW, grup WhatsApp ojek, atau yang lain. Nama mitra kamu yang tentukan; jenis dan keterangan hanya acuan untuk admin.</div>
+      <select id="og-jenis" onchange="window.__mitraJenisChanged()" style="${inp}">
+        <option value="grup">💬 Grup WhatsApp ojek</option>
+        <option value="rw">🏘️ RW</option>
+        <option value="rt">🏠 RT</option>
+        <option value="lainnya">🤝 Mitra lainnya</option>
+      </select>
+      <input id="og-name" type="text" maxlength="80" placeholder="Nama mitra" style="${inp}" />
       <input id="og-link" type="url" placeholder="https://chat.whatsapp.com/xxxxxxxx" style="${inp}" />
-      <select id="og-region" style="${inp}">${regionOptionsHtml('📍 Pilih wilayah')}</select>
+      <div id="og-link-hint" style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wajib untuk jenis grup.</div>
+      <div style="font-size:10.5px;font-weight:700;margin-top:10px;">📍 Wilayah baku (minimal sampai kecamatan)</div>
+      <div id="mt-wil-box">${mitraWilayahInner()}</div>
+      <select id="og-region" style="${inp}">${regionOptionsHtml('📍 Wilayah untuk tampil ke pembeli')}</select>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wilayah tampil: wajib untuk grup WhatsApp. Untuk mitra lain boleh dikosongkan.</div>
+      <input id="og-ket" type="text" maxlength="200" placeholder="Keterangan acuan, misal: RW 05 Perum Griya Asri, ketua Pak Budi (tidak tampil ke pembeli)" style="${inp}" />
       <input id="og-area" type="text" maxlength="120" placeholder="Area layanan, misal: Perum Griya Asri RW 05 (opsional)" style="${inp}" />
       <input id="og-note" type="text" maxlength="300" placeholder="Catatan admin (opsional, tidak tampil ke pembeli)" style="${inp}" />
       <div id="og-error" style="color:#f87171;font-size:11.5px;margin-top:6px;"></div>
@@ -7513,6 +7559,7 @@ const OJEK_REASON_LABEL = { penipuan: 'Penipuan', link_mati: 'Tautan mati', spam
 let adminMitraData = [];
 let adminMitraFilter = { jenis: '', status: '', q: '' };
 const MITRA_JENIS_LABEL = { rt: 'RT', rw: 'RW', grup: 'Grup WA', lainnya: 'Lainnya' };
+const MITRA_MAX_AKUN = 3; // juga dijaga trigger di database
 
 function adminMitraEnsureShell() {
   const el = document.getElementById('admin-mitra');
@@ -7633,6 +7680,7 @@ async function loadAdminOjek() {
     return;
   }
   const { drivers = [], groups = [], reports = [] } = adminOjekData;
+  try { adminMitraData = (await callAdminAction('list_mitra')).mitra || []; } catch (e) { /* label wilayah saja; abaikan */ }
   const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   const btn = 'class="follow-btn"';
   const sup = adminRole !== 'staff';
@@ -7663,33 +7711,40 @@ async function loadAdminOjek() {
 
   const coords = adminOjekData.coordinators || [];
   gEl.innerHTML = groups.length ? groups.map(g => {
-    const co = coords.find(c => c.group_id === g.id);
+    const cos = coords.filter(c => c.group_id === g.id);
+    const mt = adminMitraData.find(x => x.id === g.id) || {};
+    const jenisIcon = { grup: '💬', rw: '🏘️', rt: '🏠', lainnya: '🤝' }[g.jenis] || '💬';
     const vs = g.verification_status || 'verified';
     const [vbg, vfg] = OJEK_STATUS_COLOR[vs] || OJEK_STATUS_COLOR.pending;
     const memberCount = drivers.filter(d => d.group_id === g.id).length;
     return `
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${g.active ? '' : 'opacity:.65;'}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <span style="font-weight:700;font-size:12.5px;">💬 ${escapeHtml(g.name)}</span>
+        <span style="font-weight:700;font-size:12.5px;">${jenisIcon} ${escapeHtml(g.name)}</span>
         <span style="display:flex;gap:4px;">
+          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--stroke);">${escapeHtml(MITRA_JENIS_LABEL[g.jenis] || 'Grup WA')}</span>
           <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${vbg};color:${vfg};">${OJEK_STATUS_LABEL[vs] || vs}</span>
           <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${g.active ? '#DCFCE7' : '#F3F4F6'};color:${g.active ? '#15803D' : '#6B7280'};">${g.active ? 'Aktif' : 'Nonaktif'}</span>
         </span>
       </div>
       ${g.service_area ? `<div style="font-size:10.5px;color:var(--text-dim);">🏘️ ${escapeHtml(g.service_area)}</div>` : ''}
       <div style="font-size:10.5px;color:var(--text-faint);">👥 ${memberCount}/${g.max_drivers || 20} ojek tercatat di aplikasi</div>
-      <div style="font-size:10.5px;color:${co ? 'var(--text-dim)' : 'var(--text-faint)'};">${co
-        ? `🧑‍💼 Koordinator: <b>${escapeHtml(co.name)}</b> (${escapeHtml(co.whatsapp)}) · ${co.status === 'active' ? 'aktif' : '<span style="color:#DC2626;">ditangguhkan</span>'} · ${co.terms_accepted_at ? 'ketentuan disetujui' : '<span style="color:#B45309;">belum setuju ketentuan</span>'}${co.last_login_at ? ' · masuk terakhir ' + fmt(co.last_login_at) : ' · belum pernah masuk'}`
-        : 'Belum ada akun koordinator'}</div>
-      <div style="font-size:10.5px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(g.wa_link)}</div>
+      ${g.keterangan ? `<div style="font-size:10.5px;color:var(--text-dim);font-style:italic;">🗒️ ${escapeHtml(g.keterangan)}</div>` : ''}
+      <div style="font-size:10.5px;color:var(--text-faint);">🗺️ ${escapeHtml(mt.wilayah || 'wilayah baku belum diisi')}</div>
+      <div style="font-size:10.5px;color:var(--text-faint);">🧑‍💼 Akun pengelola (${cos.length}/${MITRA_MAX_AKUN})${cos.length ? '' : ': belum ada'}</div>
+      ${cos.map(co => `<div style="font-size:10.5px;color:var(--text-dim);display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--stroke);padding-top:5px;">
+        <span><b>${escapeHtml(co.name)}</b> (${escapeHtml(co.whatsapp)}) · ${co.status === 'active' ? 'aktif' : '<span style="color:#DC2626;">ditangguhkan</span>'} · ${co.terms_accepted_at ? 'ketentuan disetujui' : '<span style="color:#B45309;">belum setuju ketentuan</span>'}${co.last_login_at ? ' · masuk ' + fmt(co.last_login_at) : ''}</span>
+        ${sup ? `<span style="display:flex;gap:4px;">
+          <button ${btn} onclick="window.__adminResetCoordPin('${co.id}')">🔑 Reset PIN</button>
+          <button ${btn} onclick="window.__adminCoordStatus('${co.id}','${co.status === 'active' ? 'suspended' : 'active'}')">${co.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}</button></span>` : ''}
+      </div>`).join('')}
+      ${g.wa_link ? `<div style="font-size:10.5px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(g.wa_link)}</div>` : ''}
       <div style="font-size:10.5px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(g.region_id))}</div>
       ${g.admin_note ? `<div style="font-size:10.5px;color:var(--text-dim);">📝 ${escapeHtml(g.admin_note)}</div>` : ''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         ${vs !== 'verified' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','verified')">✔ Setujui grup</button>` : ''}
         ${vs !== 'suspended' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','suspended')">⏸ Tangguhkan grup</button>` : ''}
-        ${!sup ? '' : !co ? `<button ${btn} onclick="window.__adminCreateCoord('${g.id}')">🔑 Buat akun koordinator</button>` : `
-          <button ${btn} onclick="window.__adminResetCoordPin('${co.id}')">🔑 Reset PIN</button>
-          <button ${btn} onclick="window.__adminCoordStatus('${co.id}','${co.status === 'active' ? 'suspended' : 'active'}')">${co.status === 'active' ? 'Nonaktifkan akun' : 'Aktifkan akun'}</button>`}
+        ${sup && cos.length < MITRA_MAX_AKUN ? `<button ${btn} onclick="window.__adminCreateCoord('${g.id}')">➕ Tambah akun pengelola</button>` : ''}
         <button ${btn} onclick="window.__adminOjekGroupActive('${g.id}', ${g.active ? 'false' : 'true'})">${g.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
         ${sup ? `<button ${btn} style="color:#f87171;" onclick="window.__adminOjekGroupDelete('${g.id}')">🗑 Hapus</button>` : ''}
       </div>
@@ -7775,22 +7830,32 @@ window.__adminOjekDelete = async function (id) {
 
 window.__adminSaveOjekGroup = async function () {
   const errEl = document.getElementById('og-error');
+  const jenis = document.getElementById('og-jenis').value;
   const name = document.getElementById('og-name').value.trim();
   const link = document.getElementById('og-link').value.trim();
   const regionId = document.getElementById('og-region').value || null;
   const note = document.getElementById('og-note').value.trim();
   const area = document.getElementById('og-area').value.trim();
-  if (!name || !link) { errEl.textContent = 'Nama dan tautan grup wajib diisi.'; return; }
-  if (!/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+(\?[A-Za-z0-9=&_.-]*)?$/.test(link)) {
+  const ket = document.getElementById('og-ket').value.trim();
+  const wilayahKode = mitraWil.kel || mitraWil.kec || '';
+  if (!name) { errEl.textContent = 'Nama mitra wajib diisi.'; return; }
+  if (jenis === 'grup' && !link) { errEl.textContent = 'Tautan grup WhatsApp wajib diisi untuk jenis grup.'; return; }
+  if (link && !/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+(\?[A-Za-z0-9=&_.-]*)?$/.test(link)) {
     errEl.textContent = 'Tautan harus berbentuk https://chat.whatsapp.com/kode-undangan'; return;
   }
-  if (!regionId) { errEl.textContent = 'Pilih wilayah dulu.'; return; }
+  if (!wilayahKode) { errEl.textContent = 'Pilih wilayah baku sampai kecamatan.'; return; }
+  if (jenis === 'grup' && !regionId) { errEl.textContent = 'Pilih wilayah tampil ke pembeli dulu.'; return; }
+  const group = { name, jenis, wilayah_kode: wilayahKode, keterangan: ket, admin_note: note, service_area: area, active: true };
+  if (link) group.wa_link = link;
+  if (regionId) group.region_id = regionId;
   errEl.textContent = 'Menyimpan...';
   try {
-    await callAdminAction('save_ojek_group', undefined, { group: { name, wa_link: link, region_id: regionId, admin_note: note, service_area: area, active: true } });
-    ['og-name', 'og-link', 'og-note', 'og-area'].forEach(id => { document.getElementById(id).value = ''; });
+    await callAdminAction('save_ojek_group', undefined, { group });
+    ['og-name', 'og-link', 'og-note', 'og-area', 'og-ket'].forEach(id => { document.getElementById(id).value = ''; });
+    mitraWil = { prov: '', kota: '', kec: '', kel: '' };
+    const box = document.getElementById('mt-wil-box'); if (box) box.innerHTML = mitraWilayahInner();
     errEl.textContent = '';
-    showToast('Grup disimpan 💬');
+    showToast('Mitra disimpan 🤝');
     ojekCache.ts = 0;
     await loadAdminOjek();
   } catch (e) { errEl.textContent = 'Gagal menyimpan: ' + e.message; }
@@ -7819,12 +7884,12 @@ function showCoordPin(name, wa, pin, isReset) {
   const el = document.getElementById('oj-coord-result');
   if (!el) return;
   const url = window.location.origin + '/koordinator.html';
-  const msg = `Halo ${name}, ini akun koordinator grup ojek di JajanDekat.\nBuka: ${url}\nNomor: ${wa}\nPIN: ${pin}\nSetelah masuk, segera ganti PIN. Jangan bagikan PIN ke siapa pun.`;
+  const msg = `Halo ${name}, ini akun pengelola mitra ojek di JajanDekat.\nBuka: ${url}\nNomor: ${wa}\nPIN: ${pin}\nSetelah masuk, segera ganti PIN. Jangan bagikan PIN ke siapa pun.`;
   el.innerHTML = `
     <div class="vendor-hero" style="text-align:left;margin-bottom:12px;border:1.5px solid var(--brand);">
       <div style="font-weight:700;font-size:12.5px;">🔑 ${isReset ? 'PIN baru' : 'Akun koordinator dibuat'}: ${escapeHtml(name)}</div>
       <div style="font-family:monospace;font-size:22px;letter-spacing:4px;margin:6px 0;color:var(--brand);">${escapeHtml(pin)}</div>
-      <div style="font-size:11px;color:#B45309;">PIN hanya tampil sekali. Kirim ke koordinator sekarang.</div>
+      <div style="font-size:11px;color:#B45309;">PIN hanya tampil sekali. Kirim ke pengelola sekarang.</div>
       <a class="follow-btn" style="display:block;text-align:center;text-decoration:none;padding:10px;margin-top:8px;" target="_blank" rel="noopener" href="https://wa.me/${escapeHtml(wa)}?text=${encodeURIComponent(msg)}">Kirim lewat WhatsApp</a>
     </div>`;
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -7845,9 +7910,9 @@ window.__adminGroupVerify = async function (id, status) {
 
 window.__adminCreateCoord = async function (groupId) {
   const g = adminOjekData.groups.find(x => x.id === groupId);
-  const name = (prompt(`Nama koordinator untuk grup "${g ? g.name : ''}":`) || '').trim();
+  const name = (prompt(`Nama pengelola untuk mitra "${g ? g.name : ''}":`) || '').trim();
   if (!name) return;
-  const wa = (prompt('Nomor WhatsApp koordinator (08xxxxxxxxxx):') || '').trim();
+  const wa = (prompt('Nomor WhatsApp pengelola (08xxxxxxxxxx):') || '').trim();
   if (!wa) return;
   try {
     const r = await callAdminAction('create_ojek_coordinator', undefined, { group_id: groupId, name, whatsapp: wa });
