@@ -7439,33 +7439,45 @@ function ojekRegionLabel(regionId) {
   return chain.length ? chain.slice(0, 2).map(r => r.name).join(', ') : '(wilayah tidak dikenal)';
 }
 
-// ---------- Pemilih wilayah baku untuk form mitra (tabel wilayah; state & id terpisah dari form pedagang) ----------
-let mitraWil = { prov: '', kota: '', kec: '', kel: '' };
-function mitraWilSelect(id, label, options, value, disabled) {
+// ---------- Pemilih wilayah baku untuk admin (tabel wilayah, seluruh Indonesia; state & id terpisah dari form pedagang) ----------
+const wilState = { mt: { prov: '', kota: '', kec: '', kel: '' }, od: { prov: '', kota: '', kec: '', kel: '' } };
+function wilSelectAdmin(px, lvl, label, options, value, disabled) {
   const opts = options.map(o => `<option value="${escapeHtml(o.kode)}"${o.kode === value ? ' selected' : ''}>${escapeHtml(o.nama)}</option>`).join('');
-  return `<select id="${id}" ${disabled ? 'disabled' : ''} onchange="window.__mitraWilPick('${id}', this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin-top:6px;"><option value="">${label}</option>${opts}</select>`;
+  return `<select id="${px}-${lvl}" ${disabled ? 'disabled' : ''} onchange="window.__wilPickAdmin('${px}','${lvl}', this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin-top:6px;"><option value="">${label}</option>${opts}</select>`;
 }
-function mitraWilayahInner() {
-  if (!wilayahCache['']) fetchWilayahChildren('').then(() => { const el = document.getElementById('mt-wil-box'); if (el) el.innerHTML = mitraWilayahInner(); });
+function wilPickerAdminInner(px) {
+  if (!wilayahCache['']) fetchWilayahChildren('').then(() => { const el = document.getElementById(px + '-box'); if (el) el.innerHTML = wilPickerAdminInner(px); });
+  const st = wilState[px];
   const prov = wilayahCache[''] || [];
-  const kota = mitraWil.prov ? (wilayahCache[mitraWil.prov] || []) : [];
-  const kec = mitraWil.kota ? (wilayahCache[mitraWil.kota] || []) : [];
-  const kel = mitraWil.kec ? (wilayahCache[mitraWil.kec] || []) : [];
+  const kota = st.prov ? (wilayahCache[st.prov] || []) : [];
+  const kec = st.kota ? (wilayahCache[st.kota] || []) : [];
+  const kel = st.kec ? (wilayahCache[st.kec] || []) : [];
   return `
-    ${mitraWilSelect('mt-prov', prov.length ? 'Pilih provinsi' : 'Memuat provinsi…', prov, mitraWil.prov, !prov.length)}
-    ${mitraWilSelect('mt-kota', 'Pilih kota / kabupaten', kota, mitraWil.kota, !mitraWil.prov)}
-    ${mitraWilSelect('mt-kec', 'Pilih kecamatan', kec, mitraWil.kec, !mitraWil.kota)}
-    ${mitraWilSelect('mt-kel', 'Pilih kelurahan / desa (opsional)', kel, mitraWil.kel, !mitraWil.kec)}`;
+    ${wilSelectAdmin(px, 'prov', prov.length ? 'Pilih provinsi' : 'Memuat provinsi…', prov, st.prov, !prov.length)}
+    ${wilSelectAdmin(px, 'kota', 'Pilih kota / kabupaten', kota, st.kota, !st.prov)}
+    ${wilSelectAdmin(px, 'kec', 'Pilih kecamatan', kec, st.kec, !st.kota)}
+    ${wilSelectAdmin(px, 'kel', 'Pilih kelurahan / desa (opsional)', kel, st.kel, !st.kec)}`;
 }
-window.__mitraWilPick = async function (id, val) {
-  if (id === 'mt-prov') { mitraWil.prov = val; mitraWil.kota = mitraWil.kec = mitraWil.kel = ''; }
-  if (id === 'mt-kota') { mitraWil.kota = val; mitraWil.kec = mitraWil.kel = ''; }
-  if (id === 'mt-kec') { mitraWil.kec = val; mitraWil.kel = ''; }
-  if (id === 'mt-kel') { mitraWil.kel = val; }
-  const next = id === 'mt-prov' ? mitraWil.prov : id === 'mt-kota' ? mitraWil.kota : id === 'mt-kec' ? mitraWil.kec : null;
+function wilPickerAdminHtml(px) { return `<div id="${px}-box">${wilPickerAdminInner(px)}</div>`; }
+function wilKodeAdmin(px) { const st = wilState[px]; return st.kel || st.kec || ''; }
+function wilResetAdmin(px) {
+  wilState[px] = { prov: '', kota: '', kec: '', kel: '' };
+  const box = document.getElementById(px + '-box'); if (box) box.innerHTML = wilPickerAdminInner(px);
+}
+window.__wilPickAdmin = async function (px, lvl, val) {
+  const st = wilState[px];
+  if (lvl === 'prov') { st.prov = val; st.kota = st.kec = st.kel = ''; }
+  if (lvl === 'kota') { st.kota = val; st.kec = st.kel = ''; }
+  if (lvl === 'kec') { st.kec = val; st.kel = ''; }
+  if (lvl === 'kel') { st.kel = val; }
+  const next = lvl === 'prov' ? st.prov : lvl === 'kota' ? st.kota : lvl === 'kec' ? st.kec : null;
   if (next) await fetchWilayahChildren(next);
-  const box = document.getElementById('mt-wil-box');
-  if (box) box.innerHTML = mitraWilayahInner();
+  const box = document.getElementById(px + '-box');
+  if (box) box.innerHTML = wilPickerAdminInner(px);
+};
+window.__ojekGroupChanged = function () {
+  const g = document.getElementById('oj-group'), w = document.getElementById('oj-region-wrap');
+  if (g && w) w.style.display = g.value ? 'none' : '';
 };
 window.__mitraJenisChanged = function () {
   const j = document.getElementById('og-jenis').value;
@@ -7500,7 +7512,11 @@ function ojekPanelHtml() {
       <input id="oj-name" type="text" maxlength="80" placeholder="Nama ojek" style="${inp}" />
       <input id="oj-wa" type="tel" placeholder="Nomor WhatsApp (08xxxxxxxxxx)" style="${inp}" />
       <input id="oj-plate" type="text" maxlength="15" placeholder="Plat nomor (opsional)" style="${inp}" />
-      <select id="oj-region" style="${inp}">${regionOptionsHtml('📍 Pilih wilayah')}</select>
+      <select id="oj-group" onchange="window.__ojekGroupChanged()" style="${inp}"><option value="">Mitra: memuat…</option></select>
+      <div id="oj-region-wrap">
+        <select id="oj-region" style="${inp}">${regionOptionsHtml('📍 Pilih wilayah (hanya untuk ojek tanpa mitra)')}</select>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Kalau memilih mitra, wilayah ojek otomatis mengikuti wilayah mitra.</div>
       <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:11.5px;color:var(--text-dim);line-height:1.4;">
         <input id="oj-consent" type="checkbox" style="margin-top:2px;flex-shrink:0;" />
         <span>Ojek ini sudah setuju nama &amp; nomor WhatsApp-nya ditampilkan ke pembeli.</span>
@@ -7525,10 +7541,9 @@ function ojekPanelHtml() {
       <input id="og-name" type="text" maxlength="80" placeholder="Nama mitra" style="${inp}" />
       <input id="og-link" type="url" placeholder="https://chat.whatsapp.com/xxxxxxxx" style="${inp}" />
       <div id="og-link-hint" style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wajib untuk jenis grup.</div>
-      <div style="font-size:10.5px;font-weight:700;margin-top:10px;">📍 Wilayah baku (minimal sampai kecamatan)</div>
-      <div id="mt-wil-box">${mitraWilayahInner()}</div>
-      <select id="og-region" style="${inp}">${regionOptionsHtml('📍 Wilayah untuk tampil ke pembeli')}</select>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wilayah tampil: wajib untuk grup WhatsApp. Untuk mitra lain boleh dikosongkan.</div>
+      <div style="font-size:10.5px;font-weight:700;margin-top:10px;">📍 Wilayah (seluruh Indonesia, minimal sampai kecamatan)</div>
+      ${wilPickerAdminHtml('mt')}
+      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Dipakai juga untuk menentukan pembeli mana yang melihat mitra ini.</div>
       <input id="og-ket" type="text" maxlength="200" placeholder="Keterangan acuan, misal: RW 05 Perum Griya Asri, ketua Pak Budi (tidak tampil ke pembeli)" style="${inp}" />
       <input id="og-area" type="text" maxlength="120" placeholder="Area layanan, misal: Perum Griya Asri RW 05 (opsional)" style="${inp}" />
       <input id="og-note" type="text" maxlength="300" placeholder="Catatan admin (opsional, tidak tampil ke pembeli)" style="${inp}" />
@@ -7681,6 +7696,13 @@ async function loadAdminOjek() {
   }
   const { drivers = [], groups = [], reports = [] } = adminOjekData;
   try { adminMitraData = (await callAdminAction('list_mitra')).mitra || []; } catch (e) { /* label wilayah saja; abaikan */ }
+  const ogSel = document.getElementById('oj-group');
+  if (ogSel) {
+    const keep = ogSel.value;
+    ogSel.innerHTML = '<option value="">Mitra: tanpa mitra (pilih wilayah)</option>' +
+      groups.filter(g => g.active).map(g => `<option value="${g.id}" ${g.id === keep ? 'selected' : ''}>${escapeHtml(g.name)}${(adminMitraData.find(x => x.id === g.id) || {}).wilayah ? ' · ' + escapeHtml((adminMitraData.find(x => x.id === g.id) || {}).wilayah.split(', ')[0]) : ''}</option>`).join('');
+    window.__ojekGroupChanged();
+  }
   const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   const btn = 'class="follow-btn"';
   const sup = adminRole !== 'staff';
@@ -7776,16 +7798,17 @@ window.__adminSaveOjek = async function () {
   const name = document.getElementById('oj-name').value.trim();
   const wa = document.getElementById('oj-wa').value.trim();
   const plate = document.getElementById('oj-plate').value.trim();
+  const groupId = document.getElementById('oj-group').value || null;
   const regionId = document.getElementById('oj-region').value || null;
   const consent = document.getElementById('oj-consent').checked;
   const verified = document.getElementById('oj-verified').checked;
   if (!name || !wa) { errEl.textContent = 'Nama dan nomor WhatsApp wajib diisi.'; return; }
-  if (!regionId) { errEl.textContent = 'Pilih wilayah dulu supaya ojek muncul di tempat yang benar.'; return; }
+  if (!groupId && !regionId) { errEl.textContent = 'Pilih mitra, atau pilih wilayah kalau ojek ini belum punya mitra.'; return; }
   if (verified && !consent) { errEl.textContent = 'Ojek baru tampil ke pembeli kalau persetujuan tampil juga dicentang.'; return; }
   errEl.textContent = 'Menyimpan...';
   try {
     await callAdminAction('save_ojek_driver', undefined, {
-      driver: { name, whatsapp: wa, plate_number: plate, region_id: regionId, consent_confirmed: consent, status: verified ? 'verified' : 'pending' },
+      driver: { name, whatsapp: wa, plate_number: plate, ...(groupId ? { group_id: groupId } : { region_id: regionId }), consent_confirmed: consent, status: verified ? 'verified' : 'pending' },
     });
     ['oj-name', 'oj-wa', 'oj-plate'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('oj-consent').checked = false;
@@ -7833,27 +7856,23 @@ window.__adminSaveOjekGroup = async function () {
   const jenis = document.getElementById('og-jenis').value;
   const name = document.getElementById('og-name').value.trim();
   const link = document.getElementById('og-link').value.trim();
-  const regionId = document.getElementById('og-region').value || null;
   const note = document.getElementById('og-note').value.trim();
   const area = document.getElementById('og-area').value.trim();
   const ket = document.getElementById('og-ket').value.trim();
-  const wilayahKode = mitraWil.kel || mitraWil.kec || '';
+  const wilayahKode = wilKodeAdmin('mt');
   if (!name) { errEl.textContent = 'Nama mitra wajib diisi.'; return; }
   if (jenis === 'grup' && !link) { errEl.textContent = 'Tautan grup WhatsApp wajib diisi untuk jenis grup.'; return; }
   if (link && !/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+(\?[A-Za-z0-9=&_.-]*)?$/.test(link)) {
     errEl.textContent = 'Tautan harus berbentuk https://chat.whatsapp.com/kode-undangan'; return;
   }
   if (!wilayahKode) { errEl.textContent = 'Pilih wilayah baku sampai kecamatan.'; return; }
-  if (jenis === 'grup' && !regionId) { errEl.textContent = 'Pilih wilayah tampil ke pembeli dulu.'; return; }
   const group = { name, jenis, wilayah_kode: wilayahKode, keterangan: ket, admin_note: note, service_area: area, active: true };
   if (link) group.wa_link = link;
-  if (regionId) group.region_id = regionId;
   errEl.textContent = 'Menyimpan...';
   try {
     await callAdminAction('save_ojek_group', undefined, { group });
     ['og-name', 'og-link', 'og-note', 'og-area', 'og-ket'].forEach(id => { document.getElementById(id).value = ''; });
-    mitraWil = { prov: '', kota: '', kec: '', kel: '' };
-    const box = document.getElementById('mt-wil-box'); if (box) box.innerHTML = mitraWilayahInner();
+    wilResetAdmin('mt');
     errEl.textContent = '';
     showToast('Mitra disimpan 🤝');
     ojekCache.ts = 0;
