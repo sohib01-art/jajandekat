@@ -6006,10 +6006,9 @@ async function renderAdminDashboard() {
             <option value="pembeli">Pembeli</option>
             <option value="pedagang">Pedagang</option>
           </select>
-          <select id="bn-region" style="flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
-            ${regionOptionsHtml('🌏 Zona: Nasional (semua wilayah)')}
-          </select>
+          
         </div>
+        <div style="margin-top:8px;">${wilSearchHtml('bn', 'Nasional (semua wilayah)')}</div>
         <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-end;">
           <label style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);">Mulai tayang (kosong = langsung)
             <input id="bn-start" type="datetime-local" style="width:100%;box-sizing:border-box;margin-top:2px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;color:var(--text);font-size:12px;" /></label>
@@ -6037,10 +6036,9 @@ async function renderAdminDashboard() {
             <option value="biasa">Pedagang Biasa</option>
             <option value="pembeli">Pembeli</option>
           </select>
-          <select id="ann-region" style="flex:1;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
-            ${regionOptionsHtml('🌏 Zona: Nasional (semua wilayah)')}
-          </select>
+          
         </div>
+        <div style="margin-top:8px;">${wilSearchHtml('ann', 'Nasional (semua wilayah)')}</div>
         <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Zona memakai daftar wilayah resmi (provinsi → kabupaten/kota → kecamatan). Pengumuman zona hanya tampil &amp; terkirim ke perangkat yang wilayahnya diketahui berada di dalam zona itu; pembeli yang belum membagikan lokasi hanya menerima yang Nasional.</div>
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:var(--text-dim);cursor:pointer;">
           <input type="checkbox" id="ann-send-push" style="margin-top:2px;" />
@@ -6438,7 +6436,7 @@ window.__adminCreateAnnouncement = async function () {
   const message = document.getElementById('ann-message').value.trim();
   const link = document.getElementById('ann-link').value.trim();
   const audience = document.getElementById('ann-audience').value;
-  const regionId = document.getElementById('ann-region').value || null;
+  let regionId = null;
   const sendPush = !!(document.getElementById('ann-send-push') && document.getElementById('ann-send-push').checked);
 
   if (!message) { errEl.textContent = 'Isi pengumuman wajib diisi.'; return; }
@@ -6453,6 +6451,7 @@ window.__adminCreateAnnouncement = async function () {
     if (pendingAnnImageFile) {
       imageUrl = await uploadAnnouncementImage(pendingAnnImageFile);
     }
+    regionId = await wilSearchResolve('ann');
     const res = await callAdminAction('create_announcement', undefined, {
       message, link: link || null, image_url: imageUrl, audience, region_id: regionId,
     });
@@ -6460,7 +6459,7 @@ window.__adminCreateAnnouncement = async function () {
     pendingAnnImageFile = null; pendingAnnImagePreview = null;
     document.getElementById('ann-message').value = '';
     document.getElementById('ann-link').value = '';
-    document.getElementById('ann-region').value = '';
+    window.__wilSearchClear('ann');
     const pushBox = document.getElementById('ann-send-push');
     if (pushBox) pushBox.checked = false;
     const zone = document.getElementById('ann-image-zone');
@@ -6812,7 +6811,7 @@ window.__adminCreateBanner = async function () {
   const dest = bnDestValue();
   const link = dest.link || '';
   const audience = document.getElementById('bn-audience').value;
-  const regionId = document.getElementById('bn-region').value || null;
+  let regionId = null;
   const startAt = bnParseLocal(document.getElementById('bn-start').value.replace('T', ' '));
   const endAt = bnParseLocal(document.getElementById('bn-end').value.replace('T', ' '));
 
@@ -6836,12 +6835,13 @@ window.__adminCreateBanner = async function () {
   errEl.textContent = 'Memproses & mengunggah gambar...';
   let uploaded = null;
   try {
+    regionId = await wilSearchResolve('bn');
     uploaded = await uploadBannerImage(pendingBnImageEl, pendingBnImageFocus);
     await callAdminBanners('save_banner', { banner: { title, image_url: uploaded.url, link: link || null, audience, region_id: regionId, start_at: startAt, end_at: endAt, active: true } });
     pendingBnImageEl = null; pendingBnImageFocus = 0.5;
     renderBnImagePreview();
     ['bn-title', 'bn-start', 'bn-end'].forEach(id => { document.getElementById(id).value = ''; });
-    document.getElementById('bn-region').value = '';
+    window.__wilSearchClear('bn');
     document.getElementById('bn-audience').value = 'semua';
     bnAudienceTouched = false;
     document.getElementById('bn-dest').value = 'none';
@@ -7218,9 +7218,7 @@ window.__adminOpenArticleForm = function (articleId) {
       </div>
 
       <label style="font-size:11px;color:var(--text-faint);">Wilayah artikel (opsional — dipakai untuk menarget notifikasi push)</label>
-      <select id="art-region" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 10px;">
-        ${regionOptionsHtml('🌏 Umum (semua wilayah)', existing?.region_id || '')}
-      </select>
+      ${wilSearchHtml('art', 'Umum (semua wilayah)', existing && existing.region_id ? wilInitialFromRegion(existing.region_id) : null)}
 
       <label style="font-size:11px;color:var(--text-faint);">Status</label>
       <select id="art-status" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin:4px 0 14px;">
@@ -7280,9 +7278,10 @@ window.__adminSaveArticle = async function () {
     }
     const existing = editingArticleId ? adminArticlesData.find(a => a.id === editingArticleId) : null;
     const newlyPublished = published && !(existing && existing.status === 'published');
+    const artRegionId = await wilSearchResolve('art');
     const article = {
       title, slug, excerpt: excerpt || null, content, cover_image: coverUrl || null, status,
-      region_id: (document.getElementById('art-region') && document.getElementById('art-region').value) || null,
+      region_id: artRegionId,
     };
     if (editingArticleId) article.id = editingArticleId;
     if (newlyPublished) article.published_at = new Date().toISOString(); // revisi artikel yang sudah terbit tidak mengubah tanggal terbit
@@ -7439,8 +7438,84 @@ function ojekRegionLabel(regionId) {
   return chain.length ? chain.slice(0, 2).map(r => r.name).join(', ') : '(wilayah tidak dikenal)';
 }
 
+// ---------- Pencarian wilayah admin (ketik nama → pilih hasil; tidak perlu memilih bertingkat) ----------
+const wilSel = {};          // px -> { kode?, regionId?, label }
+const wilSearchEmpty = {};  // px -> teks untuk kondisi kosong
+const wilSearchRes = {};    // px -> hasil pencarian terakhir
+const wilSearchTimers = {};
+const WIL_LEVEL_LABEL = { 1: 'Provinsi', 2: 'Kab/Kota', 3: 'Kecamatan' };
+function wilInitialFromRegion(rid) {
+  const chain = regionChain(rid);
+  return chain.length ? { regionId: rid, label: chain.map(r => r.name).join(', ') } : null;
+}
+function wilSearchInner(px) {
+  const sel = wilSel[px];
+  const base = 'width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;';
+  if (sel) return `<div style="${base}display:flex;justify-content:space-between;align-items:center;gap:8px;"><span style="min-width:0;word-break:break-word;">📍 ${escapeHtml(sel.label)}</span><button type="button" class="follow-btn" onclick="window.__wilSearchClear('${px}')" style="flex-shrink:0;padding:4px 10px;">✕ Ganti</button></div>`;
+  const empty = wilSearchEmpty[px];
+  return `<input id="${px}-q" type="search" autocomplete="off" placeholder="🔍 Cari wilayah (min. 3 huruf), misal: sangatta" oninput="window.__wilSearchType('${px}', this.value)" style="${base}">
+    <div id="${px}-res" style="margin-top:2px;"></div>
+    <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">${empty ? 'Dikosongkan = ' + escapeHtml(empty) : 'Ketuk hasil pencarian untuk mengisi pilihan bertingkat di bawah.'}</div>`;
+}
+function wilSearchHtml(px, emptyLabel, initial) {
+  wilSearchEmpty[px] = emptyLabel || '';
+  if (initial) wilSel[px] = initial; else delete wilSel[px];
+  return `<div id="${px}-ws">${wilSearchInner(px)}</div>`;
+}
+function wilSearchRerender(px) { const el = document.getElementById(px + '-ws'); if (el) el.innerHTML = wilSearchInner(px); }
+window.__wilSearchClear = function (px) { delete wilSel[px]; wilSearchRerender(px); };
+window.__wilSearchType = function (px, q) {
+  clearTimeout(wilSearchTimers[px]);
+  const res = document.getElementById(px + '-res'); if (!res) return;
+  q = q.trim();
+  if (q.length < 3) { res.innerHTML = ''; return; }
+  wilSearchTimers[px] = setTimeout(async () => {
+    res.innerHTML = '<div style="font-size:11px;color:var(--text-faint);padding:6px 2px;">Mencari…</div>';
+    try {
+      const { data, error } = await sb.rpc('cari_wilayah', { p_q: q, p_limit: 12 });
+      if (error) throw error;
+      const cur = document.getElementById(px + '-q');
+      if (!cur || cur.value.trim() !== q) return; // pengetikan sudah berubah
+      wilSearchRes[px] = data || [];
+      res.innerHTML = wilSearchRes[px].length
+        ? wilSearchRes[px].map((r, i) => `<button type="button" onclick="window.__wilSearchPick('${px}', ${i})" style="display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 10px;margin-top:4px;color:var(--text);font-size:12px;cursor:pointer;"><span style="font-size:9.5px;color:var(--brand);font-weight:700;">${WIL_LEVEL_LABEL[r.level] || ''}</span><br>${escapeHtml(r.label)}</button>`).join('')
+        : '<div style="font-size:11px;color:var(--text-faint);padding:6px 2px;">Tidak ditemukan. Coba ejaan lain.</div>';
+    } catch (e) {
+      res.innerHTML = `<div style="font-size:11px;color:#f87171;padding:6px 2px;">Gagal mencari: ${escapeHtml(e.message)}</div>`;
+    }
+  }, 250);
+};
+window.__wilSearchPick = async function (px, i) {
+  const r = (wilSearchRes[px] || [])[i]; if (!r) return;
+  if (px === 'mts') { await wilApplyToMitra(r.kode); return; }
+  wilSel[px] = { kode: r.kode, label: r.label };
+  wilSearchRerender(px);
+};
+// Hasil pencarian untuk form mitra: kode berjenjang ("64.08.04") diuraikan ke pilihan provinsi → kota → kecamatan.
+async function wilApplyToMitra(kode) {
+  const p = kode.split('.');
+  const st = { prov: p[0], kota: p.length > 1 ? p.slice(0, 2).join('.') : '', kec: p.length > 2 ? p.slice(0, 3).join('.') : '', kel: '' };
+  await fetchWilayahChildren('');
+  await fetchWilayahChildren(st.prov);
+  if (st.kota) await fetchWilayahChildren(st.kota);
+  if (st.kec) await fetchWilayahChildren(st.kec);
+  wilState.mt = st;
+  const box = document.getElementById('mt-box'); if (box) box.innerHTML = wilPickerAdminInner('mt');
+  const q = document.getElementById('mts-q'); if (q) q.value = '';
+  const res = document.getElementById('mts-res'); if (res) res.innerHTML = '';
+}
+// Kembalikan id wilayah (tabel regions) untuk pilihan di kolom pencarian; null = tidak dipilih (nasional/umum).
+async function wilSearchResolve(px) {
+  const sel = wilSel[px];
+  if (!sel) return null;
+  if (sel.regionId) return sel.regionId;
+  const r = await callAdminAction('resolve_region', undefined, { wilayah_kode: sel.kode });
+  await fetchRegions(); // supaya nama wilayah baru langsung dikenal di daftar admin
+  return r.region_id;
+}
+
 // ---------- Pemilih wilayah baku untuk admin (tabel wilayah, seluruh Indonesia; state & id terpisah dari form pedagang) ----------
-const wilState = { mt: { prov: '', kota: '', kec: '', kel: '' }, od: { prov: '', kota: '', kec: '', kel: '' } };
+const wilState = { mt: { prov: '', kota: '', kec: '', kel: '' } };
 function wilSelectAdmin(px, lvl, label, options, value, disabled) {
   const opts = options.map(o => `<option value="${escapeHtml(o.kode)}"${o.kode === value ? ' selected' : ''}>${escapeHtml(o.nama)}</option>`).join('');
   return `<select id="${px}-${lvl}" ${disabled ? 'disabled' : ''} onchange="window.__wilPickAdmin('${px}','${lvl}', this.value)" style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;margin-top:6px;"><option value="">${label}</option>${opts}</select>`;
@@ -7475,10 +7550,6 @@ window.__wilPickAdmin = async function (px, lvl, val) {
   const box = document.getElementById(px + '-box');
   if (box) box.innerHTML = wilPickerAdminInner(px);
 };
-window.__ojekGroupChanged = function () {
-  const g = document.getElementById('oj-group'), w = document.getElementById('oj-region-wrap');
-  if (g && w) w.style.display = g.value ? 'none' : '';
-};
 window.__mitraJenisChanged = function () {
   const j = document.getElementById('og-jenis').value;
   const h = document.getElementById('og-link-hint');
@@ -7512,11 +7583,8 @@ function ojekPanelHtml() {
       <input id="oj-name" type="text" maxlength="80" placeholder="Nama ojek" style="${inp}" />
       <input id="oj-wa" type="tel" placeholder="Nomor WhatsApp (08xxxxxxxxxx)" style="${inp}" />
       <input id="oj-plate" type="text" maxlength="15" placeholder="Plat nomor (opsional)" style="${inp}" />
-      <select id="oj-group" onchange="window.__ojekGroupChanged()" style="${inp}"><option value="">Mitra: memuat…</option></select>
-      <div id="oj-region-wrap">
-        <select id="oj-region" style="${inp}">${regionOptionsHtml('📍 Pilih wilayah (hanya untuk ojek tanpa mitra)')}</select>
-      </div>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Kalau memilih mitra, wilayah ojek otomatis mengikuti wilayah mitra.</div>
+      <select id="oj-group" style="${inp}"><option value="">Mitra: memuat…</option></select>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wilayah ojek otomatis mengikuti wilayah mitra. Belum ada mitranya? Buat dulu di bagian "Tambah mitra" di bawah.</div>
       <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:11.5px;color:var(--text-dim);line-height:1.4;">
         <input id="oj-consent" type="checkbox" style="margin-top:2px;flex-shrink:0;" />
         <span>Ojek ini sudah setuju nama &amp; nomor WhatsApp-nya ditampilkan ke pembeli.</span>
@@ -7542,6 +7610,7 @@ function ojekPanelHtml() {
       <input id="og-link" type="url" placeholder="https://chat.whatsapp.com/xxxxxxxx" style="${inp}" />
       <div id="og-link-hint" style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wajib untuk jenis grup.</div>
       <div style="font-size:10.5px;font-weight:700;margin-top:10px;">📍 Wilayah (seluruh Indonesia, minimal sampai kecamatan)</div>
+      ${wilSearchHtml('mts', '')}
       ${wilPickerAdminHtml('mt')}
       <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Dipakai juga untuk menentukan pembeli mana yang melihat mitra ini.</div>
       <input id="og-ket" type="text" maxlength="200" placeholder="Keterangan acuan, misal: RW 05 Perum Griya Asri, ketua Pak Budi (tidak tampil ke pembeli)" style="${inp}" />
@@ -7699,9 +7768,8 @@ async function loadAdminOjek() {
   const ogSel = document.getElementById('oj-group');
   if (ogSel) {
     const keep = ogSel.value;
-    ogSel.innerHTML = '<option value="">Mitra: tanpa mitra (pilih wilayah)</option>' +
+    ogSel.innerHTML = '<option value="">' + (groups.some(g => g.active) ? 'Pilih mitra…' : 'Belum ada mitra aktif — buat dulu di bawah') + '</option>' +
       groups.filter(g => g.active).map(g => `<option value="${g.id}" ${g.id === keep ? 'selected' : ''}>${escapeHtml(g.name)}${(adminMitraData.find(x => x.id === g.id) || {}).wilayah ? ' · ' + escapeHtml((adminMitraData.find(x => x.id === g.id) || {}).wilayah.split(', ')[0]) : ''}</option>`).join('');
-    window.__ojekGroupChanged();
   }
   const fmt = (d) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   const btn = 'class="follow-btn"';
@@ -7799,16 +7867,15 @@ window.__adminSaveOjek = async function () {
   const wa = document.getElementById('oj-wa').value.trim();
   const plate = document.getElementById('oj-plate').value.trim();
   const groupId = document.getElementById('oj-group').value || null;
-  const regionId = document.getElementById('oj-region').value || null;
   const consent = document.getElementById('oj-consent').checked;
   const verified = document.getElementById('oj-verified').checked;
   if (!name || !wa) { errEl.textContent = 'Nama dan nomor WhatsApp wajib diisi.'; return; }
-  if (!groupId && !regionId) { errEl.textContent = 'Pilih mitra, atau pilih wilayah kalau ojek ini belum punya mitra.'; return; }
+  if (!groupId) { errEl.textContent = 'Pilih mitra dulu. Wilayah ojek mengikuti wilayah mitra.'; return; }
   if (verified && !consent) { errEl.textContent = 'Ojek baru tampil ke pembeli kalau persetujuan tampil juga dicentang.'; return; }
   errEl.textContent = 'Menyimpan...';
   try {
     await callAdminAction('save_ojek_driver', undefined, {
-      driver: { name, whatsapp: wa, plate_number: plate, ...(groupId ? { group_id: groupId } : { region_id: regionId }), consent_confirmed: consent, status: verified ? 'verified' : 'pending' },
+      driver: { name, whatsapp: wa, plate_number: plate, group_id: groupId, consent_confirmed: consent, status: verified ? 'verified' : 'pending' },
     });
     ['oj-name', 'oj-wa', 'oj-plate'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('oj-consent').checked = false;
