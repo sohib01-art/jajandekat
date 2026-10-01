@@ -2610,10 +2610,57 @@ function renderAkunView() {
     <div class="acc-section-label">Lainnya</div>
     <div class="acc-list">
       ${row('📤', 'acc-ico-teal', 'Bagikan JajanDekat', 'Ajak teman dan keluarga', 'window.__shareApp()')}
+      ${row('🤝', 'acc-ico-orange', 'Jadi Mitra Ojek', 'RT, RW, grup ojek, atau lainnya', 'window.__openMitraInfo()')}
       ${row('🛒', 'acc-ico-pink', 'Ingin Berjualan?', 'Buka mode Pedagang', 'window.__goPedagang()')}
     </div>
   `;
 }
+
+// ---------- JADI MITRA OJEK (halaman info + tombol hubungi admin; belum ada pendaftaran mandiri) ----------
+const MITRA_ADMIN_WHATSAPP = '628134271001'; // nomor admin untuk calon mitra (terpisah dari ADMIN_WHATSAPP untuk Premium)
+window.__openMitraInfo = function () {
+  document.getElementById('mitra-info-overlay')?.remove();
+  const region = (document.getElementById('buyer-region-text')?.textContent || '').trim();
+  const msg = 'Halo admin JajanDekat, saya tertarik menjadi mitra ojek' + (region ? ' di wilayah ' + region : '') + '. Mohon info lebih lanjut.';
+  const waUrl = `https://wa.me/${MITRA_ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+  const steps = [
+    ['Buat mitra', 'Admin mendata mitra: jenisnya (RT, RW, grup ojek, atau lainnya), nama, dan wilayahnya.', 'Admin'],
+    ['Terima akun pengelola', 'Admin membuat akun pengelola (maksimal 3 orang per mitra). Nomor WhatsApp dan PIN dikirim lewat chat pribadi.', 'Admin'],
+    ['Masuk dan setujui ketentuan', 'Pengelola masuk dengan nomor WhatsApp dan PIN, menyetujui ketentuan, lalu mengganti PIN.', 'Pengelola'],
+    ['Daftarkan ojek', 'Pengelola mengisi nama, nomor WhatsApp, dan plat ojek yang sendiri setuju tampil, serta mencatat cara persetujuannya.', 'Pengelola'],
+    ['Diperiksa admin', 'Admin memeriksa dan menyetujui. Ojek yang belum diperiksa tidak tampil ke pembeli.', 'Admin'],
+    ['Tampil ke pembeli', 'Ojek yang disetujui muncul bagi pembeli di wilayah mitra, lengkap dengan tombol WhatsApp.', 'Pembeli'],
+  ];
+  const tagColor = { Admin: '#534AB7', Pengelola: '#0F6E56', Pembeli: '#5F5E5A' };
+  const overlay = document.createElement('div');
+  overlay.id = 'mitra-info-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:88vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">\U0001F91D Jadi Mitra Ojek</div>
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.55;margin-bottom:14px;">JajanDekat membantu warga menemukan pedagang dan ojek di sekitar mereka. Mitra (RT, RW, grup ojek, atau lainnya) membantu mendaftarkan ojek warga di wilayahnya dan menjaga kualitasnya.</div>
+      ${steps.map((st, i) => `
+        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">
+          <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:${tagColor[st[2]]};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</div>
+          <div style="min-width:0;">
+            <div style="font-size:12.5px;font-weight:700;">${st[0]} <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${tagColor[st[2]]};color:#fff;vertical-align:1px;">${st[2]}</span></div>
+            <div style="font-size:11.5px;color:var(--text-dim);line-height:1.5;margin-top:2px;">${st[1]}</div>
+          </div>
+        </div>`).join('')}
+      <div style="border:1px solid var(--stroke);border-radius:12px;padding:12px;margin:14px 0;font-size:11.5px;color:var(--text-dim);line-height:1.6;">
+        <div style="font-weight:700;color:var(--text);margin-bottom:4px;">Yang perlu diperhatikan</div>
+        &bull; Hanya ojek yang sendiri setuju nama dan nomor WhatsApp-nya tampil yang didaftarkan.<br>
+        &bull; JajanDekat hanya menyediakan tautan. Ongkos dan pembayaran disepakati langsung dengan ojek.<br>
+        &bull; Laporan masalah ditindak pengelola dan admin; mitra atau ojek bermasalah bisa ditangguhkan.<br>
+        &bull; PIN rahasia dan tidak dibagikan. Admin tidak pernah meminta PIN.
+      </div>
+      <a href="${waUrl}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:12px;border-radius:10px;background:var(--brand);color:#fff;font-weight:700;font-size:13px;">Hubungi admin lewat WhatsApp</a>
+      <button onclick="document.getElementById('mitra-info-overlay').remove()" style="width:100%;margin-top:8px;padding:12px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;">Tutup</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+};
 
 // ---------- SHEET DETAIL PEDAGANG ----------
 window.__closeVendorSheet = function () {
