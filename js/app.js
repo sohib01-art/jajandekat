@@ -5926,6 +5926,7 @@ async function renderAdminDashboard() {
       <button class="admin-tab" data-tab="announcements" onclick="window.__adminSwitchTab('announcements')">📢 Pengumuman</button>
       <button class="admin-tab" data-tab="banners" onclick="window.__adminSwitchTab('banners')">🖼️ Banner Slider</button>
       <button class="admin-tab" data-tab="ojek" onclick="window.__adminSwitchTab('ojek')">🛵 Ojek</button>
+      <button class="admin-tab" data-tab="mitra" onclick="window.__adminSwitchTab('mitra')">🤝 Mitra</button>
       <button class="admin-tab" data-tab="metrics" onclick="window.__adminSwitchTab('metrics')">📈 Metrik</button>
     </div>
 
@@ -5968,6 +5969,11 @@ async function renderAdminDashboard() {
 
     <div class="admin-panel" data-panel="ojek" style="display:none;">
       ${ojekPanelHtml()}
+    </div>
+
+    <div class="admin-panel" data-panel="mitra" style="display:none;">
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;line-height:1.5;">Ringkasan tiap mitra (RT, RW, grup WA, dan lainnya): jumlah ojek, laporan, klik, dan akun pengelola. Urut dari yang punya laporan baru terbanyak. Untuk tambah/ubah detail mitra, ojek, dan akun, pakai tab 🛵 Ojek.</div>
+      <div id="admin-mitra"><div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div></div>
     </div>
 
     <div class="admin-panel" data-panel="metrics" style="display:none;">
@@ -6175,6 +6181,7 @@ window.__adminSwitchTab = function (tab) {
   document.querySelectorAll('.admin-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
   document.querySelectorAll('.admin-panel').forEach(panel => { panel.style.display = panel.dataset.panel === tab ? '' : 'none'; });
   if (tab === 'metrics' && !adminMetricsLoaded) loadAdminMetrics();
+  if (tab === 'mitra') loadAdminMitra();
 };
 
 function renderAdminVendorList(list) {
@@ -7501,6 +7508,114 @@ function metricsPanelHtml() {
 const OJEK_STATUS_LABEL = { pending: 'Menunggu', verified: 'Terverifikasi', suspended: 'Ditangguhkan' };
 const OJEK_STATUS_COLOR = { pending: ['#FEF3C7', '#B45309'], verified: ['#DCFCE7', '#15803D'], suspended: ['#FEE2E2', '#DC2626'] };
 const OJEK_REASON_LABEL = { penipuan: 'Penipuan', link_mati: 'Tautan mati', spam: 'Spam', tidak_responsif: 'Tidak responsif', lainnya: 'Lainnya' };
+
+// ---------- MITRA (tabel ringkasan per mitra: ojek, laporan, klik, akun) ----------
+let adminMitraData = [];
+let adminMitraFilter = { jenis: '', status: '', q: '' };
+const MITRA_JENIS_LABEL = { rt: 'RT', rw: 'RW', grup: 'Grup WA', lainnya: 'Lainnya' };
+
+function adminMitraEnsureShell() {
+  const el = document.getElementById('admin-mitra');
+  if (!el || document.getElementById('admin-mitra-table')) return el;
+  const sel = 'background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;color:var(--text);font-size:12px;';
+  el.innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <input type="text" placeholder="🔍 Cari nama / wilayah / keterangan" value="${escapeHtml(adminMitraFilter.q)}" oninput="window.__adminMitraFilter('q', this.value)" style="flex:1;min-width:150px;box-sizing:border-box;${sel}">
+      <select onchange="window.__adminMitraFilter('jenis', this.value)" style="${sel}">
+        <option value="">Semua jenis</option>
+        ${Object.entries(MITRA_JENIS_LABEL).map(([k, v]) => `<option value="${k}" ${adminMitraFilter.jenis === k ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+      <select onchange="window.__adminMitraFilter('status', this.value)" style="${sel}">
+        <option value="">Semua status</option>
+        ${Object.entries(OJEK_STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${adminMitraFilter.status === k ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+      <button class="follow-btn" onclick="window.__adminMitraReload()">↻ Muat ulang</button>
+    </div>
+    <div id="admin-mitra-summary"></div>
+    <div id="admin-mitra-table"></div>`;
+  return el;
+}
+
+async function loadAdminMitra() {
+  if (!adminMitraEnsureShell()) return;
+  const tEl = document.getElementById('admin-mitra-table');
+  tEl.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Memuat...</div>';
+  try {
+    const res = await callAdminAction('list_mitra');
+    adminMitraData = res.mitra || [];
+  } catch (e) {
+    const msg = /Aksi tidak dikenal|action dan vendor_id/.test(e.message)
+      ? 'Edge function admin-action belum diperbarui (aksi list_mitra belum dikenal).'
+      : 'Gagal memuat: ' + escapeHtml(e.message);
+    tEl.innerHTML = `<span style="color:#f87171;font-size:11.5px;">${msg}</span>`;
+    return;
+  }
+  renderAdminMitraTable();
+}
+
+function renderAdminMitraTable() {
+  const sEl = document.getElementById('admin-mitra-summary');
+  const tEl = document.getElementById('admin-mitra-table');
+  if (!tEl) return;
+  const f = adminMitraFilter;
+  const q = f.q.trim().toLowerCase();
+  const rows = adminMitraData
+    .filter(m => (!f.jenis || m.jenis === f.jenis) && (!f.status || m.verification_status === f.status) &&
+      (!q || [m.name, m.wilayah, m.keterangan].some(x => String(x || '').toLowerCase().includes(q))))
+    .sort((a, b) => ((Number(b.laporan_baru) || 0) - (Number(a.laporan_baru) || 0)) || (new Date(b.created_at) - new Date(a.created_at)));
+  const sum = (k) => rows.reduce((n, m) => n + (Number(m[k]) || 0), 0);
+  const card = (label, val, warn) => `<div style="flex:1;min-width:70px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;text-align:center;">
+      <div style="font-size:16px;font-weight:800;${warn ? 'color:#DC2626;' : ''}">${val}</div>
+      <div style="font-size:9.5px;color:var(--text-faint);">${label}</div></div>`;
+  if (sEl) sEl.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      ${card('Mitra', rows.length)}${card('Ojek aktif', sum('ojek_aktif'))}${card('Menunggu', sum('ojek_pending'))}
+      ${card('Laporan baru', sum('laporan_baru'), sum('laporan_baru') > 0)}${card('Klik 30 hari', sum('klik_30_hari'))}</div>`;
+  if (!rows.length) { tEl.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada mitra yang cocok.</div>'; return; }
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'belum pernah';
+  const th = 'text-align:left;padding:8px 6px;border-bottom:1px solid var(--stroke);font-size:10px;color:var(--text-faint);white-space:nowrap;';
+  const td = 'padding:8px 6px;border-bottom:1px solid var(--stroke);vertical-align:top;';
+  tEl.innerHTML = `<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px;">
+    <thead><tr><th style="${th}">Mitra</th><th style="${th}">Jenis</th><th style="${th}">Status</th><th style="${th}">Ojek (aktif / menunggu / tangguh)</th><th style="${th}">Laporan (baru / total)</th><th style="${th}">Klik 7h / 30h</th><th style="${th}">Akun</th><th style="${th}">Aksi</th></tr></thead>
+    <tbody>${rows.map(m => {
+      const vs = m.verification_status || 'verified';
+      const [bg, fg] = OJEK_STATUS_COLOR[vs] || OJEK_STATUS_COLOR.pending;
+      const baru = Number(m.laporan_baru) || 0;
+      const b = 'class="follow-btn" style="padding:4px 8px;font-size:10.5px;"';
+      return `<tr style="${m.active ? '' : 'opacity:.6;'}">
+        <td style="${td}"><div style="font-weight:700;">${escapeHtml(m.name)}</div>
+          <div style="color:var(--text-faint);font-size:10px;">📍 ${escapeHtml(m.wilayah || 'wilayah belum diisi')}</div>
+          ${m.keterangan ? `<div style="color:var(--text-dim);font-size:10px;font-style:italic;">${escapeHtml(m.keterangan)}</div>` : ''}</td>
+        <td style="${td}">${escapeHtml(MITRA_JENIS_LABEL[m.jenis] || m.jenis || '-')}</td>
+        <td style="${td}"><span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${bg};color:${fg};white-space:nowrap;">${OJEK_STATUS_LABEL[vs] || vs}</span>${m.active ? '' : '<div style="font-size:9.5px;color:var(--text-faint);">nonaktif</div>'}</td>
+        <td style="${td}">${Number(m.ojek_aktif) || 0} / ${Number(m.ojek_pending) || 0} / ${Number(m.ojek_ditangguhkan) || 0}</td>
+        <td style="${td}"><span style="${baru > 0 ? 'color:#DC2626;font-weight:800;' : ''}">${baru}</span> / ${Number(m.laporan_total) || 0}</td>
+        <td style="${td}">${Number(m.klik_7_hari) || 0} / ${Number(m.klik_30_hari) || 0}</td>
+        <td style="${td}">${Number(m.jumlah_akun) || 0} akun<div style="color:var(--text-faint);font-size:10px;">login: ${fmt(m.terakhir_login)}</div></td>
+        <td style="${td}"><div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${vs !== 'verified' ? `<button ${b} onclick="window.__adminMitraSetStatus('${m.id}','verified')">✔ Setujui</button>` : ''}
+          ${vs !== 'suspended' ? `<button ${b} onclick="window.__adminMitraSetStatus('${m.id}','suspended')">⏸ Tangguhkan</button>` : ''}
+          <button ${b} onclick="window.__adminSwitchTab('ojek')">Detail</button></div></td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+window.__adminMitraFilter = function (key, value) {
+  adminMitraFilter[key] = value;
+  renderAdminMitraTable();
+};
+window.__adminMitraReload = function () { loadAdminMitra(); };
+window.__adminMitraSetStatus = async function (id, status) {
+  const m = adminMitraData.find(x => x.id === id);
+  const q = status === 'suspended'
+    ? `Tangguhkan mitra "${m ? m.name : ''}"? Mitra dan SEMUA ojek di dalamnya langsung hilang dari pembeli.`
+    : `Setujui mitra "${m ? m.name : ''}" tampil ke pembeli?`;
+  if (!confirm(q)) return;
+  try {
+    await callAdminAction('save_ojek_group', undefined, { group: { id, verification_status: status } });
+    ojekCache.ts = 0;
+    await Promise.all([loadAdminMitra(), loadAdminOjek()]);
+  } catch (e) { alert('Gagal mengubah status mitra: ' + e.message); }
+};
 
 async function loadAdminOjek() {
   const dEl = document.getElementById('admin-ojek-drivers');
