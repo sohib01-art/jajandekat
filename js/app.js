@@ -4860,11 +4860,19 @@ function renderPedagang() {
         </button>
       `}
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke);">
-        <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;">Tulisan promo (tampil di kartu Anda saat promo aktif) — contoh: "Diskon 20% khusus hari ini!"</div>
-        <div style="display:flex;gap:6px;">
-          <input id="promo-text-input" type="text" maxlength="80" value="${(v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Tulis promo Anda di sini..." style="flex:1;" />
-          <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;">💾</button>
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px;">Tulisan promo di kartu</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;line-height:1.45;">Tampil di pita oranye pada foto kartu Anda saat promo aktif. Tulis <b>singkat</b> (maks. ±20 huruf) supaya terbaca penuh. Ketuk salah satu pilihan di bawah, atau tulis sendiri.</div>
+        <div class="promo-chips">${PROMO_CHIPS.map(t => `<button type="button" class="promo-chip" onclick="window.__promoPick(this.textContent)">${t}</button>`).join('')}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input id="promo-text-input" type="text" maxlength="80" value="${(v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Contoh: Diskon 20%" oninput="window.__promoCount()" style="flex:1;" />
+          <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;" aria-label="Simpan tulisan promo">💾</button>
         </div>
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:11px;">
+          <span id="promo-hint" style="color:var(--text-faint);">${promoGuideState(v.promo_text).hint}</span>
+          <span id="promo-count" style="color:${promoGuideState(v.promo_text).color};white-space:nowrap;">${promoGuideState(v.promo_text).count}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-faint);margin:8px 0 4px;">Tampilan di kartu:</div>
+        <div class="promo-preview"><span id="promo-preview-text" class="promo-preview-rb">${escapeHtml(promoGuideState(v.promo_text).preview)}</span></div>
         <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
       </div>
     </div>
@@ -6094,6 +6102,33 @@ window.__requestPromo = async function (vendorId) {
   } catch (e) { /* tetap lanjut buka WA walau insert gagal */ }
   const msg = 'Halo, saya ' + v.name + ' (ID: ' + v.id + ') mau pasang Promosi Lokal di JajanDekat.';
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
+};
+
+// Pilihan cepat tulisan promo (singkat supaya muat di pita kartu) + hitungan huruf + pratinjau pita.
+const PROMO_CHIPS = ['Diskon 10%', 'Diskon 20%', 'Diskon 30%', 'Diskon 50%', 'Beli 2 gratis 1', 'Gratis ongkir', 'Gratis topping', 'Promo hari ini', 'Harga spesial', 'Menu baru'];
+const PROMO_IDEAL_LEN = 20;
+function promoGuideState(raw) {
+  const t = String(raw || '').trim(), n = t.length, over = n > PROMO_IDEAL_LEN;
+  return {
+    count: n + '/' + PROMO_IDEAL_LEN,
+    color: over ? '#C77F0A' : 'var(--text-faint)',
+    hint: over ? 'Terlalu panjang: di pita kartu akan terpotong (…), di halaman detail tetap utuh.' : (n ? 'Pas, muat di pita kartu.' : 'Kosong = pita hanya bertuliskan "Promo".'),
+    preview: '🔥 ' + (t || 'Promo'),
+  };
+}
+window.__promoCount = function () {
+  const inp = document.getElementById('promo-text-input'); if (!inp) return;
+  const s = promoGuideState(inp.value);
+  const cnt = document.getElementById('promo-count'), hint = document.getElementById('promo-hint'), pv = document.getElementById('promo-preview-text');
+  if (cnt) { cnt.textContent = s.count; cnt.style.color = s.color; }
+  if (hint) hint.textContent = s.hint;
+  if (pv) pv.textContent = s.preview;
+};
+window.__promoPick = function (t) {
+  const inp = document.getElementById('promo-text-input'); if (!inp) return;
+  inp.value = String(t || '').trim();
+  window.__promoCount();
+  inp.focus();
 };
 
 window.__savePromoText = async function (vendorId) {
