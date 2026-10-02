@@ -1488,6 +1488,79 @@ function renderHmRecCard(v) {
   </div>`;
 }
 
+// Warna pita promo mengikuti warna dominan foto (hijau → pita hijau, biru → pita biru, dst).
+// Hue dihitung di perangkat dari foto 24x24 px, disimpan di localStorage supaya render berikutnya tidak berkedip oranye dulu.
+// Foto tanpa izin CORS / foto abu-abu, putih, atau gelap → pita tetap oranye bawaan.
+const HM_DOM_KEY = 'jd_dom_hue';
+let hmDomCache = {};
+try { hmDomCache = JSON.parse(localStorage.getItem(HM_DOM_KEY) || '{}') || {}; } catch (e) { hmDomCache = {}; }
+function hmTintVars(h) { return `--rb1:hsl(${h},78%,40%);--rb2:hsl(${(h + 14) % 360},85%,47%);--rb3:hsl(${(h + 28) % 360},90%,52%);`; }
+function hmTintStyle(v) { const h = v.photo_url ? hmDomCache[v.photo_url] : null; return (h === undefined || h === null) ? '' : `style="${hmTintVars(h)}"`; }
+function hmDominantHue(img) {
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 24;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, 24, 24);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    const bw = new Array(12).fill(0), bx = bw.slice(), by = bw.slice();
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+      if (mx === mn) continue;
+      const s = (mx - mn) / (1 - Math.abs(2 * l - 1));
+      if (s < 0.25 || l < 0.15 || l > 0.9) continue;
+      let h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+      h = ((h * 60) + 360) % 360;
+      const w = s * (1 - Math.abs(2 * l - 1)), k = Math.floor(h / 30) % 12, rad = h * Math.PI / 180;
+      bw[k] += w; bx[k] += w * Math.cos(rad); by[k] += w * Math.sin(rad);
+    }
+    let best = 0; for (let k = 1; k < 12; k++) if (bw[k] > bw[best]) best = k;
+    if (bw[best] < 2) return null;
+    return Math.round(((Math.atan2(by[best], bx[best]) * 180 / Math.PI) + 360) % 360);
+  } catch (e) { return null; }
+}
+window.__hmTint = function (img) {
+  const card = img.closest('.hm-gc'); if (!card) return;
+  const src = img.dataset.src || img.getAttribute('src');
+  const h = hmDominantHue(img);
+  if (h === null) return;
+  card.style.cssText += hmTintVars(h);
+  if (hmDomCache[src] !== h) {
+    hmDomCache[src] = h;
+    const keys = Object.keys(hmDomCache);
+    if (keys.length > 200) delete hmDomCache[keys[0]];
+    try { localStorage.setItem(HM_DOM_KEY, JSON.stringify(hmDomCache)); } catch (e) {}
+  }
+};
+window.__hmImgErr = function (img) {
+  if (!img.dataset.r) { img.dataset.r = '1'; img.removeAttribute('crossorigin'); const s = img.src; img.src = ''; img.src = s; }
+  else img.remove();
+};
+// Kartu grid 2 kolom (gaya aplikasi pesan-antar): foto 4:3 + lencana, nama maks 2 baris, rating · jarak.
+// Foto pakai <img loading="lazy"> supaya grid panjang tidak berat di WebView; tanpa foto → placeholder emoji.
+function renderHmGridCard(v) {
+  const d = vendorDistanceLabel(v), open = hmIsOpen(v), rt = hmRating(v), promo = isPromoActive(v);
+  const hasPhoto = !!v.photo_url;
+  const modeBg = (!hasPhoto && v.mode_icon) ? `style="background-image:url('mode_icons/${v.mode_icon}.png');"` : '';
+  const ph = hasPhoto
+    ? `<img class="hm-gc-img" crossorigin="anonymous" data-src="${escapeHtml(v.photo_url)}" src="${escapeHtml(v.photo_url)}" alt="" loading="lazy" decoding="async" onload="window.__hmTint(this)" onerror="window.__hmImgErr(this)">`
+    : '';
+  const fav = followedIds.has(v.id);
+  return `<div class="hm-gc ${promo ? 'promo' : ''}" ${hmTintStyle(v)} role="button" tabindex="0" onclick="if(!event.target.closest('button')) window.__openVendorSheet('${v.id}')">
+    <div class="hm-gc-ph ${hasPhoto || v.mode_icon ? '' : 'noimg'} ${open ? '' : 'closed'}" ${modeBg}>
+      ${ph}${hasPhoto || v.mode_icon ? '' : `<span class="hm-gc-emoji">${v.emoji || '🍜'}</span>`}
+      ${v.is_premium ? '<span class="hm-gc-tag">Unggulan</span>' : ''}
+      <button type="button" class="hm-gc-heart ${fav ? 'on' : ''}" aria-label="${fav ? 'Berhenti mengikuti' : 'Ikuti'} ${escapeHtml(v.name)}" aria-pressed="${fav}" onclick="event.stopPropagation();window.__toggleFollow('${v.id}')">${fav ? '♥' : '♡'}</button>
+      ${promo ? `<span class="hm-gc-promo">🔥 ${v.promo_text ? escapeHtml(v.promo_text) : 'Promo'}</span>` : ''}
+      <span class="hm-gc-st ${open ? '' : 'off'}">${open ? 'Buka' : 'Tutup'}</span>
+    </div>
+    <div class="hm-gc-name">${escapeHtml(v.name)}</div>
+    <div class="hm-gc-cat">${escapeHtml(hmCatLabel(v))}${v.claim_status === 'unclaimed' ? ' · <span style="color:#9CA3AF;">Belum diklaim</span>' : ''}</div>
+    <div class="hm-gc-foot"><span class="hm-gc-rt">${rt || '<span class="hm-gc-new">Baru</span>'}</span>${d ? `<span class="hm-gc-km">📍 ${d}</span>` : ''}</div>
+  </div>`;
+}
+function hmGridHtml(list) { return `<div class="hm-grid">${list.map(renderHmGridCard).join('')}</div>`; }
+
 function hmSearchHtml() {
   const n = window.__regionName || 'Di sekitar kamu';
   return HM_SEARCH_HTML + `<button type="button" class="hm-locrow" onclick="window.__enableLocation && window.__enableLocation()" aria-label="Lokasi"><svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg><span id="loc-pill-text">${escapeHtml(n)}</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`;
@@ -1535,7 +1608,7 @@ function renderPembeli() {
     <div class="sec-head" style="margin-top:12px;"><h2>Kategori Lainnya</h2></div>
     <div class="fm-sqgrid compact">${othGridHtml}</div>${hmActive && !hmActive.kul ? typeChipsHtml : ''}
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
-    ${recs.length ? `<div class="hm-rec">${recs.map(renderHmRecCard).join('')}</div>` : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>'}
+    ${recs.length ? hmGridHtml(recs) : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>'}
   `;
   initAnnSlider();
 }
@@ -2507,7 +2580,7 @@ function renderTerdekatView() {
   main.innerHTML = `
     <div class="sec-head"><button class="sec-back" onclick="window.__goView('status')">‹ Beranda</button></div>
     <div class="sec-head"><h2>Pedagang terdekat</h2>${near.length ? `<span class="sec-count">${near.length} sedang buka</span>` : ''}</div>
-    ${near.length ? `<div class="hm-near">${near.map(renderHmNearCard).join('')}</div>` : nearbyEmptyHtml()}
+    ${near.length ? hmGridHtml(near) : nearbyEmptyHtml()}
   `;
 }
 
@@ -2518,7 +2591,7 @@ function renderFavoritView() {
   main.innerHTML = `
     <div class="sec-head"><h2>💛 Pedagang yang Kamu Ikuti</h2>${favs.length ? `<span class="sec-count">${openCount} sedang buka</span>` : ''}</div>
     ${favs.length
-      ? `<div class="hm-near">${favs.map(renderHmNearCard).join('')}</div>`
+      ? hmGridHtml(favs)
       : `<div class="empty-state">
            <div class="empty-title">Belum ada favorit</div>
            <div class="empty-text">Ketuk ♥ di kartu pedagang untuk mengikutinya. Kamu akan tahu saat mereka mulai jualan.</div>
@@ -2879,7 +2952,7 @@ function renderCariView() {
       (!cat || vendorMainCats(v).includes(cat.k))
     );
     results.innerHTML = filtered.length
-      ? `<div class="hm-near">${sortVendorsForDisplay(filtered).map(renderHmNearCard).join('')}</div>`
+      ? hmGridHtml(sortVendorsForDisplay(filtered))
       : `<div class="nb-empty">Tidak ada pedagang yang cocok.<button type="button" onclick="window.__openAddVendorModal()" style="display:block;margin:10px auto 0;padding:9px 14px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:11.5px;">➕ Tambahkan toko ini</button></div>`;
   }
   document.querySelectorAll('#cari-chips .map-chip').forEach(btn => {
