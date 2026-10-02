@@ -3058,8 +3058,94 @@ let baPhotoFile = null;
 let baBusy = false;
 let baMenu = [{ name: '', price: '' }];
 
+// ---------- Form tambah toko oleh pembeli: jam operasional & menu (gaya mandiri, tidak bergantung style.css) ----------
+const BH_CSS = `
+.bh-card{background:var(--surface);border:1px solid var(--stroke);border-radius:14px;padding:14px;margin:0 0 14px}
+.bh-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.bh-ico{width:32px;height:32px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.bh-title{font-size:14px;font-weight:800;line-height:1.2}
+.bh-help{font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4}
+.bh-sub{font-size:12px;font-weight:700;margin:12px 0 6px}
+.bh-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.bh-day{padding:11px 0;border-radius:9px;border:1.5px solid var(--stroke);background:var(--bg);color:var(--text-dim);font-weight:700;font-size:12px;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.bh-day[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+.bh-presets{display:flex;gap:6px;flex-wrap:wrap}
+.bh-preset{padding:8px 13px;border-radius:99px;border:1.5px solid var(--stroke);background:var(--bg);color:var(--text);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer}
+.bh-preset.on{border-color:var(--brand);color:var(--brand);background:transparent}
+.bh-sw{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;margin-top:10px;cursor:pointer}
+.bh-sw b{font-size:12.5px;display:block}
+.bh-sw small{font-size:11px;color:var(--text-dim)}
+.bh-sw input{-webkit-appearance:none;appearance:none;width:46px;height:27px;border-radius:99px;background:#c9c4bc;position:relative;flex-shrink:0;transition:background .15s;border:none;margin:0;cursor:pointer}
+.bh-sw input::after{content:'';position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.bh-sw input:checked{background:var(--brand)}
+.bh-sw input:checked::after{left:22px}
+.bh-sw input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.bh-times{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.bh-times label{font-size:11.5px;font-weight:700;display:block;margin-bottom:4px}
+.bh-times input{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+.bh-menu{display:grid;grid-template-columns:24px minmax(0,1fr) 104px auto;gap:6px;align-items:end;margin-top:10px}
+.bh-num{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:9px}
+.bh-mf label{display:block;font-size:10.5px;color:var(--text-dim);margin-bottom:3px}
+.bh-mf input{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--text);font-family:inherit;font-size:12.5px;min-width:0}
+.bh-del{border:none;background:transparent;color:#DC2626;font-size:11.5px;font-weight:700;padding:10px 2px;cursor:pointer;font-family:inherit}
+.bh-add{width:100%;margin-top:12px;padding:11px;border-radius:10px;border:1px dashed var(--brand);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer}
+.bh-quota{border:1px solid var(--stroke);background:var(--bg);border-radius:10px;padding:9px 11px;font-size:11.5px;color:var(--text-dim);line-height:1.5;margin-bottom:12px}
+.bh-quota.full{border-color:#DC2626;color:#DC2626}
+`;
+(function () {
+  if (document.getElementById('bh-style')) return;
+  const st = document.createElement('style');
+  st.id = 'bh-style';
+  st.textContent = BH_CSS;
+  document.head.appendChild(st);
+})();
+
+const BH_PRESETS = { 'sen-jum': [1, 2, 3, 4, 5], 'sen-sab': [1, 2, 3, 4, 5, 6], 'semua': [0, 1, 2, 3, 4, 5, 6] };
+let baHari = []; // kosong = hari buka belum diisi (tidak ada hari yang terpilih sejak awal)
+function baSyncHari() {
+  document.querySelectorAll('#ba-hari-row .bh-day').forEach(b => b.setAttribute('aria-pressed', baHari.includes(Number(b.dataset.d)) ? 'true' : 'false'));
+  document.querySelectorAll('#ba-presets .bh-preset').forEach(b => {
+    const want = BH_PRESETS[b.dataset.k] || [];
+    b.classList.toggle('on', want.length === baHari.length && want.every(x => baHari.includes(x)));
+  });
+}
+window.__baToggleHari = function (d) {
+  baHari = baHari.includes(d) ? baHari.filter(x => x !== d) : [...baHari, d].sort((a, b) => a - b);
+  baSyncHari();
+};
+window.__baPreset = function (k) {
+  const want = BH_PRESETS[k] || [];
+  const same = want.length === baHari.length && want.every(x => baHari.includes(x));
+  baHari = same ? [] : want.slice(); // ketuk lagi untuk membatalkan
+  baSyncHari();
+};
+function baFmtRp(d) { return String(d).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+window.__baMenuPrice = function (i, el) {
+  const digits = el.value.replace(/\D/g, '').slice(0, 8);
+  if (baMenu[i]) baMenu[i].price = digits;
+  el.value = digits ? 'Rp ' + baFmtRp(digits) : '';
+};
+// Kuota pendaftaran toko oleh pembeli per hari (batas total, sementara). Hanya info; server yang menolak kalau penuh.
+async function baLoadQuota() {
+  const box = document.getElementById('ba-quota');
+  if (!box) return;
+  try {
+    const { data, error } = await sb.rpc('jd_buyer_add_quota');
+    if (error) throw error;
+    const left = Number(data && data.remaining), cap = Number(data && data.cap);
+    if (!Number.isFinite(left) || !Number.isFinite(cap)) return;
+    const btn = document.getElementById('ba-submit-btn');
+    if (left <= 0) {
+      box.innerHTML = `<div class="bh-quota full">Pendaftaran toko oleh pembeli hari ini sudah penuh (maksimal ${cap} toko per hari). Coba lagi besok.</div>`;
+      if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+    } else if (left <= 10) {
+      box.innerHTML = `<div class="bh-quota">Sisa kuota pendaftaran toko hari ini: ${left} dari ${cap}.</div>`;
+    }
+  } catch (e) { /* abaikan */ }
+}
+
 window.__openAddVendorModal = function () {
-  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baPhotoFile = null; baBusy = false; baMenu = [{ name: '', price: '' }];
+  baName = ''; baWhatsapp = ''; baCategoryKey = null; baLat = null; baLng = null; baLocationNote = ''; baPhotoFile = null; baBusy = false; baMenu = [{ name: '', price: '' }]; baHari = [];
   document.getElementById('addvendor-modal-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'addvendor-modal-overlay';
@@ -3070,6 +3156,7 @@ window.__openAddVendorModal = function () {
       <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:4px;">➕ Tambahkan Toko</div>
       <div style="font-size:11px;color:var(--text-faint);margin-bottom:14px;">Nemu pedagang/toko yang belum ada di JajanDekat? Daftarkan di sini. Toko ini akan tampil dengan status <b>"Belum diklaim"</b> sampai pemiliknya konfirmasi lewat WhatsApp ke admin.</div>
 
+      <div id="ba-quota"></div>
       <input id="ba-name" type="text" value="" oninput="window.__baUpdate('name', this.value)" placeholder="Nama toko, misal: Bakso Pak Slamet" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
 
       <div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">Jenis dagangan</div>
@@ -3102,33 +3189,37 @@ window.__openAddVendorModal = function () {
 
       <input id="ba-note" type="text" value="" oninput="window.__baUpdate('note', this.value)" placeholder="Catatan lokasi (opsional), misal: sebelah warung Bu Siti" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
 
-      <div style="font-size:11.5px;font-weight:700;margin-bottom:2px;">Hari &amp; jam buka (opsional)</div>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Isi kalau kamu tahu. Pemilik toko bisa memperbaikinya nanti.</div>
-      <div class="jd-days" id="ba-hari-row" role="group" aria-label="Hari buka">
-        ${HARI_URUTAN.map(d => `<button type="button" class="jd-day" data-d="${d}" aria-pressed="true" onclick="window.__toggleHari('ba', ${d})">${HARI_SINGKAT[d]}</button>`).join('')}
-      </div>
-      <div class="jd-presets" style="margin:6px 0 8px;">
-        <button type="button" class="jd-preset" onclick="window.__setHariPreset('ba', 'semua')">Setiap hari</button>
-        <button type="button" class="jd-preset" onclick="window.__setHariPreset('ba', 'sen-sab')">Sen–Sab</button>
-        <button type="button" class="jd-preset" onclick="window.__setHariPreset('ba', 'sen-jum')">Sen–Jum</button>
-      </div>
-      <label class="jd-switch-row">
-        <span class="jd-switch-text"><b>Buka 24 jam</b><small>Tanpa jam tutup</small></span>
-        <input id="ba-buka24" class="jd-switch" type="checkbox" role="switch" onchange="window.__baToggle24(this.checked)" />
-      </label>
-      <div class="jd-time-row" id="ba-jam-wrap">
-        <div class="jd-field"><label class="jd-label" for="ba-jam-buka">Jam buka</label><input id="ba-jam-buka" type="time" /></div>
-        <div class="jd-field"><label class="jd-label" for="ba-jam-tutup">Jam tutup</label><input id="ba-jam-tutup" type="time" /></div>
-      </div>
-      <label class="jd-switch-row">
-        <span class="jd-switch-text"><b>Tutup saat tanggal merah</b><small>Libur nasional saja</small></span>
-        <input id="ba-libur" class="jd-switch" type="checkbox" role="switch" />
-      </label>
+      <section class="bh-card">
+        <div class="bh-head"><div class="bh-ico">🕒</div><div><div class="bh-title">Jam operasional</div><div class="bh-help">Opsional. Isi kalau kamu tahu. Pemilik toko bisa memperbaikinya nanti.</div></div></div>
+        <div class="bh-sub">Hari buka</div>
+        <div class="bh-days" id="ba-hari-row" role="group" aria-label="Hari buka">
+          ${HARI_URUTAN.map(d => `<button type="button" class="bh-day" data-d="${d}" aria-pressed="false" onclick="window.__baToggleHari(${d})">${HARI_SINGKAT[d]}</button>`).join('')}
+        </div>
+        <div class="bh-sub">Preset cepat</div>
+        <div class="bh-presets" id="ba-presets">
+          <button type="button" class="bh-preset" data-k="sen-jum" onclick="window.__baPreset('sen-jum')">Sen–Jum</button>
+          <button type="button" class="bh-preset" data-k="sen-sab" onclick="window.__baPreset('sen-sab')">Sen–Sab</button>
+          <button type="button" class="bh-preset" data-k="semua" onclick="window.__baPreset('semua')">Setiap hari</button>
+        </div>
+        <label class="bh-sw">
+          <span><b>Buka 24 jam</b><small>Tanpa jam tutup</small></span>
+          <input id="ba-buka24" type="checkbox" role="switch" onchange="window.__baToggle24(this.checked)" />
+        </label>
+        <div class="bh-times" id="ba-jam-wrap">
+          <div><label for="ba-jam-buka">Jam buka</label><input id="ba-jam-buka" type="time" /></div>
+          <div><label for="ba-jam-tutup">Jam tutup</label><input id="ba-jam-tutup" type="time" /></div>
+        </div>
+        <label class="bh-sw">
+          <span><b>Tutup saat tanggal merah</b><small>Libur nasional saja</small></span>
+          <input id="ba-libur" type="checkbox" role="switch" />
+        </label>
+      </section>
 
-      <div style="font-size:11.5px;font-weight:700;margin:14px 0 2px;">Menu hidangan (opsional)</div>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Tulis menu andalannya beserta harga. Maksimal 10 menu.</div>
-      <div id="ba-menu-list"></div>
-      <button type="button" id="ba-menu-add" onclick="window.__baMenuAdd()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;margin-bottom:12px;">+ Tambah menu</button>
+      <section class="bh-card">
+        <div class="bh-head"><div class="bh-ico">🍴</div><div><div class="bh-title">Menu unggulan</div><div class="bh-help">Opsional. Tambahkan maksimal 10 menu yang paling dicari pelanggan.</div></div></div>
+        <div id="ba-menu-list"></div>
+        <button type="button" id="ba-menu-add" class="bh-add" onclick="window.__baMenuAdd()">+ Tambah menu</button>
+      </section>
 
       <div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">Foto toko (opsional)</div>
       <input type="file" id="ba-photo-input" accept="image/*" style="display:none;" onchange="window.__baPhotoPick(this)" />
@@ -3146,6 +3237,7 @@ window.__openAddVendorModal = function () {
   document.body.appendChild(overlay);
   baRenderMenu();
   baInitMap();
+  baLoadQuota();
 };
 
 window.__baUpdate = function (field, value) {
@@ -3157,12 +3249,12 @@ window.__baUpdate = function (field, value) {
 function baRenderMenu() {
   const list = document.getElementById('ba-menu-list');
   if (!list) return;
-  const st = 'width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;';
   list.innerHTML = baMenu.map((m, i) => `
-    <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
-      <input type="text" maxlength="80" value="${escapeHtml(m.name)}" placeholder="Nama menu, misal: Bakso urat" oninput="window.__baMenuSet(${i}, 'name', this.value)" style="${st}flex:2;min-width:0;" />
-      <input type="number" inputmode="numeric" min="0" value="${escapeHtml(m.price)}" placeholder="Harga (Rp)" oninput="window.__baMenuSet(${i}, 'price', this.value)" style="${st}flex:1;min-width:0;" />
-      <button type="button" aria-label="Hapus menu" onclick="window.__baMenuRemove(${i})" style="flex-shrink:0;width:34px;height:40px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);">✕</button>
+    <div class="bh-menu">
+      <div class="bh-num">${i + 1}</div>
+      <div class="bh-mf"><label>Nama menu</label><input type="text" maxlength="80" value="${escapeHtml(m.name)}" placeholder="Contoh: Mie ayam" oninput="window.__baMenuSet(${i}, 'name', this.value)" /></div>
+      <div class="bh-mf"><label>Harga</label><input type="text" inputmode="numeric" value="${m.price ? 'Rp ' + baFmtRp(m.price) : ''}" placeholder="Rp 12.000" oninput="window.__baMenuPrice(${i}, this)" /></div>
+      <button type="button" class="bh-del" aria-label="Hapus menu ${i + 1}" onclick="window.__baMenuRemove(${i})">Hapus</button>
     </div>`).join('');
   const add = document.getElementById('ba-menu-add');
   if (add) add.style.display = baMenu.length >= 10 ? 'none' : '';
@@ -3179,14 +3271,16 @@ function baCollectDetails() {
   const jb = document.getElementById('ba-jam-buka')?.value || '';
   const jt = document.getElementById('ba-jam-tutup')?.value || '';
   const libur = !!document.getElementById('ba-libur')?.checked;
-  const hari = readHariFromDom('ba') || [0, 1, 2, 3, 4, 5, 6];
+  const hari = baHari.slice();
   if (!buka24 && ((jb && !jt) || (!jb && jt))) return { error: 'Isi jam buka dan jam tutup keduanya, atau kosongkan dua-duanya.' };
   const products = baMenu.map(m => ({ name: String(m.name || '').trim(), price: String(m.price || '').trim() })).filter(m => m.name);
   for (const m of products) {
     if (m.price && !/^\d{1,8}$/.test(m.price)) return { error: `Harga "${m.name}" tidak valid. Isi angka saja, misal 15000.` };
   }
   const hasSchedule = buka24 || !!(jb && jt);
-  return { hasAny: hasSchedule || products.length > 0, buka24, jamBuka: hasSchedule && !buka24 ? jb : null, jamTutup: hasSchedule && !buka24 ? jt : null, hari, libur, products };
+  if (hasSchedule && !hari.length) return { error: 'Pilih hari buka dulu, atau kosongkan jam bukanya.' };
+  if (!hasSchedule && hari.length) return { error: 'Isi jam buka dan jam tutup (atau aktifkan Buka 24 jam), atau kosongkan hari buka.' };
+  return { hasAny: hasSchedule || products.length > 0, buka24, jamBuka: hasSchedule && !buka24 ? jb : null, jamTutup: hasSchedule && !buka24 ? jt : null, hari: hasSchedule ? hari : null, libur, products };
 }
 async function baSaveDetails(vendorId, deviceIdVal, det) {
   const { error } = await sb.rpc('set_unclaimed_vendor_details', {
