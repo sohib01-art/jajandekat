@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v21';
+const CACHE_VERSION = 'v23';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -40,6 +40,9 @@ const APP_SHELL = [
   '/bel-mangkuk.mp3',
   offlineFallbackPage,
   '/offline-mascot.png',
+  '/icons/install-wave.webp',
+  '/icons/install-girl.webp',
+  '/icons/install-thumb.webp',
   '/icons/onboarding-wave.png',
   '/icons/onboarding-point.png',
   '/icons/onboarding-thumbsup.png',
