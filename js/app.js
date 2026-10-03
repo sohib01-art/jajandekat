@@ -8638,38 +8638,58 @@ setInterval(() => {
   }
 }, 60 * 1000); // tiap 1 menit
 
+// Tombol "Instal" kecil di header (sebelah lonceng), desain H.
+// Hanya muncul kalau app bisa dipasang; hilang otomatis kalau sudah terpasang.
 let deferredInstallPrompt = null;
+const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const isIOSDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+function mountInstallButton() {
+  if (isStandaloneApp) return null;
+  let btn = document.getElementById('install-btn');
+  if (btn) return btn;
+  const bell = document.getElementById('btn-bell');
+  if (!bell || !bell.parentNode) return null;
+  btn = document.createElement('button');
+  btn.id = 'install-btn';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Instal aplikasi JajanDekat');
+  btn.style.cssText = `
+    display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 14px;
+    margin-right:8px; border:none; border-radius:999px; background:#fff;
+    color:var(--brand); font:700 13px/1 'Inter',sans-serif; white-space:nowrap;
+    cursor:pointer; flex:none; -webkit-tap-highlight-color:transparent;
+  `;
+  btn.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>
+    Instal
+  `;
+  btn.onclick = async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      if (choice && choice.outcome === 'accepted') btn.remove();
+    } else if (isIOSDevice) {
+      alert('Ketuk tombol Bagikan di Safari, lalu pilih "Tambahkan ke Layar Utama".');
+    }
+  };
+  bell.parentNode.insertBefore(btn, bell);
+  return btn;
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  showInstallBanner();
+  mountInstallButton();
 });
 
-function showInstallBanner() {
-  if (document.getElementById('install-banner')) return;
-  const banner = document.createElement('div');
-  banner.id = 'install-banner';
-  banner.style.cssText = `
-    position:fixed; bottom:78px; left:50%; transform:translateX(-50%);
-    max-width:440px; width:calc(100% - 32px); background:var(--brand); color:#fff;
-    border-radius:14px; padding:12px 14px; display:flex; align-items:center; gap:10px;
-    box-shadow:0 10px 30px -8px rgba(0,0,0,.3); z-index:90; font-family:'Inter';
-  `;
-  banner.innerHTML = `
-    <span style="font-size:20px;">📲</span>
-    <div style="flex:1;font-size:12.5px;font-weight:600;">Instal JajanDekat ke layar utama HP-mu</div>
-    <button id="install-btn" style="background:#fff;color:var(--brand);border:none;border-radius:8px;padding:7px 12px;font-weight:700;font-size:11.5px;">Instal</button>
-    <button id="install-dismiss" style="background:transparent;color:#fff;border:none;font-size:16px;padding:0 4px;">✕</button>
-  `;
-  document.body.appendChild(banner);
-  document.getElementById('install-btn').onclick = async () => {
-    banner.remove();
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-  };
-  document.getElementById('install-dismiss').onclick = () => banner.remove();
-}
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.remove();
+});
+
+if (isIOSDevice) mountInstallButton();
 
 init();
