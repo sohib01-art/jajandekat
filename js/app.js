@@ -8638,58 +8638,130 @@ setInterval(() => {
   }
 }, 60 * 1000); // tiap 1 menit
 
-// Tombol "Instal" kecil di header (sebelah lonceng), desain H.
-// Hanya muncul kalau app bisa dipasang; hilang otomatis kalau sudah terpasang.
+// Widget instal: maskot mengintip dari tepi kanan (bergantian cowok & cewek),
+// maskot jempol muncul setelah instal berhasil. Hanya tampil kalau app bisa dipasang.
 let deferredInstallPrompt = null;
 const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 const isIOSDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const INSTALL_DISMISS_KEY = 'jd_install_widget_dismissed_at';
+const INSTALL_HIDE_MS = 24 * 60 * 60 * 1000; // setelah ditutup, muncul lagi 24 jam kemudian
+const INSTALL_MASCOTS = ['icons/install-wave.webp', 'icons/install-girl.webp'];
+const INSTALL_MASCOT_THUMB = 'icons/install-thumb.webp';
 
-function mountInstallButton() {
-  if (isStandaloneApp) return null;
-  let btn = document.getElementById('install-btn');
-  if (btn) return btn;
-  const bell = document.getElementById('btn-bell');
-  if (!bell || !bell.parentNode) return null;
-  btn = document.createElement('button');
-  btn.id = 'install-btn';
-  btn.type = 'button';
-  btn.setAttribute('aria-label', 'Instal aplikasi JajanDekat');
-  btn.style.cssText = `
-    display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 14px;
-    margin-right:8px; border:none; border-radius:999px; background:#fff;
-    color:var(--brand); font:700 13px/1 'Inter',sans-serif; white-space:nowrap;
-    cursor:pointer; flex:none; -webkit-tap-highlight-color:transparent;
+function installWidgetRecentlyDismissed() {
+  try {
+    const t = parseInt(localStorage.getItem(INSTALL_DISMISS_KEY) || '0', 10);
+    return t && (Date.now() - t) < INSTALL_HIDE_MS;
+  } catch (e) { return false; }
+}
+
+function showInstallSuccess() {
+  const wrap = document.getElementById('install-widget');
+  if (!wrap || wrap.dataset.done) return;
+  wrap.dataset.done = '1';
+  const slide = wrap.querySelector('.jd-iw-slide');
+  const img = wrap.querySelector('.jd-iw-img');
+  const bubble = wrap.querySelector('.jd-iw-bubble');
+  wrap.classList.add('done');
+  slide.style.animation = 'none';
+  slide.style.transform = 'translateX(0)';
+  img.src = INSTALL_MASCOT_THUMB;
+  bubble.textContent = 'Mantap! Sudah terpasang';
+  setTimeout(() => { wrap.remove(); }, 3400);
+}
+
+function mountInstallWidget() {
+  if (isStandaloneApp || installWidgetRecentlyDismissed()) return null;
+  if (document.getElementById('install-widget')) return document.getElementById('install-widget');
+
+  if (!document.getElementById('install-widget-style')) {
+    const st = document.createElement('style');
+    st.id = 'install-widget-style';
+    st.textContent = `
+      #install-widget { position:fixed; top:54%; right:max(0px, calc((100vw - 440px) / 2)); width:160px;
+        overflow:hidden; z-index:85; pointer-events:none; padding-top:6px; }
+      #install-widget .jd-iw-slide { position:relative; display:flex; flex-direction:column; align-items:flex-end;
+        pointer-events:auto; cursor:pointer; -webkit-tap-highlight-color:transparent;
+        animation: jdIwPeek 7s ease-in-out infinite; transform:translateX(112%); }
+      #install-widget .jd-iw-img { display:block; height:116px; width:auto; margin-right:8px;
+        filter:drop-shadow(0 6px 8px rgba(0,0,0,.28)); animation: jdIwBob 2.4s ease-in-out infinite; }
+      #install-widget .jd-iw-bubble { position:relative; margin:0 6px 8px 0; background:#fff; color:var(--brand);
+        border:2px solid var(--brand); border-radius:14px; padding:6px 11px; font:800 12.5px/1.2 'Inter',sans-serif;
+        white-space:nowrap; box-shadow:0 4px 10px rgba(0,0,0,.18); animation: jdIwPop 2s ease-in-out infinite; }
+      #install-widget .jd-iw-bubble:after { content:""; position:absolute; right:30px; bottom:-8px; width:12px; height:12px;
+        background:#fff; border-right:2px solid var(--brand); border-bottom:2px solid var(--brand); transform:rotate(45deg); }
+      #install-widget .jd-iw-x { position:absolute; top:-2px; left:8px; width:22px; height:22px; border:none; border-radius:50%;
+        background:rgba(40,40,40,.78); color:#fff; font-size:12px; line-height:22px; padding:0; cursor:pointer; }
+      #install-widget.done .jd-iw-img { height:128px; }
+      #install-widget.done .jd-iw-bubble { color:#1B8A3A; border-color:#1B8A3A; animation:none; }
+      #install-widget.done .jd-iw-bubble:after { border-color:#1B8A3A; }
+      #install-widget.done .jd-iw-x { display:none; }
+      @keyframes jdIwPeek { 0%,10% { transform:translateX(112%); } 22%,74% { transform:translateX(0); } 86%,100% { transform:translateX(112%); } }
+      @keyframes jdIwBob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-5px); } }
+      @keyframes jdIwPop { 0%,100% { transform:scale(1); } 50% { transform:scale(1.07); } }
+      @media (prefers-reduced-motion: reduce) {
+        #install-widget .jd-iw-slide { animation:none; transform:translateX(0); }
+        #install-widget .jd-iw-img, #install-widget .jd-iw-bubble { animation:none; }
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  let idx = 0;
+  try { idx = parseInt(localStorage.getItem('jd_install_mascot_idx') || '0', 10) || 0; } catch (e) {}
+
+  const wrap = document.createElement('div');
+  wrap.id = 'install-widget';
+  wrap.innerHTML = `
+    <div class="jd-iw-slide" role="button" tabindex="0" aria-label="Instal aplikasi JajanDekat">
+      <div class="jd-iw-bubble">Instal yuk!</div>
+      <img class="jd-iw-img" alt="Maskot JajanDekat" src="${INSTALL_MASCOTS[idx % INSTALL_MASCOTS.length]}">
+      <button class="jd-iw-x" type="button" aria-label="Tutup">✕</button>
+    </div>
   `;
-  btn.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>
-    Instal
-  `;
-  btn.onclick = async () => {
+  const slide = wrap.querySelector('.jd-iw-slide');
+  const img = wrap.querySelector('.jd-iw-img');
+
+  slide.addEventListener('animationiteration', (e) => {
+    if (e.animationName !== 'jdIwPeek') return;
+    idx++;
+    try { localStorage.setItem('jd_install_mascot_idx', String(idx)); } catch (err) {}
+    img.src = INSTALL_MASCOTS[idx % INSTALL_MASCOTS.length];
+  });
+
+  const doInstall = async () => {
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
       const choice = await deferredInstallPrompt.userChoice;
       deferredInstallPrompt = null;
-      if (choice && choice.outcome === 'accepted') btn.remove();
+      if (choice && choice.outcome === 'accepted') showInstallSuccess();
     } else if (isIOSDevice) {
       alert('Ketuk tombol Bagikan di Safari, lalu pilih "Tambahkan ke Layar Utama".');
     }
   };
-  bell.parentNode.insertBefore(btn, bell);
-  return btn;
+  slide.addEventListener('click', doInstall);
+  slide.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); doInstall(); } });
+  wrap.querySelector('.jd-iw-x').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch (err) {}
+    wrap.remove();
+  });
+
+  document.body.appendChild(wrap);
+  return wrap;
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  mountInstallButton();
+  mountInstallWidget();
 });
 
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
-  const btn = document.getElementById('install-btn');
-  if (btn) btn.remove();
+  showInstallSuccess();
 });
 
-if (isIOSDevice) mountInstallButton();
+if (isIOSDevice) mountInstallWidget();
 
 init();
