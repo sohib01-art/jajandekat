@@ -994,10 +994,19 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
-async function fetchVendors() {
-  const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
-  if (error) { console.error(error); throw error; }
-  return data;
+async function fetchVendors(retry = 1) {
+  try {
+    const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
+    if (error) { console.error(error); throw error; }
+    return data;
+  } catch (e) {
+    // Jaringan putus-nyambung (mis. "Failed to fetch"): coba sekali lagi sebelum menyerah.
+    if (retry > 0 && /Failed to fetch|NetworkError|Load failed/i.test((e && e.message) || '')) {
+      await new Promise(r => setTimeout(r, 1500));
+      return fetchVendors(retry - 1);
+    }
+    throw e;
+  }
 }
 
 async function fetchFollows() {
@@ -8456,18 +8465,24 @@ async function init() {
     return;
   }
   if (!isConfigured) { renderSetupNeeded(); return; }
+  let initStep = 'mulai';
   try {
     const liburPromise = loadLiburNasional(); // paralel dengan ambil data pedagang; gagal pun tidak memblokir
+    initStep = 'ambil data pedagang';
     vendors = (await fetchVendors()).map(normalizeExpiry);
     await liburPromise;
+    initStep = 'ambil data ikutan';
     const followList = await fetchFollows();
     followedIds = new Set(followList);
+    initStep = 'ambil data wilayah';
     await fetchRegions();
     await getBuyerRegion().catch(() => {}); // wilayah pembeli dari cache (kalau ada), dipakai filter pengumuman
     jdTrack('app_open', { regionId: buyerRegionId });
     if (new URLSearchParams(location.search).get('src') === 'push') jdTrack('push_open', { regionId: buyerRegionId });
     jdLoadOjek(); // tidak perlu ditunggu; tombol ojek baru muncul kalau wilayah ini punya data ojek
+    initStep = 'ambil pengumuman';
     announcements = await fetchAnnouncements();
+    initStep = 'ambil banner';
     banners = (await fetchBanners()) || [];
     bannersFetchedAt = Date.now();
     scheduleBannerRefresh();
@@ -8547,7 +8562,7 @@ async function init() {
     }
   } catch (e) {
     console.error(e);
-    renderError('Terjadi kesalahan saat mengambil data pedagang dari server. Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
+    renderError('Terjadi kesalahan saat memuat data (tahap: ' + initStep + '). Detail: ' + (e && e.message ? e.message : 'tidak diketahui') + '. Tarik layar ke bawah untuk mencoba lagi.');
   }
 }
 // ---------- TOMBOL INSTAL APLIKASI (PWA) ----------
