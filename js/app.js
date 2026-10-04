@@ -232,6 +232,7 @@ btnPedagang.onclick = () => {
 // ikut menyalakan tombol induknya: 'artikel' -> Akun, 'terdekat' -> Beranda.
 let bottomView = 'status';
 function setNavActive(view) {
+  document.body.setAttribute('data-jd-tab', view); // dipakai CSS: widget instal disembunyikan di tab Peta
   const navView = view === 'artikel' ? 'akun' : (view === 'terdekat' ? 'status' : view);
   document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
     const on = n.dataset.view === navView;
@@ -1555,7 +1556,7 @@ function renderHmGridCard(v) {
     ? `<img class="hm-gc-img" crossorigin="anonymous" data-src="${escapeHtml(v.photo_url)}" src="${escapeHtml(v.photo_url)}" alt="" loading="lazy" decoding="async" onload="window.__hmTint(this)" onerror="window.__hmImgErr(this)">`
     : '';
   const fav = followedIds.has(v.id);
-  return `<div class="hm-gc ${promo ? 'promo' : ''}" ${hmTintStyle(v)} role="button" tabindex="0" onclick="if(!event.target.closest('button')) window.__openVendorSheet('${v.id}')">
+  return `<div class="hm-gc ${promo ? 'promo' : ''}" ${hmTintStyle(v)} role="button" tabindex="0" onclick="if(!event.target.closest('button')) window.__vendorTap('${v.id}')">
     <div class="hm-gc-ph ${hasPhoto || v.mode_icon ? '' : 'noimg'} ${open ? '' : 'closed'}" ${modeBg}>
       ${ph}${hasPhoto || v.mode_icon ? '' : `<span class="hm-gc-emoji">${v.emoji || '🍜'}</span>`}
       ${v.is_premium ? '<span class="hm-gc-tag">Unggulan</span>' : ''}
@@ -2929,10 +2930,7 @@ window.__goToVendorOnMap = function (id) {
   }
   renderPembeli();
   setTimeout(() => {
-    if (map && p) {
-      map.setView([p.lat, p.lng], 17);
-      if (jdCluster && markers[id]) jdCluster.zoomToShowLayer(markers[id], () => {});
-    }
+    if (map && p) window.__jdPickOnMap(id, true);
   }, 200);
 };
 
@@ -3918,6 +3916,17 @@ function jdInjectMapCss() {
   const st = document.createElement('style');
   st.id = 'jd-map-css';
   st.textContent = `
+    body[data-jd-tab="peta"] #install-widget{display:none!important}
+    .jd-route-card{position:absolute;left:10px;right:10px;max-width:420px;margin:0 auto;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:1100;background:#fff;border-radius:18px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-family:'Poppins',sans-serif}
+    .jd-route-card .rc-top{display:flex;align-items:center;gap:8px}
+    .jd-route-card .rc-name{flex:1;min-width:0;font:700 14px 'Poppins',sans-serif;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .jd-route-card .rc-x{flex:0 0 auto;width:28px;height:28px;border:none;border-radius:50%;background:#F3F4F6;color:#6B7280;font-size:14px;cursor:pointer}
+    .jd-route-card .rc-info{font:500 12.5px 'Poppins',sans-serif;color:#4B5563;margin:4px 0 10px}
+    .jd-route-card .rc-actions{display:flex;gap:8px}
+    .jd-route-card .rc-btn{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;border:none;border-radius:12px;padding:10px 8px;font:700 13px 'Poppins',sans-serif;cursor:pointer;background:#F3F4F6;color:#374151}
+    .jd-route-card .rc-btn.primary{background:#FF6B4A;color:#fff}
+    .jd-pt-map:not(.full) .jd-route-card{display:none}
+    .jd-pt-map.has-route .jd-pt-youare{display:none!important}
     .jd-pin{display:block;filter:drop-shadow(0 3px 4px rgba(0,0,0,.28));cursor:pointer;transition:transform .15s}
     .jd-pin:active{transform:scale(.92)}
     .jd-cluster{width:38px;height:38px;border-radius:50%;background:#FF6B4A;color:#fff;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;font:700 13px 'Poppins',sans-serif;box-sizing:border-box}
@@ -3976,12 +3985,160 @@ function jdMarkerHost() {
   return jdCluster;
 }
 
+// ---------- JALUR TERBAIK KE PEDAGANG ----------
+// Routing gratis dari OpenStreetMap (profil jalan kaki). Meminta beberapa alternatif lalu memilih yang tercepat.
+// Kalau layanan rute gagal/timeout, tetap tampil garis lurus putus-putus sebagai perkiraan.
+const JD_ROUTE_API = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/';
+let jdRouteLayer = null;
+let jdRoute = null; // { vendorId, from, to }
+let jdRouteSeq = 0;
+
+function jdFmtDuration(sec) {
+  const m = Math.max(1, Math.round(sec / 60));
+  if (m < 60) return m + ' mnt';
+  const h = Math.floor(m / 60), r = m % 60;
+  return h + ' jam' + (r ? ' ' + r + ' mnt' : '');
+}
+
+function jdGetBuyerPosition() {
+  return new Promise((resolve) => {
+    if (buyerLoc) { resolve(buyerLoc); return; }
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { buyerLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude }; resolve(buyerLoc); },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  });
+}
+
+async function jdFetchBestRoute(from, to) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 9000);
+  try {
+    const url = `${JD_ROUTE_API}${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&alternatives=true`;
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const routes = (data && data.code === 'Ok' && data.routes) || [];
+    if (!routes.length) throw new Error('rute tidak ditemukan');
+    routes.sort((a, b) => (a.duration - b.duration) || (a.distance - b.distance));
+    return routes[0];
+  } finally { clearTimeout(timer); }
+}
+
+function jdRouteCardEl() {
+  const wrap = document.getElementById('jd-pt-map');
+  if (!wrap) return null;
+  let el = document.getElementById('jd-route-card');
+  if (el && el.parentNode !== wrap) { el.remove(); el = null; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'jd-route-card';
+    el.className = 'jd-route-card';
+    wrap.appendChild(el);
+  }
+  wrap.classList.add('has-route');
+  return el;
+}
+
+function jdRenderRouteCard(v, st) {
+  const el = jdRouteCardEl();
+  if (!el) return;
+  const to = jdRoute && jdRoute.to;
+  let info;
+  if (st.loading) info = 'Mencari jalur terbaik…';
+  else if (st.noLoc) info = 'Izinkan akses lokasi untuk melihat jalur dari posisimu.';
+  else info = `🚶 ${formatDistance(st.dist)} · ±${jdFmtDuration(st.dur)} jalan kaki${st.approx ? ' (perkiraan garis lurus)' : ''}`;
+  const from = jdRoute && jdRoute.from;
+  const gmaps = to ? `https://www.google.com/maps/dir/?api=1${from ? `&origin=${from.lat},${from.lng}` : ''}&destination=${to.lat},${to.lng}&travelmode=walking` : '';
+  el.innerHTML = `
+    <div class="rc-top"><div class="rc-name">${escapeHtml(v.name)}</div><button type="button" class="rc-x" aria-label="Tutup jalur" onclick="window.__jdClearRoute()">✕</button></div>
+    <div class="rc-info">${info}</div>
+    <div class="rc-actions">
+      ${gmaps ? `<a class="rc-btn primary" href="${gmaps}" target="_blank" rel="noopener">Mulai navigasi</a>` : ''}
+      <button type="button" class="rc-btn" onclick="window.__jdRouteDetail('${v.id}')">Lihat detail</button>
+    </div>`;
+}
+
+function jdClearRouteLayer() {
+  if (jdRouteLayer && map) map.removeLayer(jdRouteLayer);
+  jdRouteLayer = null;
+}
+
+async function jdDrawRoute(v) {
+  const p = vendorDisplayLatLng(v);
+  if (!p || !map) return;
+  const seq = ++jdRouteSeq;
+  jdRoute = { vendorId: v.id, from: null, to: { lat: p.lat, lng: p.lng } };
+  jdClearRouteLayer();
+  jdRenderRouteCard(v, { loading: true });
+
+  const from = await jdGetBuyerPosition();
+  if (seq !== jdRouteSeq || !map) return;
+  if (!from) {
+    jdRenderRouteCard(v, { noLoc: true });
+    map.setView([p.lat, p.lng], 17);
+    if (jdCluster && markers[v.id]) jdCluster.zoomToShowLayer(markers[v.id], () => {});
+    return;
+  }
+  jdRoute.from = from;
+  jdPlaceMe(from.lat, from.lng);
+
+  let route = null;
+  try { route = await jdFetchBestRoute(from, jdRoute.to); }
+  catch (e) { console.warn('Rute gagal diambil, pakai garis lurus:', e); }
+  if (seq !== jdRouteSeq || !map) return;
+
+  let latlngs, dist, dur, approx = false;
+  if (route) {
+    latlngs = route.geometry.coordinates.map(c => [c[1], c[0]]);
+    dist = route.distance; dur = route.duration;
+  } else {
+    latlngs = [[from.lat, from.lng], [p.lat, p.lng]];
+    dist = haversineMeters(from.lat, from.lng, p.lat, p.lng);
+    dur = dist / 1.25; approx = true;
+  }
+  jdRouteLayer = L.layerGroup().addTo(map);
+  L.polyline(latlngs, { color: '#fff', weight: 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(jdRouteLayer);
+  L.polyline(latlngs, { color: '#2563EB', weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', dashArray: approx ? '8 10' : null, interactive: false }).addTo(jdRouteLayer);
+  jdRenderRouteCard(v, { dist, dur, approx });
+  map.invalidateSize({ pan: false });
+  map.fitBounds(L.latLngBounds(latlngs), { paddingTopLeft: [40, 80], paddingBottomRight: [40, 190], maxZoom: 18 });
+}
+
+// Pembeli memilih pedagang di peta (pin atau kartu): buka peta layar penuh lalu gambar jalur terbaik.
+window.__jdPickOnMap = function (id, noTrack) {
+  const v = vendors.find(x => x.id === id);
+  if (!v || !map || !vendorIsShowable(v)) { window.__openVendorSheet(id); return; }
+  if (!jdMapFull) jdToggleMapFull(true);
+  if (!noTrack) jdTrackVendor(id, 'route');
+  setTimeout(() => jdDrawRoute(v), 60);
+};
+
+window.__vendorTap = function (id) {
+  if (bottomView === 'peta' && map) window.__jdPickOnMap(id);
+  else window.__openVendorSheet(id);
+};
+
+window.__jdClearRoute = function () {
+  jdRouteSeq++; jdRoute = null; jdClearRouteLayer();
+  const el = document.getElementById('jd-route-card'); if (el) el.remove();
+  const wrap = document.getElementById('jd-pt-map'); if (wrap) wrap.classList.remove('has-route');
+};
+
+window.__jdRouteDetail = function (id) {
+  if (jdMapFull) jdToggleMapFull(false);
+  window.__openVendorSheet(id);
+};
+
 function renderMap() {
   const el = document.getElementById('map');
   if (!el) return;
   if (map && map.getContainer() !== el) { // tab Peta dirender ulang -> container lama sudah hilang
     try { map.remove(); } catch (_) {}
     map = null; markers = {}; jdMeMarker = null; jdCluster = null; jdMapFull = false; mapDidInitialFit = false;
+    jdRouteLayer = null; jdRoute = null; jdRouteSeq++;
     if (jdMapRO) { jdMapRO.disconnect(); jdMapRO = null; }
   }
   if (!map) {
@@ -4007,9 +4164,16 @@ function renderMap() {
     const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [34, 43], iconAnchor: [17, 43] });
     // Ketuk pin -> sheet detail pedagang (chat, WhatsApp, menu, ikuti, ulasan sudah ada di sheet)
     markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name, zIndexOffset: hmIsOpen(v) ? 1000 : 0 })
-      .on('click', () => window.__openVendorSheet(v.id));
+      .on('click', () => window.__jdPickOnMap(v.id));
     jdMarkerHost().addLayer(markers[v.id]);
   });
+
+  if (jdRoute && jdRoute.from) {
+    const rv = vendors.find(x => x.id === jdRoute.vendorId);
+    const np = rv && vendorDisplayLatLng(rv);
+    if (!np) window.__jdClearRoute();
+    else if (haversineMeters(np.lat, np.lng, jdRoute.to.lat, jdRoute.to.lng) > 40) jdDrawRoute(rv);
+  }
 
   // Peta dulu selalu diam di lokasi/zoom default (kadang jauh dari pedagang/pembeli),
   // jadi marker yang ada bisa kelewat kalau di luar area yang kelihatan. Sekali saja,
