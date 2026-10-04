@@ -3925,6 +3925,9 @@ function jdInjectMapCss() {
     .jd-route-card .rc-actions{display:flex;gap:8px}
     .jd-route-card .rc-btn{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;border:none;border-radius:12px;padding:10px 8px;font:700 13px 'Poppins',sans-serif;cursor:pointer;background:#F3F4F6;color:#374151}
     .jd-route-card .rc-btn.primary{background:#FF6B4A;color:#fff}
+    .jd-route-card .rc-btn.big{padding:13px 8px;font-size:14px}
+    .jd-route-card .rc-actions.col{flex-direction:column}
+    .jd-route-card .rc-actions.col .rc-actions{display:flex;gap:8px}
     .jd-pt-map:not(.full) .jd-route-card{display:none}
     .jd-pt-map.has-route .jd-pt-youare{display:none!important}
     .jd-pin{display:block;filter:drop-shadow(0 3px 4px rgba(0,0,0,.28));cursor:pointer;transition:transform .15s}
@@ -3986,12 +3989,16 @@ function jdMarkerHost() {
 }
 
 // ---------- JALUR TERBAIK KE PEDAGANG ----------
-// Routing gratis dari OpenStreetMap (profil jalan kaki). Meminta beberapa alternatif lalu memilih yang tercepat.
-// Kalau layanan rute gagal/timeout, tetap tampil garis lurus putus-putus sebagai perkiraan.
-const JD_ROUTE_API = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/';
+// Jalur dihitung di Supabase Edge Function "route" (OpenRouteService jalan kaki + cache + penghitung kuota harian).
+// Kalau jalur tidak tersedia (kuota habis, fitur dimatikan, terlalu jauh, lokasi mati, atau gagal), kartu rute
+// menampilkan satu tombol besar ke Google Maps. Tidak ada garis lurus pengganti.
+const JD_ROUTE_FN = String(SUPABASE_URL).replace(/\/+$/, '') + '/functions/v1/route';
+const JD_ROUTE_MAX_KM = 15;
 let jdRouteLayer = null;
 let jdRoute = null; // { vendorId, from, to }
 let jdRouteSeq = 0;
+let jdRouteBlockedUntil = 0; // server bilang penuh/mati -> jangan tanya lagi beberapa menit
+const jdRouteCache = new Map();
 
 function jdFmtDuration(sec) {
   const m = Math.max(1, Math.round(sec / 60));
@@ -4012,18 +4019,42 @@ function jdGetBuyerPosition() {
   });
 }
 
+// Tautan Google Maps mode jalan kaki. Tanpa titik asal, Google Maps memakai lokasi pengguna sendiri.
+function jdGmapsUrl(from, to) {
+  return 'https://www.google.com/maps/dir/?api=1' +
+    (from ? `&origin=${from.lat},${from.lng}` : '') +
+    `&destination=${to.lat},${to.lng}&travelmode=walking`;
+}
+
+// Hasil: { status: 'ok', route: { coords:[[lat,lng],...], distance, duration } }
+//     atau { status: 'quota' | 'off' | 'device' | 'noroute' | 'error' }
 async function jdFetchBestRoute(from, to) {
+  if (Date.now() < jdRouteBlockedUntil) return { status: 'quota' };
+  const ck = `${from.lat.toFixed(3)},${from.lng.toFixed(3)}|${to.lat.toFixed(4)},${to.lng.toFixed(4)}`;
+  const hit = jdRouteCache.get(ck);
+  if (hit && hit.exp > Date.now()) return { status: 'ok', route: hit.route };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 9000);
   try {
-    const url = `${JD_ROUTE_API}${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&alternatives=true`;
-    const res = await fetch(url, { signal: ctrl.signal });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    const routes = (data && data.code === 'Ok' && data.routes) || [];
-    if (!routes.length) throw new Error('rute tidak ditemukan');
-    routes.sort((a, b) => (a.duration - b.duration) || (a.distance - b.distance));
-    return routes[0];
+    const headers = { 'Content-Type': 'application/json', 'x-device-id': deviceId };
+    if (typeof SUPABASE_ANON_KEY === 'string' && SUPABASE_ANON_KEY) {
+      headers.apikey = SUPABASE_ANON_KEY;
+      if (SUPABASE_ANON_KEY.startsWith('eyJ')) headers.Authorization = 'Bearer ' + SUPABASE_ANON_KEY;
+    }
+    const res = await fetch(JD_ROUTE_FN, { method: 'POST', headers, body: JSON.stringify({ from, to }), signal: ctrl.signal });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.status) return { status: 'error' };
+    if (data.status === 'ok' && data.route && Array.isArray(data.route.coords) && data.route.coords.length > 1) {
+      jdRouteCache.set(ck, { route: data.route, exp: Date.now() + 10 * 60 * 1000 });
+      return { status: 'ok', route: data.route };
+    }
+    if (data.status === 'quota' || data.status === 'off' || data.status === 'device') {
+      jdRouteBlockedUntil = Date.now() + 5 * 60 * 1000;
+    }
+    return { status: data.status === 'ok' ? 'error' : data.status };
+  } catch (e) {
+    console.warn('Layanan jalur gagal:', e);
+    return { status: 'error' };
   } finally { clearTimeout(timer); }
 }
 
@@ -4042,28 +4073,59 @@ function jdRouteCardEl() {
   return el;
 }
 
+const JD_ROUTE_REASON = {
+  quota: 'Jalur di aplikasi sedang penuh. Rute lengkapnya tetap bisa dibuka di Google Maps.',
+  off: 'Jalur di aplikasi sedang tidak aktif. Rute lengkapnya tetap bisa dibuka di Google Maps.',
+  device: 'Terlalu banyak permintaan jalur dari perangkat ini. Buka rutenya di Google Maps.',
+  noroute: 'Jalur jalan kaki ke titik ini belum terbaca di peta. Coba buka di Google Maps.',
+  far: 'Pedagang ini cukup jauh dari posisimu. Buka rutenya di Google Maps.',
+  noloc: 'Lokasimu belum terbaca. Izinkan akses lokasi, atau langsung buka Google Maps.',
+  error: 'Jalur belum bisa dimuat. Coba lagi, atau buka rutenya di Google Maps.',
+};
+
+// st: { mode:'loading' } | { mode:'ok', dist, dur } | { mode:'fallback', reason, dist? }
 function jdRenderRouteCard(v, st) {
   const el = jdRouteCardEl();
   if (!el) return;
-  const to = jdRoute && jdRoute.to;
-  let info;
-  if (st.loading) info = 'Mencari jalur terbaik…';
-  else if (st.noLoc) info = 'Izinkan akses lokasi untuk melihat jalur dari posisimu.';
-  else info = `🚶 ${formatDistance(st.dist)} · ±${jdFmtDuration(st.dur)} jalan kaki${st.approx ? ' (perkiraan garis lurus)' : ''}`;
   const from = jdRoute && jdRoute.from;
-  const gmaps = to ? `https://www.google.com/maps/dir/?api=1${from ? `&origin=${from.lat},${from.lng}` : ''}&destination=${to.lat},${to.lng}&travelmode=walking` : '';
+  const to = jdRoute && jdRoute.to;
+  const gmaps = to ? jdGmapsUrl(from, to) : '';
+  let info = '', actions = '';
+  if (st.mode === 'loading') {
+    info = 'Mencari jalur terbaik…';
+  } else if (st.mode === 'ok') {
+    info = `🚶 ${formatDistance(st.dist)} · ±${jdFmtDuration(st.dur)} jalan kaki`;
+    actions = `<div class="rc-actions">
+      <a class="rc-btn primary" href="${gmaps}" target="_blank" rel="noopener">Mulai navigasi</a>
+      <button type="button" class="rc-btn" onclick="window.__jdRouteDetail('${v.id}')">Lihat detail</button>
+    </div>`;
+  } else {
+    info = escapeHtml(JD_ROUTE_REASON[st.reason] || JD_ROUTE_REASON.error);
+    if (st.dist != null) info += `<br><span style="color:#9CA3AF">📍 ±${formatDistance(st.dist)} dari kamu (jarak lurus)</span>`;
+    actions = `<div class="rc-actions col">
+      <a class="rc-btn primary big" href="${gmaps}" target="_blank" rel="noopener">Buka rute di Google Maps</a>
+      <div class="rc-actions">
+        ${st.reason === 'error' || st.reason === 'noloc' ? `<button type="button" class="rc-btn" onclick="window.__jdRetryRoute('${v.id}')">Coba lagi</button>` : ''}
+        <button type="button" class="rc-btn" onclick="window.__jdRouteDetail('${v.id}')">Lihat detail</button>
+      </div>
+    </div>`;
+  }
   el.innerHTML = `
     <div class="rc-top"><div class="rc-name">${escapeHtml(v.name)}</div><button type="button" class="rc-x" aria-label="Tutup jalur" onclick="window.__jdClearRoute()">✕</button></div>
     <div class="rc-info">${info}</div>
-    <div class="rc-actions">
-      ${gmaps ? `<a class="rc-btn primary" href="${gmaps}" target="_blank" rel="noopener">Mulai navigasi</a>` : ''}
-      <button type="button" class="rc-btn" onclick="window.__jdRouteDetail('${v.id}')">Lihat detail</button>
-    </div>`;
+    ${actions}`;
 }
 
 function jdClearRouteLayer() {
   if (jdRouteLayer && map) map.removeLayer(jdRouteLayer);
   jdRouteLayer = null;
+}
+
+function jdFitPoints(points) {
+  if (!map || !points.length) return;
+  map.invalidateSize({ pan: false });
+  if (points.length === 1) { map.setView(points[0], 17); return; }
+  map.fitBounds(L.latLngBounds(points), { paddingTopLeft: [40, 80], paddingBottomRight: [40, 220], maxZoom: 18 });
 }
 
 async function jdDrawRoute(v) {
@@ -4072,39 +4134,35 @@ async function jdDrawRoute(v) {
   const seq = ++jdRouteSeq;
   jdRoute = { vendorId: v.id, from: null, to: { lat: p.lat, lng: p.lng } };
   jdClearRouteLayer();
-  jdRenderRouteCard(v, { loading: true });
+  jdRenderRouteCard(v, { mode: 'loading' });
 
   const from = await jdGetBuyerPosition();
   if (seq !== jdRouteSeq || !map) return;
   if (!from) {
-    jdRenderRouteCard(v, { noLoc: true });
-    map.setView([p.lat, p.lng], 17);
+    jdRenderRouteCard(v, { mode: 'fallback', reason: 'noloc' });
+    jdFitPoints([[p.lat, p.lng]]);
     if (jdCluster && markers[v.id]) jdCluster.zoomToShowLayer(markers[v.id], () => {});
     return;
   }
   jdRoute.from = from;
   jdPlaceMe(from.lat, from.lng);
+  const straight = haversineMeters(from.lat, from.lng, p.lat, p.lng);
+  const fail = (reason) => {
+    jdRenderRouteCard(v, { mode: 'fallback', reason, dist: straight });
+    jdFitPoints([[from.lat, from.lng], [p.lat, p.lng]]);
+  };
 
-  let route = null;
-  try { route = await jdFetchBestRoute(from, jdRoute.to); }
-  catch (e) { console.warn('Rute gagal diambil, pakai garis lurus:', e); }
+  if (straight / 1000 > JD_ROUTE_MAX_KM) { fail('far'); return; }
+  const r = await jdFetchBestRoute(from, jdRoute.to);
   if (seq !== jdRouteSeq || !map) return;
+  if (r.status !== 'ok') { fail(r.status); return; }
 
-  let latlngs, dist, dur, approx = false;
-  if (route) {
-    latlngs = route.geometry.coordinates.map(c => [c[1], c[0]]);
-    dist = route.distance; dur = route.duration;
-  } else {
-    latlngs = [[from.lat, from.lng], [p.lat, p.lng]];
-    dist = haversineMeters(from.lat, from.lng, p.lat, p.lng);
-    dur = dist / 1.25; approx = true;
-  }
+  const latlngs = r.route.coords;
   jdRouteLayer = L.layerGroup().addTo(map);
   L.polyline(latlngs, { color: '#fff', weight: 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(jdRouteLayer);
-  L.polyline(latlngs, { color: '#2563EB', weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', dashArray: approx ? '8 10' : null, interactive: false }).addTo(jdRouteLayer);
-  jdRenderRouteCard(v, { dist, dur, approx });
-  map.invalidateSize({ pan: false });
-  map.fitBounds(L.latLngBounds(latlngs), { paddingTopLeft: [40, 80], paddingBottomRight: [40, 190], maxZoom: 18 });
+  L.polyline(latlngs, { color: '#2563EB', weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(jdRouteLayer);
+  jdRenderRouteCard(v, { mode: 'ok', dist: r.route.distance, dur: r.route.duration });
+  jdFitPoints(latlngs);
 }
 
 // Pembeli memilih pedagang di peta (pin atau kartu): buka peta layar penuh lalu gambar jalur terbaik.
@@ -4119,6 +4177,11 @@ window.__jdPickOnMap = function (id, noTrack) {
 window.__vendorTap = function (id) {
   if (bottomView === 'peta' && map) window.__jdPickOnMap(id);
   else window.__openVendorSheet(id);
+};
+
+window.__jdRetryRoute = function (id) {
+  const v = vendors.find(x => x.id === id);
+  if (v) jdDrawRoute(v);
 };
 
 window.__jdClearRoute = function () {
@@ -5271,6 +5334,20 @@ function renderPedagang() {
       </button>
     </div>
 
+    <div class="vendor-hero" id="jd-track-card" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🧭</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Catat Rute Jualan Saya</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Opsional. Bantu JajanDekat mengenali jalur dan jam Anda biasa lewat. Bisa dicabut kapan saja.</div>
+        </div>
+      </div>
+      <div id="jd-track-state" style="font-size:12px;margin-bottom:10px;">${jdTrackStateHtml()}</div>
+      <button onclick="window.__openTrackConsent('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
+        ⚙️ Atur izin jejak rute
+      </button>
+    </div>
+
     <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
 
     </div>
@@ -6196,6 +6273,7 @@ window.__pickVendor = async function () {
 window.__logoutVendor = function () {
   myVendorId = null;
   myVendorPin = null;
+  jdTrackConsent = null;
   lastPendingNotified = 0;
   setPedagangDot(0);
   localStorage.removeItem('jd_my_vendor_id');
@@ -9104,6 +9182,102 @@ setInterval(() => {
     reportLocationError(v.id, 'Izin/GPS gagal (kode ' + (err && err.code) + '): ' + (err && err.message ? err.message : 'tidak diketahui'));
   }, { timeout: 8000 });
 }, 5 * 60 * 1000); // tiap 5 menit
+
+// ---------- JEJAK RUTE PEDAGANG (opsional; hanya dengan izin pedagang; dikunci PIN) ----------
+// Posisi dikirim ke RPC jd_log_vendor_point ±tiap 60 detik HANYA saat: pedagang sudah memberi izin, status "sedang jualan",
+// layar app terbuka, dan PIN sudah terisi di sesi ini. Server memeriksa ulang semuanya (izin, aktif, PIN, batas 1 titik/20 dtk).
+let jdTrackConsent = null;   // null = belum dicek di sesi ini, true/false = hasil dari server
+let jdTrackBusy = false;
+let jdTrackChecking = false;
+
+function jdTrackStateHtml() {
+  if (jdTrackConsent === true) return '✅ <b>Aktif</b> — posisi dicatat selama status Anda "sedang jualan".';
+  if (jdTrackConsent === false) return '⚪ <b>Tidak aktif</b> — tidak ada jejak yang dicatat.';
+  return '⚪ Belum diatur. Ketuk tombol di bawah untuk melihat penjelasan dan memilih.';
+}
+function jdTrackRefreshCard() {
+  const el = document.getElementById('jd-track-state');
+  if (el) el.innerHTML = jdTrackStateHtml();
+}
+
+async function jdTrackLoadConsent() {
+  if (jdTrackChecking || !myVendorId || myVendorPin === null) return;
+  jdTrackChecking = true;
+  try {
+    const { data, error } = await sb.rpc('jd_get_track_consent', { p_vendor_id: myVendorId, p_pin: myVendorPin });
+    jdTrackConsent = error ? false : !!data; // gagal -> anggap tidak ada izin (aman)
+    jdTrackRefreshCard();
+  } catch (e) { jdTrackConsent = false; }
+  finally { jdTrackChecking = false; }
+}
+
+window.__openTrackConsent = async function (vendorId) {
+  let pin = myVendorPin;
+  if (pin === null) {
+    pin = prompt('Masukkan PIN akun Anda:');
+    if (pin === null) return;
+    pin = pin.trim();
+  }
+  const { data, error } = await sb.rpc('jd_get_track_consent', { p_vendor_id: vendorId, p_pin: pin });
+  if (error) { showToast('PIN salah atau gagal memuat. Coba lagi.'); return; }
+  myVendorPin = pin;
+  jdTrackConsent = !!data;
+  jdTrackRefreshCard();
+
+  document.getElementById('jd-track-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'jd-track-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:230;display:flex;align-items:flex-end;justify-content:center;';
+  const on = jdTrackConsent === true;
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:85vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">🧭 Catat Rute Jualan Saya</div>
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.6;margin-bottom:12px;">
+        <b>Yang dicatat:</b> posisi GPS Anda sekitar tiap 1 menit, <b>hanya saat status "sedang jualan"</b> dan app terbuka. Tidak dicatat saat Anda tidak jualan.<br><br>
+        <b>Untuk apa:</b> mengenali jalur dan jam Anda biasa lewat (dalam kotak area ±100 m), supaya fitur rute dan perkiraan jam lewat di JajanDekat makin baik. Pembeli tidak bisa melihat garis jejak Anda.<br><br>
+        <b>Disimpan:</b> titik mentah 30 hari, setelah itu hanya rekap per kotak area, hari, dan jam.<br><br>
+        <b>Anda yang menentukan:</b> izin bisa dicabut kapan saja. Mencabut izin <b>menghapus semua jejak dan rekap</b> Anda.
+      </div>
+      <div style="font-size:12px;margin-bottom:12px;">Status sekarang: ${on ? '✅ <b>Aktif</b>' : '⚪ <b>Tidak aktif</b>'}</div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('jd-track-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Tutup</button>
+        <button onclick="window.__setTrackConsent('${vendorId}', ${on ? 'false' : 'true'})" style="flex:2;padding:11px;border-radius:10px;border:none;background:${on ? '#B91C1C' : 'var(--brand)'};color:#fff;font-weight:700;">${on ? 'Matikan & hapus jejak' : 'Saya setuju, aktifkan'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.__setTrackConsent = async function (vendorId, on) {
+  if (jdTrackBusy) return;
+  jdTrackBusy = true;
+  try {
+    const { error } = await sb.rpc('jd_set_track_consent', { p_vendor_id: vendorId, p_pin: myVendorPin || '', p_on: on });
+    if (error) throw error;
+    jdTrackConsent = on;
+    document.getElementById('jd-track-overlay')?.remove();
+    jdTrackRefreshCard();
+    showToast(on ? 'Jejak rute diaktifkan.' : 'Jejak rute dimatikan dan semua jejak dihapus.');
+  } catch (e) {
+    console.error('Izin jejak rute gagal disimpan:', e);
+    showToast('Gagal menyimpan pilihan. Coba lagi.');
+  } finally { jdTrackBusy = false; }
+};
+
+setInterval(() => {
+  if (mode !== 'pedagang' || !myVendorId || myVendorPin === null) return;
+  if (jdTrackConsent === null) { jdTrackLoadConsent(); return; }
+  if (jdTrackConsent !== true) return;
+  if (document.visibilityState !== 'visible' || !navigator.geolocation) return;
+  const v = vendors.find(x => x.id === myVendorId);
+  if (!v || !v.active) return;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const c = pos.coords;
+    if (c.accuracy != null && c.accuracy > 100) return; // GPS terlalu kasar, buang
+    sb.rpc('jd_log_vendor_point', {
+      p_vendor_id: v.id, p_pin: myVendorPin, p_lat: c.latitude, p_lng: c.longitude, p_acc: c.accuracy != null ? c.accuracy : null,
+    }).then(({ error }) => { if (error) console.warn('Jejak rute gagal:', error.message); });
+  }, () => {}, { enableHighAccuracy: false, maximumAge: 30000, timeout: 8000 });
+}, 60 * 1000);
 
 // ---------- PENGINGAT "MASIH JUALAN?" (tiap 1 jam, selama app tetap terbuka) ----------
 setInterval(async () => {
