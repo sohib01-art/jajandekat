@@ -1718,9 +1718,13 @@ async function renderArtikelDetailView(slug) {
       <button class="follow-btn" style="margin-bottom:12px;" onclick="window.__backFromArtikel()">← Kembali ke Artikel</button>
       ${data.cover_image ? `<img src="${data.cover_image}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ''}
       <div style="font-family:'Poppins';font-weight:800;font-size:18px;margin-bottom:6px;">${escapeHtml(data.title)}</div>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:14px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      <button id="art-share-inline" class="follow-btn" style="margin-bottom:14px;" onclick="window.__shareArtikel()">📤 Bagikan artikel</button>
       <div style="font-size:13.5px;line-height:1.7;">${renderMarkdownSafe(data.content)}</div>
+      ${artikelJoinCardHtml()}
     `;
+    window.__currentArtikel = { slug: data.slug, title: data.title };
+    mountShareFab();
   } catch (e) {
     main.innerHTML = `
       <button class="follow-btn" style="margin-bottom:12px;" onclick="window.__backFromArtikel()">← Kembali ke Artikel</button>
@@ -1728,6 +1732,90 @@ async function renderArtikelDetailView(slug) {
     `;
   }
 }
+
+// Kartu ajakan di akhir artikel (untuk pembaca yang datang dari tautan bagikan)
+function artikelJoinCardHtml() {
+  const canInstall = !isStandaloneApp;
+  return `
+    <div style="margin-top:22px;border:1.5px solid var(--brand);border-radius:16px;padding:14px;background:var(--surface-2);display:flex;gap:12px;align-items:center;">
+      <img src="icons/install-wave.webp" alt="" style="height:84px;width:auto;flex-shrink:0;" onerror="this.style.display='none'" />
+      <div style="min-width:0;">
+        <div style="font-family:'Poppins';font-weight:800;font-size:14.5px;">Cari jajanan di sekitarmu</div>
+        <div style="font-size:12px;color:var(--text-dim);margin:2px 0 10px;line-height:1.45;">Gratis. Cek dulu pedagang yang sedang buka, baru jalan.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${canInstall ? `<button class="follow-btn" style="background:var(--brand);color:#fff;border-color:var(--brand);" onclick="window.__installFromArtikel()">Instal aplikasi</button>` : ''}
+          <button class="follow-btn" onclick="window.__backFromArtikel()">Buka JajanDekat</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Tombol "BAGIKAN" melayang di halaman detail artikel (hilang sendiri saat pindah halaman)
+function mountShareFab() {
+  if (document.getElementById('share-fab')) return;
+  if (!document.getElementById('share-fab-style')) {
+    const st = document.createElement('style');
+    st.id = 'share-fab-style';
+    st.textContent = `
+      #share-fab { position:fixed; z-index:80; right:max(14px, calc((100vw - 440px) / 2 + 14px));
+        bottom:calc(84px + env(safe-area-inset-bottom, 0px)); display:flex; align-items:center; gap:8px;
+        padding:12px 20px 12px 22px; border:0; border-radius:999px; background:#E4561A !important; color:#fff !important; overflow:hidden; -webkit-appearance:none; appearance:none;
+        font:800 15px/1 'Poppins','Inter',sans-serif; letter-spacing:.07em; text-transform:uppercase; cursor:pointer;
+        box-shadow: inset 0 0 0 3px rgba(255,255,255,.88), 0 5px 0 #A93C0E, 0 12px 20px rgba(0,0,0,.32);
+        -webkit-tap-highlight-color:transparent; animation: jdFabFloat 2.4s ease-in-out infinite; }
+      #share-fab:active { transform:translateY(3px); box-shadow: inset 0 0 0 3px rgba(255,255,255,.88), 0 2px 0 #A93C0E, 0 6px 12px rgba(0,0,0,.3); animation:none; }
+      #share-fab svg { width:22px; height:22px; flex:none; animation: jdFabArrow 1.2s ease-in-out infinite; }
+      #share-fab::after { content:""; position:absolute; top:-20%; bottom:-20%; width:34%; left:-50%;
+        background:rgba(255,255,255,.45); transform:skewX(-22deg); animation: jdFabShine 3.4s ease-in-out infinite; }
+      @keyframes jdFabFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-7px); } }
+      @keyframes jdFabArrow { 0%,100% { transform:translateX(0); } 50% { transform:translateX(4px); } }
+      @keyframes jdFabShine { 0%,55% { left:-50%; } 85%,100% { left:130%; } }
+      @media (prefers-reduced-motion: reduce) { #share-fab, #share-fab svg, #share-fab::after { animation:none; } }
+    `;
+    document.head.appendChild(st);
+  }
+  const fab = document.createElement('button');
+  fab.id = 'share-fab';
+  fab.type = 'button';
+  fab.setAttribute('aria-label', 'Bagikan artikel');
+  fab.innerHTML = `Bagikan <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18c0-6 4-10 11-10h5"/><path d="M15 3l5 5-5 5"/></svg>`;
+  fab.onclick = () => window.__shareArtikel();
+  document.body.appendChild(fab);
+
+  // Hapus tombol begitu halaman artikel tidak lagi tampil (ditandai tombol bagikan di dalam halaman)
+  const host = document.getElementById('art-share-inline') ? document.getElementById('art-share-inline').parentNode : null;
+  if (host) {
+    const mo = new MutationObserver(() => {
+      if (!document.getElementById('art-share-inline')) { fab.remove(); mo.disconnect(); }
+    });
+    mo.observe(host, { childList: true });
+  }
+}
+
+window.__shareArtikel = function () {
+  const a = window.__currentArtikel;
+  if (!a) return;
+  const link = `${location.origin}${location.pathname}?artikel=${encodeURIComponent(a.slug)}`;
+  const text = `Baca "${a.title}" di JajanDekat: ${link}`;
+  if (navigator.share) {
+    navigator.share({ title: a.title, text, url: link }).catch(() => {});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+};
+
+window.__installFromArtikel = async function () {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (choice && choice.outcome === 'accepted') { showInstallSuccess(); showToast('Mantap! JajanDekat sudah terpasang.'); }
+  } else if (isIOSDevice) {
+    alert('Ketuk tombol Bagikan di Safari, lalu pilih "Tambahkan ke Layar Utama".');
+  } else {
+    showToast('Buka menu browser, lalu pilih "Instal aplikasi" atau "Tambahkan ke layar utama".');
+  }
+};
 
 window.__backFromArtikel = function () {
   artikelDetailSlug = null;
