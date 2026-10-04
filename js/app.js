@@ -2998,15 +2998,79 @@ function openInternalLink(link) {
 window.__openInternalLink = function (link) { openInternalLink(link); };
 
 // ---------- PETA VIEW (tab "Peta") ----------
+let mapQuery = '';
+let mapCat = null;
+let jdMeMarker = null;
+
+// Pedagang yang tampil di peta: yang sedang buka + sesuai kata kunci/kategori dari kolom cari.
+function jdMapVendors() {
+  const q = mapQuery.trim().toLowerCase();
+  const cat = FOOD_MAIN.find(c => c.k === mapCat);
+  return vendors.filter(v =>
+    vendorIsShowable(v) &&
+    (!q || v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))) &&
+    (!cat || vendorMainCats(v).includes(cat.k))
+  );
+}
+
+function jdLocateMe() {
+  const go = (lat, lng) => {
+    if (!map) return;
+    map.setView([lat, lng], 16);
+    if (jdMeMarker) map.removeLayer(jdMeMarker);
+    jdMeMarker = L.marker([lat, lng], { icon: L.divIcon({ html: '<div class="jd-me"></div>', className: '', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, keyboard: false }).addTo(map);
+  };
+  if (buyerLoc) { go(buyerLoc.lat, buyerLoc.lng); return; }
+  if (!navigator.geolocation) { showToast('Browser ini tidak mendukung lokasi.'); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => go(pos.coords.latitude, pos.coords.longitude),
+    () => showToast('Gagal mengambil lokasi. Izinkan akses lokasi dulu ya.'),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
 function renderPetaView() {
   const activeVendors = vendors.filter(vendorIsShowable);
   main.innerHTML = `
-    <div class="sec-head"><h2>📍 Peta Pedagang</h2><span class="sec-count">${activeVendors.length} sedang buka</span></div>
-    <div id="map" style="height:calc(100vh - 340px); min-height:300px; border-radius:16px; overflow:hidden;"></div>
+    <div class="sec-head"><h2>📍 Peta Pedagang</h2><span class="sec-count" id="map-count">${activeVendors.length} sedang buka</span></div>
+    <div class="jd-map-wrap">
+      <div id="map"></div>
+      <div class="jd-map-top">
+        <div class="jd-map-search">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="map-search" type="text" placeholder="Cari jajanan di sekitar..." value="${escapeHtml(mapQuery)}" autocomplete="off" />
+          <button type="button" id="map-search-clear" aria-label="Hapus" style="display:${mapQuery ? 'block' : 'none'}">✕</button>
+        </div>
+        <div class="jd-map-chips" id="map-chips">${FOOD_MAIN.map(c => `<button type="button" class="${mapCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
+      </div>
+      <button type="button" class="jd-map-locate" id="map-locate" aria-label="Lokasi saya">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+      </button>
+      <div class="jd-map-empty" id="map-empty">Tidak ada pedagang yang cocok</div>
+    </div>
     <div class="sec-head"><h2>Pedagang Aktif</h2></div>
     ${activeVendors.length ? `<div class="hm-near">${activeVendors.map(renderHmNearCard).join('')}</div>` : '<div class="nb-empty">Belum ada pedagang yang sedang jualan.</div>'}
   `;
   renderMap();
+
+  const input = document.getElementById('map-search');
+  const clear = document.getElementById('map-search-clear');
+  input.oninput = () => {
+    mapQuery = input.value;
+    clear.style.display = mapQuery ? 'block' : 'none';
+    mapDidInitialFit = false; // fokuskan ulang ke hasil pencarian
+    renderMap();
+  };
+  clear.onclick = () => { mapQuery = ''; input.value = ''; clear.style.display = 'none'; mapDidInitialFit = false; renderMap(); input.focus(); };
+  document.querySelectorAll('#map-chips button').forEach(btn => {
+    btn.onclick = () => {
+      mapCat = mapCat === btn.dataset.k ? null : btn.dataset.k;
+      document.querySelectorAll('#map-chips button').forEach(b => b.classList.toggle('active', b.dataset.k === mapCat));
+      mapDidInitialFit = false;
+      renderMap();
+    };
+  });
+  document.getElementById('map-locate').onclick = jdLocateMe;
 }
 
 // ---------- CARI VIEW (tab "Cari") ----------
@@ -3521,9 +3585,10 @@ function baInitMap() {
   const center = hasBuyer ? [buyerLoc.lat, buyerLoc.lng] : (typeof DEFAULT_MAP_CENTER !== 'undefined' ? DEFAULT_MAP_CENTER : [-2.5, 118]);
   const zoom = hasBuyer ? 17 : (typeof DEFAULT_MAP_ZOOM !== 'undefined' ? DEFAULT_MAP_ZOOM : 14);
   baTouched = hasBuyer;
-  baMap = L.map(el, { zoomControl: false }).setView(center, zoom);
+  jdInjectMapCss();
+  baMap = L.map(el, { zoomControl: false, maxZoom: 19 }).setView(center, zoom);
   L.control.zoom({ position: 'topright' }).addTo(baMap);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(baMap);
+  jdAddBaseLayer(baMap);
   setTimeout(() => { if (baMap) baMap.invalidateSize({ pan: false }); }, 60);
   const pin = document.getElementById('ba-pin');
   baMap.on('dragstart zoomstart', () => { baTouched = true; });
@@ -3715,50 +3780,142 @@ window.__submitClaimVendor = async function (vendorId) {
   }
 };
 
+// ---------- GAYA PETA JAJANDEKAT ----------
+// Leaflet + MapLibre GL (vektor) + OpenFreeMap: gratis, tanpa API key. Warna diganti lewat JD_MAP_COLORS.
+// Kalau MapLibre/WebGL tidak tersedia atau gagal dimuat, otomatis kembali ke tile OSM biasa.
+const JD_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
+const JD_MAP_COLORS = {
+  bg: '#F6F3EE', water: '#CDE7F4', park: '#DCEFD3', building: '#ECE7DE',
+  road: '#FFFFFF', roadCasing: '#E6E0D6', major: '#FFE9C2', majorCasing: '#F3CB8E',
+  label: '#566070', labelHalo: '#FFFFFF',
+};
+let jdMapStylePromise = null;
+
+function jdRecolorStyle(style) {
+  const C = JD_MAP_COLORS;
+  const set = (l, prop, val) => { l.paint = l.paint || {}; l.paint[prop] = val; };
+  (style.layers || []).forEach((l) => {
+    const sl = l['source-layer'] || '';
+    const id = l.id || '';
+    if (l.type === 'background') set(l, 'background-color', C.bg);
+    else if (l.type === 'fill') {
+      if (sl === 'water') set(l, 'fill-color', C.water);
+      else if (sl === 'park' || sl === 'landcover' || /park|wood|grass|forest|green/i.test(id)) set(l, 'fill-color', C.park);
+      else if (sl === 'building') set(l, 'fill-color', C.building);
+    } else if (l.type === 'line') {
+      if (sl === 'waterway') set(l, 'line-color', C.water);
+      else if (sl === 'transportation' && !/rail|ferry|aerial|transit|path|pedestrian/i.test(id)) {
+        const casing = /casing/i.test(id);
+        const major = /motorway|trunk|primary|secondary/i.test(id);
+        set(l, 'line-color', casing ? (major ? C.majorCasing : C.roadCasing) : (major ? C.major : C.road));
+      }
+    } else if (l.type === 'symbol') {
+      set(l, 'text-color', C.label);
+      set(l, 'text-halo-color', C.labelHalo);
+    }
+  });
+  return style;
+}
+
+function jdLoadMapStyle() {
+  if (!jdMapStylePromise) {
+    jdMapStylePromise = withTimeout(fetch(JD_MAP_STYLE_URL), 8000, 'timeout')
+      .then((r) => { if (!r.ok) throw new Error('style ' + r.status); return r.json(); })
+      .then(jdRecolorStyle)
+      .catch((e) => { jdMapStylePromise = null; throw e; });
+  }
+  return jdMapStylePromise;
+}
+
+// Pasang peta dasar ke map Leaflet: vektor bergaya JajanDekat, atau tile OSM sebagai cadangan.
+function jdAddBaseLayer(mapObj) {
+  const fallback = () => {
+    if (!mapObj._container || !mapObj._container.isConnected) return;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(mapObj);
+  };
+  if (typeof L === 'undefined') return;
+  if (typeof L.maplibreGL !== 'function' || !('WebGLRenderingContext' in window)) { fallback(); return; }
+  jdLoadMapStyle().then((style) => {
+    if (!mapObj._container || !mapObj._container.isConnected) return;
+    L.maplibreGL({
+      style: JSON.parse(JSON.stringify(style)),
+      attribution: '&copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &copy; OpenMapTiles, data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    }).addTo(mapObj);
+  }).catch(fallback);
+}
+
+// Pin pedagang ala aplikasi ojol: lingkaran foto/emoji + ujung runcing. Hijau = sedang jualan, emas = unggulan.
+function jdInjectMapCss() {
+  if (document.getElementById('jd-map-css')) return;
+  const st = document.createElement('style');
+  st.id = 'jd-map-css';
+  st.textContent = `
+    .jd-pin{position:relative;width:44px;height:54px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.28));cursor:pointer;transition:transform .15s}
+    .jd-pin:active{transform:scale(.93)}
+    .jd-pin-head{width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #22C55E;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    .jd-pin-tip{position:absolute;left:50%;bottom:0;width:0;height:0;transform:translateX(-50%);border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #22C55E}
+    .jd-pin-img{display:block;width:100%;height:100%;background-size:cover;background-position:center}
+    .jd-pin-emoji{font-size:22px;line-height:1}
+    .jd-pin.premium .jd-pin-head{border-color:#F5B301}
+    .jd-pin.premium .jd-pin-tip{border-top-color:#F5B301}
+    .jd-map-wrap{position:relative;height:calc(100vh - 250px);min-height:380px;border-radius:16px;overflow:hidden;background:#F6F3EE}
+    .jd-map-wrap #map{position:absolute;inset:0}
+    .jd-map-top{position:absolute;top:10px;left:10px;right:10px;z-index:1000;pointer-events:none}
+    .jd-map-top>*{pointer-events:auto}
+    .jd-map-search{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:0 12px;height:44px;box-shadow:0 3px 12px rgba(0,0,0,.18);color:#6B7280}
+    .jd-map-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font:500 13.5px 'Poppins',sans-serif;color:#111827}
+    .jd-map-search button{border:none;background:#EEF0F3;color:#6B7280;width:22px;height:22px;border-radius:50%;font-size:11px;line-height:22px;padding:0;cursor:pointer}
+    .jd-map-chips{display:flex;gap:6px;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:none}
+    .jd-map-chips::-webkit-scrollbar{display:none}
+    .jd-map-chips button{flex:0 0 auto;border:none;background:#fff;color:#374151;font:600 12px 'Poppins',sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 2px 7px rgba(0,0,0,.16);cursor:pointer;white-space:nowrap}
+    .jd-map-chips button.active{background:#22C55E;color:#fff}
+    .jd-map-locate{position:absolute;right:10px;bottom:34px;z-index:1000;width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:#374151;box-shadow:0 3px 10px rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .jd-map-empty{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:1000;background:#fff;border-radius:12px;padding:8px 14px;font:600 12px 'Poppins',sans-serif;color:#6B7280;box-shadow:0 3px 10px rgba(0,0,0,.18);display:none;white-space:nowrap}
+    .jd-me{width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.2)}
+    .leaflet-container{font-family:'Poppins',sans-serif;background:#F6F3EE}
+    .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.75)!important;border-radius:8px 0 0 0}
+    .leaflet-control-zoom{border:none!important;box-shadow:0 2px 8px rgba(0,0,0,.18)!important;border-radius:12px;overflow:hidden}
+    .leaflet-control-zoom a{width:36px!important;height:36px!important;line-height:36px!important;color:#374151}
+  `;
+  document.head.appendChild(st);
+}
+
+function jdPinHtml(v) {
+  let inner;
+  if (v.photo_url) inner = `<span class="jd-pin-img" style="background-image:url('${escapeHtml(v.photo_url)}')"></span>`;
+  else if (v.mode_icon) inner = `<span class="jd-pin-img" style="background-image:url('mode_icons/${v.mode_icon}.png')"></span>`;
+  else inner = `<span class="jd-pin-emoji">${v.emoji || '🍜'}</span>`;
+  return `<div class="jd-pin${v.is_premium ? ' premium' : ''}"><div class="jd-pin-head">${inner}</div><div class="jd-pin-tip"></div></div>`;
+}
+
 function renderMap() {
   const el = document.getElementById('map');
   if (!el) return;
+  if (map && map.getContainer() !== el) { // tab Peta dirender ulang -> container lama sudah hilang
+    try { map.remove(); } catch (_) {}
+    map = null; markers = {}; jdMeMarker = null; mapDidInitialFit = false;
+  }
   if (!map) {
-    map = L.map('map').setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(map);
+    jdInjectMapCss();
+    map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    jdAddBaseLayer(map);
   } else {
     map.invalidateSize();
   }
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
-  vendors.filter(vendorIsShowable).forEach(v => {
+  const shown = jdMapVendors();
+  const emptyEl = document.getElementById('map-empty');
+  if (emptyEl) emptyEl.style.display = shown.length ? 'none' : 'block';
+  const countEl = document.getElementById('map-count');
+  if (countEl) countEl.textContent = shown.length + ' sedang buka';
+  shown.forEach(v => {
     const p = vendorDisplayLatLng(v);
-    const iconHtml = v.photo_url
-      ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('${escapeHtml(v.photo_url)}');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
-      : v.mode_icon
-      ? `<div style="width:34px;height:34px;border-radius:50%;background-image:url('mode_icons/${v.mode_icon}.png');background-size:cover;background-position:center;border:2px solid #3DDC97;box-shadow:0 0 8px #3DDC97;"></div>`
-      : `<div style="font-size:22px;filter:drop-shadow(0 0 6px #3DDC97)">${v.emoji || '🍜'}</div>`;
-    const icon = L.divIcon({
-      html: iconHtml,
-      className: '', iconSize: [34, 34]
-    });
-    const popupHtml = `
-      <div style="font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;">
-        ${escapeHtml(v.name)}${v.is_premium ? ' ⭐' : ''}
-      </div>
-      ${vendorChatEnabled(v) ? `<button onclick="window.__openChatModal('${v.id}','${escapeHtml(v.name).replace(/'/g, "\\'")}')"
-         style="display:inline-block;margin-top:6px;background:var(--brand);color:#fff;border:none;text-decoration:none;
-         font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;">
-        💬 Chat di App
-      </button>` : ''}
-      ${v.whatsapp && v.show_whatsapp !== false ? `
-        <a href="https://wa.me/${v.whatsapp}?text=${encodeURIComponent(`Halo ${v.name}, saya lihat lapak Anda di JajanDekat. Saya mau tanya-tanya, apakah masih jualan?`)}" target="_blank" onclick="window.__jdTrackVendor('${v.id}','wa')"
-           style="display:inline-block;margin-top:6px;margin-left:4px;background:#25D366;color:#fff;text-decoration:none;
-           font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;">
-          📱 WhatsApp
-        </a>
-      ` : ''}
-      <div style="font-size:9px;color:#999;margin-top:5px;">Transaksi langsung dengan pedagang, di luar tanggung jawab JajanDekat.</div>
-    `;
-    markers[v.id] = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml);
+    const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [44, 54], iconAnchor: [22, 54] });
+    // Ketuk pin -> sheet detail pedagang (chat, WhatsApp, menu, ikuti, ulasan sudah ada di sheet)
+    markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name }).addTo(map)
+      .on('click', () => window.__openVendorSheet(v.id));
   });
 
   // Peta dulu selalu diam di lokasi/zoom default (kadang jauh dari pedagang/pembeli),
