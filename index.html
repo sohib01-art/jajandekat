@@ -26,6 +26,10 @@
 <!-- Leaflet (peta gratis, tanpa API key) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- MapLibre GL + binding Leaflet: peta vektor bergaya JajanDekat (OpenFreeMap, gratis) -->
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 
 <!-- Supabase client -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -107,7 +111,7 @@
 </div>
 
 <script src="js/config.js?v=43"></script>
-<script src="js/app.js?v=94"></script>
+<script src="js/app.js?v=95"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
