@@ -2930,8 +2930,8 @@ window.__goToVendorOnMap = function (id) {
   renderPembeli();
   setTimeout(() => {
     if (map && p) {
-      map.setView([p.lat, p.lng], 16);
-      if (markers[id]) markers[id].openPopup();
+      map.setView([p.lat, p.lng], 17);
+      if (jdCluster && markers[id]) jdCluster.zoomToShowLayer(markers[id], () => {});
     }
   }, 200);
 };
@@ -3858,7 +3858,7 @@ function jdInjectMapCss() {
     .jd-pin-emoji{font-size:22px;line-height:1}
     .jd-pin.premium .jd-pin-head{border-color:#F5B301}
     .jd-pin.premium .jd-pin-tip{border-top-color:#F5B301}
-    .jd-map-wrap{position:relative;height:calc(100vh - 250px);min-height:380px;border-radius:16px;overflow:hidden;background:#F6F3EE}
+    .jd-map-wrap{position:relative;height:calc(100vh - 330px);height:calc(100dvh - 330px);min-height:320px;border-radius:16px;overflow:hidden;background:#F6F3EE}
     .jd-map-wrap #map{position:absolute;inset:0}
     .jd-map-top{position:absolute;top:10px;left:10px;right:10px;z-index:1000;pointer-events:none}
     .jd-map-top>*{pointer-events:auto}
@@ -3871,6 +3871,7 @@ function jdInjectMapCss() {
     .jd-map-chips button.active{background:#22C55E;color:#fff}
     .jd-map-locate{position:absolute;right:10px;bottom:34px;z-index:1000;width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:#374151;box-shadow:0 3px 10px rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;cursor:pointer}
     .jd-map-empty{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:1000;background:#fff;border-radius:12px;padding:8px 14px;font:600 12px 'Poppins',sans-serif;color:#6B7280;box-shadow:0 3px 10px rgba(0,0,0,.18);display:none;white-space:nowrap}
+    .jd-cluster{width:40px;height:40px;border-radius:50%;background:#22C55E;color:#fff;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font:700 14px 'Poppins',sans-serif;box-sizing:border-box}
     .jd-me{width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.2)}
     .leaflet-container{font-family:'Poppins',sans-serif;background:#F6F3EE}
     .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.75)!important;border-radius:8px 0 0 0}
@@ -3888,22 +3889,39 @@ function jdPinHtml(v) {
   return `<div class="jd-pin${v.is_premium ? ' premium' : ''}"><div class="jd-pin-head">${inner}</div><div class="jd-pin-tip"></div></div>`;
 }
 
+let jdCluster = null;
+let jdMapRO = null;
+// Pin yang berdekatan/di titik sama digabung jadi angka (klik untuk zoom atau sebar). Butuh leaflet.markercluster; tanpa itu pin tampil biasa.
+function jdMarkerHost() {
+  if (typeof L.markerClusterGroup !== 'function') return map;
+  if (!jdCluster) {
+    jdCluster = L.markerClusterGroup({
+      showCoverageOnHover: false, maxClusterRadius: 46, spiderfyOnMaxZoom: true,
+      iconCreateFunction: (c) => L.divIcon({ html: `<div class="jd-cluster">${c.getChildCount()}</div>`, className: '', iconSize: [40, 40] }),
+    });
+    map.addLayer(jdCluster);
+  }
+  return jdCluster;
+}
+
 function renderMap() {
   const el = document.getElementById('map');
   if (!el) return;
   if (map && map.getContainer() !== el) { // tab Peta dirender ulang -> container lama sudah hilang
     try { map.remove(); } catch (_) {}
-    map = null; markers = {}; jdMeMarker = null; mapDidInitialFit = false;
+    map = null; markers = {}; jdMeMarker = null; jdCluster = null; mapDidInitialFit = false;
+    if (jdMapRO) { jdMapRO.disconnect(); jdMapRO = null; }
   }
   if (!map) {
     jdInjectMapCss();
     map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
     jdAddBaseLayer(map);
+    if (typeof ResizeObserver === 'function') { jdMapRO = new ResizeObserver(() => { if (map) map.invalidateSize({ pan: false }); }); jdMapRO.observe(el); }
+    [80, 400, 1200].forEach(ms => setTimeout(() => { if (map && map.getContainer() === el) map.invalidateSize({ pan: false }); }, ms));
   } else {
     map.invalidateSize();
   }
-  Object.values(markers).forEach(m => map.removeLayer(m));
+  if (jdCluster) jdCluster.clearLayers(); else Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
   const shown = jdMapVendors();
   const emptyEl = document.getElementById('map-empty');
@@ -3914,8 +3932,9 @@ function renderMap() {
     const p = vendorDisplayLatLng(v);
     const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [44, 54], iconAnchor: [22, 54] });
     // Ketuk pin -> sheet detail pedagang (chat, WhatsApp, menu, ikuti, ulasan sudah ada di sheet)
-    markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name }).addTo(map)
+    markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name })
       .on('click', () => window.__openVendorSheet(v.id));
+    jdMarkerHost().addLayer(markers[v.id]);
   });
 
   // Peta dulu selalu diam di lokasi/zoom default (kadang jauh dari pedagang/pembeli),
