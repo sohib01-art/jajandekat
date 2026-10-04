@@ -3032,9 +3032,9 @@ function jdLocateMe() {
 function renderPetaView() {
   const activeVendors = vendors.filter(vendorIsShowable);
   main.innerHTML = `
-    <div class="sec-head"><h2>📍 Peta Pedagang</h2><span class="sec-count" id="map-count">${activeVendors.length} sedang buka</span></div>
+    <div class="sec-head"><h2>📍 Peta Pedagang</h2><span class="sec-count" id="map-count">${activeVendors.filter(hmIsOpen).length} sedang buka</span></div>
     <div class="jd-map-wrap">
-      <div id="map"></div>
+      <div id="map" style="position:absolute;inset:0;width:100%;height:100%;min-height:0;border-radius:0;margin:0"></div>
       <div class="jd-map-top">
         <div class="jd-map-search">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -3048,8 +3048,8 @@ function renderPetaView() {
       </button>
       <div class="jd-map-empty" id="map-empty">Tidak ada pedagang yang cocok</div>
     </div>
-    <div class="sec-head"><h2>Pedagang Aktif</h2></div>
-    ${activeVendors.length ? `<div class="hm-near">${activeVendors.map(renderHmNearCard).join('')}</div>` : '<div class="nb-empty">Belum ada pedagang yang sedang jualan.</div>'}
+    <div class="sec-head"><h2>Pedagang di Sekitar</h2></div>
+    ${activeVendors.length ? hmGridHtml(sortVendorsForDisplay(activeVendors)) : '<div class="nb-empty">Belum ada pedagang di sekitar sini.</div>'}
   `;
   renderMap();
 
@@ -3856,20 +3856,23 @@ function jdInjectMapCss() {
     .jd-pin-tip{position:absolute;left:50%;bottom:0;width:0;height:0;transform:translateX(-50%);border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #22C55E}
     .jd-pin-img{display:block;width:100%;height:100%;background-size:cover;background-position:center}
     .jd-pin-emoji{font-size:22px;line-height:1}
+    .jd-pin.closed .jd-pin-head{border-color:#9CA3AF}
+    .jd-pin.closed .jd-pin-tip{border-top-color:#9CA3AF}
+    .jd-pin.closed .jd-pin-img{filter:grayscale(1);opacity:.7}
     .jd-pin.premium .jd-pin-head{border-color:#F5B301}
     .jd-pin.premium .jd-pin-tip{border-top-color:#F5B301}
     .jd-map-wrap{position:relative;height:calc(100vh - 330px);height:calc(100dvh - 330px);min-height:320px;border-radius:16px;overflow:hidden;background:#F6F3EE}
-    .jd-map-wrap #map{position:absolute;inset:0}
+    .jd-map-wrap #map{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;border-radius:0!important}
     .jd-map-top{position:absolute;top:10px;left:10px;right:10px;z-index:1000;pointer-events:none}
     .jd-map-top>*{pointer-events:auto}
-    .jd-map-search{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:0 12px;height:44px;box-shadow:0 3px 12px rgba(0,0,0,.18);color:#6B7280}
+    .jd-map-search{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:0 12px;height:42px;box-shadow:0 3px 12px rgba(0,0,0,.16);color:#6B7280}
     .jd-map-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font:500 13.5px 'Poppins',sans-serif;color:#111827}
     .jd-map-search button{border:none;background:#EEF0F3;color:#6B7280;width:22px;height:22px;border-radius:50%;font-size:11px;line-height:22px;padding:0;cursor:pointer}
     .jd-map-chips{display:flex;gap:6px;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:none}
     .jd-map-chips::-webkit-scrollbar{display:none}
-    .jd-map-chips button{flex:0 0 auto;border:none;background:#fff;color:#374151;font:600 12px 'Poppins',sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 2px 7px rgba(0,0,0,.16);cursor:pointer;white-space:nowrap}
+    .jd-map-chips button{flex:0 0 auto;border:none;background:#fff;color:#374151;font:600 11.5px 'Poppins',sans-serif;padding:6px 11px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.14);cursor:pointer;white-space:nowrap}
     .jd-map-chips button.active{background:#22C55E;color:#fff}
-    .jd-map-locate{position:absolute;right:10px;bottom:34px;z-index:1000;width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:#374151;box-shadow:0 3px 10px rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .jd-map-locate{position:absolute;left:10px;bottom:30px;z-index:1000;width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:#374151;box-shadow:0 3px 10px rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;cursor:pointer}
     .jd-map-empty{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:1000;background:#fff;border-radius:12px;padding:8px 14px;font:600 12px 'Poppins',sans-serif;color:#6B7280;box-shadow:0 3px 10px rgba(0,0,0,.18);display:none;white-space:nowrap}
     .jd-cluster{width:40px;height:40px;border-radius:50%;background:#22C55E;color:#fff;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font:700 14px 'Poppins',sans-serif;box-sizing:border-box}
     .jd-me{width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.2)}
@@ -3886,7 +3889,7 @@ function jdPinHtml(v) {
   if (v.photo_url) inner = `<span class="jd-pin-img" style="background-image:url('${escapeHtml(v.photo_url)}')"></span>`;
   else if (v.mode_icon) inner = `<span class="jd-pin-img" style="background-image:url('mode_icons/${v.mode_icon}.png')"></span>`;
   else inner = `<span class="jd-pin-emoji">${v.emoji || '🍜'}</span>`;
-  return `<div class="jd-pin${v.is_premium ? ' premium' : ''}"><div class="jd-pin-head">${inner}</div><div class="jd-pin-tip"></div></div>`;
+  return `<div class="jd-pin${v.is_premium ? ' premium' : ''}${hmIsOpen(v) ? '' : ' closed'}"><div class="jd-pin-head">${inner}</div><div class="jd-pin-tip"></div></div>`;
 }
 
 let jdCluster = null;
@@ -3927,12 +3930,12 @@ function renderMap() {
   const emptyEl = document.getElementById('map-empty');
   if (emptyEl) emptyEl.style.display = shown.length ? 'none' : 'block';
   const countEl = document.getElementById('map-count');
-  if (countEl) countEl.textContent = shown.length + ' sedang buka';
+  if (countEl) countEl.textContent = shown.filter(hmIsOpen).length + ' sedang buka';
   shown.forEach(v => {
     const p = vendorDisplayLatLng(v);
     const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [44, 54], iconAnchor: [22, 54] });
     // Ketuk pin -> sheet detail pedagang (chat, WhatsApp, menu, ikuti, ulasan sudah ada di sheet)
-    markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name })
+    markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name, zIndexOffset: hmIsOpen(v) ? 1000 : 0 })
       .on('click', () => window.__openVendorSheet(v.id));
     jdMarkerHost().addLayer(markers[v.id]);
   });
