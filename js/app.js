@@ -2999,27 +2999,78 @@ window.__openInternalLink = function (link) { openInternalLink(link); };
 
 // ---------- PETA VIEW (tab "Peta") ----------
 let mapQuery = '';
-let mapCat = null;
+let mapCat = null;       // kunci sektor (kuliner / kebutuhan / fashion / ...) atau null = semua
+let mapOnlyOpen = false; // tombol filter: hanya yang buka
 let jdMeMarker = null;
+let jdMapFull = false;
 
-// Pedagang yang tampil di peta: yang sedang buka + sesuai kata kunci/kategori dari kolom cari.
-function jdMapVendors() {
-  const q = mapQuery.trim().toLowerCase();
-  const cat = FOOD_MAIN.find(c => c.k === mapCat);
-  return vendors.filter(v =>
-    vendorIsShowable(v) &&
-    (!q || v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))) &&
-    (!cat || vendorMainCats(v).includes(cat.k))
+const jdSvg = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const JD_ICONS = {
+  kuliner: jdSvg('<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2.5 1.5-3.5 4-3.5 7v3H17"/>'),
+  kebutuhan: jdSvg('<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 11.2a1 1 0 0 0 1 .8H18a1 1 0 0 0 1-.8L20.5 7H6"/>'),
+  fashion: jdSvg('<path d="M12 7a2.5 2.5 0 1 0-2.5-2.5M12 7v2L3 16a1.5 1.5 0 0 0 1 2.6h16A1.5 1.5 0 0 0 21 16l-9-7"/>'),
+  servis: jdSvg('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L3 17.7 6.3 21l6.3-6.3a4 4 0 0 0 5.1-5.4l-2.6 2.6-2.4-.6-.6-2.4Z"/>'),
+  kecantikan: jdSvg('<path d="M10 3h4v3h-4zM8.5 6h7l1.5 15H7z"/>'),
+  rumah: jdSvg('<path d="M3 11 12 3l9 8M5 10v10h14V10M10 20v-6h4v6"/>'),
+};
+// Sektor di baris chip: "Kuliner" (gabungan 5 kategori makanan) + kategori non-kuliner.
+function jdSectors() {
+  const kul = FOOD_MAIN.filter(m => m.kul).map(m => m.k);
+  return [{ k: 'kuliner', label: 'Kuliner', ks: kul, icon: JD_ICONS.kuliner }].concat(
+    FOOD_MAIN.filter(m => !m.kul).map(m => ({ k: m.k, label: m.short || m.label, ks: [m.k], icon: JD_ICONS[m.k] || `<span style="font-size:16px;line-height:1">${m.e}</span>` }))
   );
 }
 
+// Pedagang yang tampil (peta + daftar): punya lokasi, sesuai kata kunci, sektor, dan filter "buka".
+function jdMapVendors() {
+  const q = mapQuery.trim().toLowerCase();
+  const sec = jdSectors().find(x => x.k === mapCat);
+  return vendors.filter(v =>
+    vendorIsShowable(v) &&
+    (!mapOnlyOpen || hmIsOpen(v)) &&
+    (!q || v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))) &&
+    (!sec || vendorMainCats(v).some(x => sec.ks.includes(x)))
+  );
+}
+
+function jdSetMapInteractive(on) {
+  if (!map) return;
+  ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom', 'keyboard'].forEach(h => { if (map[h]) map[h][on ? 'enable' : 'disable'](); });
+}
+
+// Buka/tutup peta layar penuh. Elemen dipindah ke <body> supaya tidak terjebak container induk.
+function jdToggleMapFull(on) {
+  const wrap = document.getElementById('jd-pt-map');
+  if (!wrap || !map) return;
+  jdMapFull = on;
+  const btn = document.getElementById('map-expand');
+  if (on) {
+    const ph = document.createElement('div');
+    ph.id = 'jd-pt-ph'; ph.style.height = '200px';
+    wrap.parentNode.insertBefore(ph, wrap);
+    document.body.appendChild(wrap);
+    wrap.classList.add('full');
+    if (btn) btn.innerHTML = jdSvg('<path d="M6 6l12 12M18 6 6 18"/>');
+  } else {
+    const ph = document.getElementById('jd-pt-ph');
+    if (ph) { ph.parentNode.insertBefore(wrap, ph); ph.remove(); }
+    wrap.classList.remove('full');
+    if (btn) btn.innerHTML = jdSvg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>');
+  }
+  jdSetMapInteractive(on);
+  [30, 250].forEach(ms => setTimeout(() => { if (map) map.invalidateSize({ pan: false }); }, ms));
+}
+
+function jdPlaceMe(lat, lng) {
+  if (!map) return;
+  if (jdMeMarker) map.removeLayer(jdMeMarker);
+  jdMeMarker = L.marker([lat, lng], { icon: L.divIcon({ html: '<div class="jd-me-wrap"><div class="jd-me-halo"></div><div class="jd-me"></div></div>', className: '', iconSize: [64, 64], iconAnchor: [32, 32] }), interactive: false, keyboard: false, zIndexOffset: -500 }).addTo(map);
+  const lbl = document.getElementById('jd-pt-youare');
+  if (lbl) lbl.style.display = 'flex';
+}
+
 function jdLocateMe() {
-  const go = (lat, lng) => {
-    if (!map) return;
-    map.setView([lat, lng], 16);
-    if (jdMeMarker) map.removeLayer(jdMeMarker);
-    jdMeMarker = L.marker([lat, lng], { icon: L.divIcon({ html: '<div class="jd-me"></div>', className: '', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, keyboard: false }).addTo(map);
-  };
+  const go = (lat, lng) => { if (!map) return; jdPlaceMe(lat, lng); map.setView([lat, lng], 16); };
   if (buyerLoc) { go(buyerLoc.lat, buyerLoc.lng); return; }
   if (!navigator.geolocation) { showToast('Browser ini tidak mendukung lokasi.'); return; }
   navigator.geolocation.getCurrentPosition(
@@ -3029,48 +3080,65 @@ function jdLocateMe() {
   );
 }
 
+// Fokuskan peta setelah filter berubah: ke hasil pencarian, atau balik ke sekitar pembeli kalau filter kosong.
+function jdRefocus() {
+  if (!map) return;
+  if (!mapQuery.trim() && !mapCat && !mapOnlyOpen && buyerLoc) { map.setView([buyerLoc.lat, buyerLoc.lng], 15); return; }
+  const list = Object.values(markers);
+  if (list.length) map.fitBounds(L.featureGroup(list).getBounds(), { padding: [30, 30], maxZoom: 16 });
+}
+
+function jdRenderPetaList() {
+  const box = document.getElementById('peta-list');
+  if (!box) return;
+  const list = jdMapVendors();
+  box.innerHTML = list.length ? hmGridHtml(sortVendorsForDisplay(list)) : '<div class="nb-empty">Tidak ada pedagang yang cocok.</div>';
+}
+
 function renderPetaView() {
-  const activeVendors = vendors.filter(vendorIsShowable);
+  document.querySelectorAll('body > #jd-pt-map').forEach(n => n.remove()); // sisa peta layar penuh dari render sebelumnya
+  jdMapFull = false;
   main.innerHTML = `
-    <div class="sec-head"><h2>📍 Peta Pedagang</h2><span class="sec-count" id="map-count">${activeVendors.filter(hmIsOpen).length} sedang buka</span></div>
-    <div class="jd-map-wrap">
+    <div class="jd-pt-search">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="map-search" type="text" placeholder="Cari jajanan di sekitar..." value="${escapeHtml(mapQuery)}" autocomplete="off" />
+      <button type="button" class="jd-pt-filter ${mapOnlyOpen ? 'on' : ''}" id="map-filter" aria-label="Tampilkan yang buka saja" aria-pressed="${mapOnlyOpen}">${jdSvg('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>')}</button>
+    </div>
+    <div class="jd-pt-chips" id="map-chips">${jdSectors().map(c => `<button type="button" class="${mapCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.icon}<span>${escapeHtml(c.label)}</span></button>`).join('')}</div>
+    <div class="jd-pt-map" id="jd-pt-map">
       <div id="map" style="position:absolute;inset:0;width:100%;height:100%;min-height:0;border-radius:0;margin:0"></div>
-      <div class="jd-map-top">
-        <div class="jd-map-search">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-          <input id="map-search" type="text" placeholder="Cari jajanan di sekitar..." value="${escapeHtml(mapQuery)}" autocomplete="off" />
-          <button type="button" id="map-search-clear" aria-label="Hapus" style="display:${mapQuery ? 'block' : 'none'}">✕</button>
-        </div>
-        <div class="jd-map-chips" id="map-chips">${FOOD_MAIN.map(c => `<button type="button" class="${mapCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
-      </div>
-      <button type="button" class="jd-map-locate" id="map-locate" aria-label="Lokasi saya">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
-      </button>
+      <button type="button" class="jd-pt-btn jd-pt-locate" id="map-locate" aria-label="Lokasi saya">${jdSvg('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>')}</button>
+      <button type="button" class="jd-pt-btn jd-pt-expand" id="map-expand" aria-label="Perbesar peta">${jdSvg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}</button>
+      <div class="jd-pt-youare" id="jd-pt-youare"><i></i>Lokasi Anda</div>
       <div class="jd-map-empty" id="map-empty">Tidak ada pedagang yang cocok</div>
     </div>
-    <div class="sec-head"><h2>Pedagang di Sekitar</h2></div>
-    ${activeVendors.length ? hmGridHtml(sortVendorsForDisplay(activeVendors)) : '<div class="nb-empty">Belum ada pedagang di sekitar sini.</div>'}
+    <div class="sec-head" style="margin-top:14px;"><h2>Pedagang di Sekitar</h2><button type="button" class="jd-pt-all" id="map-all">Lihat Semua ›</button></div>
+    <div id="peta-list"></div>
   `;
+  jdRenderPetaList();
   renderMap();
 
+  const refresh = () => { renderMap(); jdRenderPetaList(); jdRefocus(); };
   const input = document.getElementById('map-search');
-  const clear = document.getElementById('map-search-clear');
-  input.oninput = () => {
-    mapQuery = input.value;
-    clear.style.display = mapQuery ? 'block' : 'none';
-    mapDidInitialFit = false; // fokuskan ulang ke hasil pencarian
-    renderMap();
-  };
-  clear.onclick = () => { mapQuery = ''; input.value = ''; clear.style.display = 'none'; mapDidInitialFit = false; renderMap(); input.focus(); };
+  let t = null;
+  input.oninput = () => { mapQuery = input.value; clearTimeout(t); t = setTimeout(refresh, 150); };
   document.querySelectorAll('#map-chips button').forEach(btn => {
     btn.onclick = () => {
       mapCat = mapCat === btn.dataset.k ? null : btn.dataset.k;
       document.querySelectorAll('#map-chips button').forEach(b => b.classList.toggle('active', b.dataset.k === mapCat));
-      mapDidInitialFit = false;
-      renderMap();
+      refresh();
     };
   });
+  document.getElementById('map-filter').onclick = (e) => {
+    mapOnlyOpen = !mapOnlyOpen;
+    e.currentTarget.classList.toggle('on', mapOnlyOpen);
+    e.currentTarget.setAttribute('aria-pressed', String(mapOnlyOpen));
+    showToast(mapOnlyOpen ? 'Menampilkan yang sedang buka' : 'Menampilkan semua pedagang');
+    refresh();
+  };
   document.getElementById('map-locate').onclick = jdLocateMe;
+  document.getElementById('map-expand').onclick = () => jdToggleMapFull(!jdMapFull);
+  document.getElementById('map-all').onclick = () => { const n = document.querySelector('.nav-item[data-view="cari"]'); if (n) n.click(); };
 }
 
 // ---------- CARI VIEW (tab "Cari") ----------
@@ -3850,46 +3918,47 @@ function jdInjectMapCss() {
   const st = document.createElement('style');
   st.id = 'jd-map-css';
   st.textContent = `
-    .jd-pin{position:relative;width:44px;height:54px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.28));cursor:pointer;transition:transform .15s}
-    .jd-pin:active{transform:scale(.93)}
-    .jd-pin-head{width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #22C55E;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;justify-content:center}
-    .jd-pin-tip{position:absolute;left:50%;bottom:0;width:0;height:0;transform:translateX(-50%);border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #22C55E}
-    .jd-pin-img{display:block;width:100%;height:100%;background-size:cover;background-position:center}
-    .jd-pin-emoji{font-size:22px;line-height:1}
-    .jd-pin.closed .jd-pin-head{border-color:#9CA3AF}
-    .jd-pin.closed .jd-pin-tip{border-top-color:#9CA3AF}
-    .jd-pin.closed .jd-pin-img{filter:grayscale(1);opacity:.7}
-    .jd-pin.premium .jd-pin-head{border-color:#F5B301}
-    .jd-pin.premium .jd-pin-tip{border-top-color:#F5B301}
-    .jd-map-wrap{position:relative;height:calc(100vh - 330px);height:calc(100dvh - 330px);min-height:320px;border-radius:16px;overflow:hidden;background:#F6F3EE}
-    .jd-map-wrap #map{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;border-radius:0!important}
-    .jd-map-top{position:absolute;top:10px;left:10px;right:10px;z-index:1000;pointer-events:none}
-    .jd-map-top>*{pointer-events:auto}
-    .jd-map-search{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:0 12px;height:42px;box-shadow:0 3px 12px rgba(0,0,0,.16);color:#6B7280}
-    .jd-map-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font:500 13.5px 'Poppins',sans-serif;color:#111827}
-    .jd-map-search button{border:none;background:#EEF0F3;color:#6B7280;width:22px;height:22px;border-radius:50%;font-size:11px;line-height:22px;padding:0;cursor:pointer}
-    .jd-map-chips{display:flex;gap:6px;overflow-x:auto;padding:8px 2px 4px;scrollbar-width:none}
-    .jd-map-chips::-webkit-scrollbar{display:none}
-    .jd-map-chips button{flex:0 0 auto;border:none;background:#fff;color:#374151;font:600 11.5px 'Poppins',sans-serif;padding:6px 11px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.14);cursor:pointer;white-space:nowrap}
-    .jd-map-chips button.active{background:#22C55E;color:#fff}
-    .jd-map-locate{position:absolute;left:10px;bottom:30px;z-index:1000;width:42px;height:42px;border-radius:50%;border:none;background:#fff;color:#374151;box-shadow:0 3px 10px rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;cursor:pointer}
-    .jd-map-empty{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:1000;background:#fff;border-radius:12px;padding:8px 14px;font:600 12px 'Poppins',sans-serif;color:#6B7280;box-shadow:0 3px 10px rgba(0,0,0,.18);display:none;white-space:nowrap}
-    .jd-cluster{width:40px;height:40px;border-radius:50%;background:#22C55E;color:#fff;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font:700 14px 'Poppins',sans-serif;box-sizing:border-box}
-    .jd-me{width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.2)}
+    .jd-pin{display:block;filter:drop-shadow(0 3px 4px rgba(0,0,0,.28));cursor:pointer;transition:transform .15s}
+    .jd-pin:active{transform:scale(.92)}
+    .jd-cluster{width:38px;height:38px;border-radius:50%;background:#FF6B4A;color:#fff;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;font:700 13px 'Poppins',sans-serif;box-sizing:border-box}
+    .jd-me-wrap{position:relative;width:64px;height:64px}
+    .jd-me-halo{position:absolute;inset:0;border-radius:50%;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.28)}
+    .jd-me{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);box-sizing:border-box}
     .leaflet-container{font-family:'Poppins',sans-serif;background:#F6F3EE}
     .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.75)!important;border-radius:8px 0 0 0}
-    .leaflet-control-zoom{border:none!important;box-shadow:0 2px 8px rgba(0,0,0,.18)!important;border-radius:12px;overflow:hidden}
-    .leaflet-control-zoom a{width:36px!important;height:36px!important;line-height:36px!important;color:#374151}
+
+    .jd-pt-search{display:flex;align-items:center;gap:10px;background:#fff;border-radius:16px;padding:0 8px 0 14px;height:48px;box-shadow:0 2px 10px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.05);color:#6B7280}
+    .jd-pt-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font:500 14px 'Poppins',sans-serif;color:#111827}
+    .jd-pt-filter{width:34px;height:34px;border-radius:10px;border:none;background:transparent;color:#4B5563;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
+    .jd-pt-filter.on{background:#FFEDE7;color:#FF6B4A}
+    .jd-pt-chips{display:flex;gap:8px;overflow-x:auto;padding:12px 2px 8px;scrollbar-width:none;margin:0 -2px}
+    .jd-pt-chips::-webkit-scrollbar{display:none}
+    .jd-pt-chips button{flex:0 0 auto;display:flex;align-items:center;gap:7px;border:none;background:#fff;color:#374151;font:600 12.5px 'Poppins',sans-serif;padding:9px 14px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;white-space:nowrap}
+    .jd-pt-chips button svg{color:#FF6B4A;flex:0 0 auto}
+    .jd-pt-chips button.active{background:#FF6B4A;color:#fff}
+    .jd-pt-chips button.active svg{color:#fff}
+
+    .jd-pt-map{position:relative;height:200px;margin:6px 0 4px;border-radius:18px;overflow:hidden;background:#F6F3EE;border:1px solid rgba(0,0,0,.06);box-shadow:0 2px 10px rgba(0,0,0,.08)}
+    .jd-pt-map #map{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;border-radius:0!important}
+    .jd-pt-btn{position:absolute;z-index:1000;width:40px;height:40px;border-radius:50%;border:none;background:#fff;color:#374151;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+    .jd-pt-locate{top:10px;right:10px}
+    .jd-pt-expand{top:58px;right:10px}
+    .jd-pt-youare{position:absolute;left:10px;bottom:10px;z-index:1000;display:none;align-items:center;gap:6px;background:#fff;border-radius:999px;padding:6px 12px;font:600 12px 'Poppins',sans-serif;color:#1F2937;box-shadow:0 2px 8px rgba(0,0,0,.16)}
+    .jd-pt-youare i{width:8px;height:8px;border-radius:50%;background:#22C55E;display:inline-block}
+    .jd-map-empty{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:1000;background:#fff;border-radius:12px;padding:8px 14px;font:600 12px 'Poppins',sans-serif;color:#6B7280;box-shadow:0 3px 10px rgba(0,0,0,.18);display:none;white-space:nowrap}
+    .jd-pt-map.full{position:fixed;inset:0;z-index:3000;height:100vh;height:100dvh;margin:0;border-radius:0;border:none;box-shadow:none}
+    .jd-pt-map.full .jd-pt-expand{top:calc(10px + env(safe-area-inset-top,0px));left:10px;right:auto}
+    .jd-pt-map.full .jd-pt-locate{top:calc(10px + env(safe-area-inset-top,0px))}
+    .jd-pt-map.full .jd-pt-youare{bottom:calc(28px + env(safe-area-inset-bottom,0px))}
+    .jd-pt-all{border:none;background:none;color:var(--brand,#FF6B4A);font:700 13px 'Poppins',sans-serif;cursor:pointer;padding:4px 0}
   `;
   document.head.appendChild(st);
 }
 
+// Pin pedagang: tetes oranye + ikon toko. Abu-abu = tutup, emas = unggulan.
 function jdPinHtml(v) {
-  let inner;
-  if (v.photo_url) inner = `<span class="jd-pin-img" style="background-image:url('${escapeHtml(v.photo_url)}')"></span>`;
-  else if (v.mode_icon) inner = `<span class="jd-pin-img" style="background-image:url('mode_icons/${v.mode_icon}.png')"></span>`;
-  else inner = `<span class="jd-pin-emoji">${v.emoji || '🍜'}</span>`;
-  return `<div class="jd-pin${v.is_premium ? ' premium' : ''}${hmIsOpen(v) ? '' : ' closed'}"><div class="jd-pin-head">${inner}</div><div class="jd-pin-tip"></div></div>`;
+  const c = hmIsOpen(v) ? (v.is_premium ? '#F5B301' : '#FF6B4A') : '#9CA3AF';
+  return `<svg class="jd-pin" viewBox="0 0 36 46" width="34" height="43" aria-hidden="true"><path d="M18 1C9 1 2 8 2 16.7 2 28 15 42.5 17 44.6c.6.6 1.4.6 2 0C21 42.5 34 28 34 16.7 34 8 27 1 18 1Z" fill="${c}" stroke="#fff" stroke-width="2"/><g transform="translate(9.5 8.2)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M2 7 3.4 2.5h10.2L15 7"/><path d="M2 7a2 2 0 0 0 4.2 0 2 2 0 0 0 4.3 0 2 2 0 0 0 4.5 0"/><path d="M3.5 9.8V15h10V9.8M7.5 15v-3h2v3"/></g></svg>`;
 }
 
 let jdCluster = null;
@@ -3900,7 +3969,7 @@ function jdMarkerHost() {
   if (!jdCluster) {
     jdCluster = L.markerClusterGroup({
       showCoverageOnHover: false, maxClusterRadius: 46, spiderfyOnMaxZoom: true,
-      iconCreateFunction: (c) => L.divIcon({ html: `<div class="jd-cluster">${c.getChildCount()}</div>`, className: '', iconSize: [40, 40] }),
+      iconCreateFunction: (c) => L.divIcon({ html: `<div class="jd-cluster">${c.getChildCount()}</div>`, className: '', iconSize: [38, 38] }),
     });
     map.addLayer(jdCluster);
   }
@@ -3912,13 +3981,15 @@ function renderMap() {
   if (!el) return;
   if (map && map.getContainer() !== el) { // tab Peta dirender ulang -> container lama sudah hilang
     try { map.remove(); } catch (_) {}
-    map = null; markers = {}; jdMeMarker = null; jdCluster = null; mapDidInitialFit = false;
+    map = null; markers = {}; jdMeMarker = null; jdCluster = null; jdMapFull = false; mapDidInitialFit = false;
     if (jdMapRO) { jdMapRO.disconnect(); jdMapRO = null; }
   }
   if (!map) {
     jdInjectMapCss();
     map = L.map('map', { zoomControl: false, maxZoom: 19 }).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
     jdAddBaseLayer(map);
+    jdSetMapInteractive(false); // peta kecil hanya pratinjau: ketuk untuk membuka layar penuh
+    map.on('click', () => { if (!jdMapFull) jdToggleMapFull(true); });
     if (typeof ResizeObserver === 'function') { jdMapRO = new ResizeObserver(() => { if (map) map.invalidateSize({ pan: false }); }); jdMapRO.observe(el); }
     [80, 400, 1200].forEach(ms => setTimeout(() => { if (map && map.getContainer() === el) map.invalidateSize({ pan: false }); }, ms));
   } else {
@@ -3933,7 +4004,7 @@ function renderMap() {
   if (countEl) countEl.textContent = shown.filter(hmIsOpen).length + ' sedang buka';
   shown.forEach(v => {
     const p = vendorDisplayLatLng(v);
-    const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [44, 54], iconAnchor: [22, 54] });
+    const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [34, 43], iconAnchor: [17, 43] });
     // Ketuk pin -> sheet detail pedagang (chat, WhatsApp, menu, ikuti, ulasan sudah ada di sheet)
     markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name, zIndexOffset: hmIsOpen(v) ? 1000 : 0 })
       .on('click', () => window.__openVendorSheet(v.id));
@@ -3944,9 +4015,13 @@ function renderMap() {
   // jadi marker yang ada bisa kelewat kalau di luar area yang kelihatan. Sekali saja,
   // begitu datanya sudah ada, fokuskan ke marker pedagang (atau ke lokasi pembeli kalau
   // belum ada pedagang aktif) — supaya sesudah itu pembeli bebas geser/zoom sendiri.
+  if (buyerLoc && !jdMeMarker) jdPlaceMe(buyerLoc.lat, buyerLoc.lng);
   if (!mapDidInitialFit) {
     const markerList = Object.values(markers);
-    if (markerList.length) {
+    if (buyerLoc) {
+      map.setView([buyerLoc.lat, buyerLoc.lng], 15);
+      mapDidInitialFit = true;
+    } else if (markerList.length) {
       map.fitBounds(L.featureGroup(markerList).getBounds(), { padding: [40, 40], maxZoom: 16 });
       mapDidInitialFit = true;
     } else if (buyerLoc) {
