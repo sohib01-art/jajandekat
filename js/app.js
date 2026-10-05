@@ -1589,11 +1589,11 @@ function renderPembeli() {
   if (hmActive && homeType) filteredVendors = filteredVendors.filter(v => [...(v.categories || []), ...(v.custom_tags || [])].some(l => foodNorm(l) === foodNorm(homeType)));
   const tileK = c => `
     <button class="fm-tile ${c.k === 'jajanan' ? 'hero' : ''} ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}');window.__scrollNear()" aria-label="${c.label}" aria-pressed="${hmActive === c}">
-      <img src="${c.img}" alt="${c.label}" loading="lazy" />
+      <img src="${c.img}" alt="${c.label}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 6px;font-size:12px;font-weight:700;line-height:1.2;text-align:center;"><span style="font-size:30px;">${c.e}</span>${c.short}</span>
     </button>`;
   const tileO = c => `
     <button class="fm-sq ${hmActive === c ? 'active' : ''}" onclick="window.__setCat('${hmActive === c ? 'semua' : 'grp:' + c.k}');window.__scrollNear()" aria-label="${c.label}" aria-pressed="${hmActive === c}">
-      <img src="${c.img}" alt="" loading="lazy" /><span>${c.short}</span>
+      <img src="${c.img}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span style="display:none;align-items:center;justify-content:center;font-size:34px;line-height:1;height:64px;">${c.e}</span><span>${c.short}</span>
     </button>`;
   const kulGridHtml = FOOD_MAIN.filter(c => c.kul).map(tileK).join('');
   const othGridHtml = FOOD_MAIN.filter(c => !c.kul).map(tileO).join('');
@@ -5343,6 +5343,7 @@ function renderPedagang() {
         </div>
       </div>
       <div id="jd-track-state" style="font-size:12px;margin-bottom:10px;">${jdTrackStateHtml()}</div>
+      <div id="jd-wake-row">${jdWakeRowHtml()}</div>
       <button onclick="window.__openTrackConsent('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
         ⚙️ Atur izin jejak rute
       </button>
@@ -9198,6 +9199,9 @@ function jdTrackStateHtml() {
 function jdTrackRefreshCard() {
   const el = document.getElementById('jd-track-state');
   if (el) el.innerHTML = jdTrackStateHtml();
+  const wr = document.getElementById('jd-wake-row');
+  if (wr) wr.innerHTML = jdWakeRowHtml();
+  jdWakeSync();
 }
 
 async function jdTrackLoadConsent() {
@@ -9278,6 +9282,54 @@ setInterval(() => {
     }).then(({ error }) => { if (error) console.warn('Jejak rute gagal:', error.message); });
   }, () => {}, { enableHighAccuracy: false, maximumAge: 30000, timeout: 8000 });
 }, 60 * 1000);
+
+// ---------- JAGA LAYAR TETAP MENYALA (opsional, agar jejak rute rapat) ----------
+// Browser menghentikan GPS saat layar mati / app di latar belakang. Wake Lock menahan layar tetap menyala selama
+// pedagang sedang jualan, sudah mengizinkan jejak rute, dan memilih opsi ini. Dilepas otomatis kalau salah satu syarat hilang.
+const JD_WAKE_PREF_KEY = 'jd_wakelock_on';
+let jdWakeLock = null;
+let jdWakeBusy = false;
+
+function jdWakeSupported() { return 'wakeLock' in navigator; }
+function jdWakePref() { try { return localStorage.getItem(JD_WAKE_PREF_KEY) === '1'; } catch (e) { return false; } }
+
+function jdWakeRowHtml() {
+  if (jdTrackConsent !== true) return '';
+  if (!jdWakeSupported()) {
+    return '<div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Browser/HP ini tidak mendukung opsi "jaga layar tetap menyala".</div>';
+  }
+  return `<label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:10px;cursor:pointer;">
+    <input type="checkbox" ${jdWakePref() ? 'checked' : ''} onchange="window.__toggleWakeLock(this.checked)" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+    <span><b>Jaga layar tetap menyala saat jualan</b><br><span style="font-size:10.5px;color:var(--text-faint);line-height:1.5;">Jejak jadi lebih rapat, tapi baterai lebih boros. Cocok kalau HP dipasang di gerobak atau sedang dicas.</span></span>
+  </label>`;
+}
+
+async function jdWakeSync() {
+  if (!jdWakeSupported() || jdWakeBusy) return;
+  const v = myVendorId ? vendors.find(x => x.id === myVendorId) : null;
+  const want = jdWakePref() && jdTrackConsent === true && mode === 'pedagang' && !!v && !!v.active && document.visibilityState === 'visible';
+  jdWakeBusy = true;
+  try {
+    if (want && !jdWakeLock) {
+      jdWakeLock = await navigator.wakeLock.request('screen');
+      jdWakeLock.addEventListener('release', () => { jdWakeLock = null; });
+    } else if (!want && jdWakeLock) {
+      await jdWakeLock.release();
+      jdWakeLock = null;
+    }
+  } catch (e) {
+    jdWakeLock = null; // ditolak (mis. mode hemat daya) -> coba lagi di putaran berikutnya
+  } finally { jdWakeBusy = false; }
+}
+
+window.__toggleWakeLock = function (on) {
+  try { localStorage.setItem(JD_WAKE_PREF_KEY, on ? '1' : '0'); } catch (e) {}
+  jdWakeSync();
+  showToast(on ? 'Layar akan tetap menyala selama Anda jualan.' : 'Layar kembali normal.');
+};
+
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') jdWakeSync(); });
+setInterval(jdWakeSync, 15 * 1000);
 
 // ---------- PENGINGAT "MASIH JUALAN?" (tiap 1 jam, selama app tetap terbuka) ----------
 setInterval(async () => {
