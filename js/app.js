@@ -997,7 +997,7 @@ function withTimeout(promise, ms, label) {
 
 async function fetchVendors(retry = 1) {
   try {
-    const { data, error } = await withTimeout(sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
+    const { data, error } = await withTimeout(sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
     if (error) { console.error(error); throw error; }
     return data;
   } catch (e) {
@@ -2949,6 +2949,14 @@ function openVendorFromLink(vendorId) {
   }
 }
 
+// Tautan toko yang bisa dibaca: ?toko=bakso-pak-ali (slug dibuat sekali di database, tidak berubah walau nama toko diganti)
+function openTokoFromLink(slug) {
+  const key = String(slug).toLowerCase();
+  const v = vendors.find(x => String(x.slug || '').toLowerCase() === key);
+  if (!v) { renderPembeli(); showToast('Toko tidak ditemukan.'); return; }
+  openVendorFromLink(v.id);
+}
+
 function openArtikelFromLink(slug) {
   artikelDetailSlug = String(slug); // kalau slug tidak ada, halaman detail menampilkan "Artikel tidak ditemukan"
   goToBottomView('artikel');
@@ -3718,7 +3726,7 @@ window.__submitAddVendor = async function () {
 
     // Ambil ulang baris lengkap (kolom sama seperti loadVendors) supaya field lain
     // (rating, is_premium, dst) konsisten dengan default kolomnya, bukan cuma yang dikembalikan RPC.
-    const { data: fullRow } = await sb.from('vendors').select('id,name,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
+    const { data: fullRow } = await sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
 
     vendors.push(fullRow || rows[0]);
 
@@ -5355,6 +5363,21 @@ function renderPedagang() {
     <div class="pd-panel" data-tab="promosi" ${pdTab === 'promosi' ? '' : 'hidden'} role="tabpanel">
 <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🔗</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Link Toko Saya</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Alamat toko yang mudah dibaca dan diingat. Tetap sama walau nama toko diganti.</div>
+        </div>
+      </div>
+      <div style="background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px 12px;font-size:12.5px;word-break:break-all;margin-bottom:10px;">${v.slug ? escapeHtml(vendorLinkFor(v).replace(/^https?:\/\//, '')) : 'Belum tersedia — muat ulang app.'}</div>
+      <div style="display:flex;gap:8px;">
+        <button class="follow-btn" style="flex:1;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__copyVendorLink('${v.id}')">📋 Salin</button>
+        <button class="follow-btn" style="flex:1;padding:10px;background:#25D366;color:#fff;" onclick="window.__shareVendorLink('${v.id}')">📤 Bagikan</button>
+      </div>
+    </div>
+
+<div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">📱</span>
         <div>
           <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">QR Code & Link Pengikut Baru</div>
@@ -5694,6 +5717,25 @@ window.__resolveReview = async function (vendorId, reviewId) {
   lastPendingNotified = 0;
   checkMyPendingReviews();
   window.__revealMyReviews(vendorId);
+};
+
+function vendorLinkFor(v) {
+  return v && v.slug ? `${location.origin}${location.pathname}?toko=${encodeURIComponent(v.slug)}` : '';
+}
+window.__copyVendorLink = function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  const link = vendorLinkFor(v);
+  if (!link) { showToast('Link toko belum tersedia. Muat ulang app.'); return; }
+  if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => showToast('Link toko disalin.'), () => prompt('Salin link ini:', link));
+  else prompt('Salin link ini:', link);
+};
+window.__shareVendorLink = function (vendorId) {
+  const v = vendors.find(x => x.id === vendorId);
+  const link = vendorLinkFor(v);
+  if (!v || !link) { showToast('Link toko belum tersedia. Muat ulang app.'); return; }
+  const text = `Cek ${v.name} di JajanDekat — lihat dulu apakah lagi jualan: ${link}`;
+  if (navigator.share) navigator.share({ title: v.name, text, url: link }).catch(() => {});
+  else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
 };
 
 function followLinkFor(vendorId) {
@@ -9105,11 +9147,12 @@ async function init() {
 
     // Shortcut app & link dari notifikasi:
     //   ?view=peta | ?view=cari | ?view=favorit | ?view=akun | ?mode=pedagang
-    //   ?vendor=ID (fokus ke pedagang di peta) | ?artikel=slug | ?ann=ID (pengumuman)
+    //   ?vendor=ID (fokus ke pedagang di peta) | ?toko=slug-toko | ?artikel=slug | ?ann=ID (pengumuman)
     const urlParams = new URLSearchParams(location.search);
     const wantMode = urlParams.get('mode');
     const wantView = urlParams.get('view');
     const wantVendor = urlParams.get('vendor');
+    const wantToko = urlParams.get('toko');
     const wantArtikel = urlParams.get('artikel');
     const wantAnn = urlParams.get('ann');
 
@@ -9120,6 +9163,8 @@ async function init() {
       renderPedagang();
     } else if (wantVendor) {
       openVendorFromLink(wantVendor);
+    } else if (wantToko) {
+      openTokoFromLink(wantToko);
     } else if (wantArtikel) {
       openArtikelFromLink(wantArtikel);
     } else if (wantAnn) {
@@ -9132,7 +9177,7 @@ async function init() {
       renderPembeli();
     }
 
-    if (wantMode || wantView || wantVendor || wantArtikel || wantAnn || urlParams.get('src')) {
+    if (wantMode || wantView || wantVendor || wantToko || wantArtikel || wantAnn || urlParams.get('src')) {
       history.replaceState(null, '', location.pathname);
     }
 
