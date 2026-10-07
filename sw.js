@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v35';
+const CACHE_VERSION = 'v36';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -71,6 +71,22 @@ const APP_SHELL = [
   '/icons/kat-jajanan.webp',
   '/icons/kat-manis.webp',
   '/icons/kat-minuman.webp',
+  // Ikon "Kategori Lainnya" (non-kuliner). Aman kalau ada yang belum ada: install memakai allSettled.
+  '/icons/kat-kebutuhan.webp',
+  '/icons/kat-segar.webp',
+  '/icons/kat-fashion.webp',
+  '/icons/kat-servis.webp',
+  '/icons/kat-kecantikan.webp',
+  '/icons/kat-rumah.webp',
+  '/icons/kat-otomotif.webp',
+  '/icons/kat-digital.webp',
+  '/icons/kat-pertanian.webp',
+  '/icons/kat-kado.webp',
+  '/icons/kat-jasa_rumah.webp',
+  '/icons/kat-pendidikan.webp',
+  '/icons/kat-kreatif.webp',
+  '/icons/kat-kesehatan.webp',
+  '/icons/kat-lain.webp',
 ];
 
 // Library pihak ketiga (CDN) yang dipakai app — kita cache runtime
@@ -174,7 +190,12 @@ self.addEventListener('fetch', (event) => {
             return networkResp;
           })
           .catch(() => undefined);
-        return cached || fetchPromise || caches.match(offlineFallbackPage);
+        // Ada di cache -> pakai itu, perbarui di latar belakang (jaga SW tetap hidup sampai selesai).
+        if (cached) { event.waitUntil(fetchPromise); return cached; }
+        // Belum ada di cache -> tunggu jaringan. Kalau gagal, balas error yang jelas
+        // (versi lama mengembalikan "undefined", dan baris cadangan offline di bawahnya tidak pernah tercapai).
+        const networkResp = await fetchPromise;
+        return networkResp || Response.error();
       })()
     );
     return;
