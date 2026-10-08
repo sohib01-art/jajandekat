@@ -1,0 +1,41 @@
+/* header-scroll.css : dimuat SETELAH css/style.css.
+   Di style.css header memakai "display:contents" (hanya .hero-sheet yang sticky).
+   Aturan di bawah dibatasi ke "header.hm-on", yang hanya aktif di Beranda pembeli
+   (saat kotak pencarian ada), jadi Peta/Cari/Akun/Pedagang tidak berubah. */
+:root{--p:0;--kolaps:0px}
+html.hm-home{overflow-anchor:none}   /* cegah browser "menarik" scroll saat header mengecil */
+
+header.hm-on{
+  display:block !important;          /* timpa display:contents agar header punya kotak untuk sticky */
+  position:sticky !important;
+  top:calc(env(safe-area-inset-top,0px) + 10px - var(--kolaps)) !important;
+  z-index:50;
+  box-shadow:0 4px 14px rgba(160,50,0,calc(var(--p) * .28));
+}
+header.hm-on .hero-sheet{position:relative;top:auto}   /* sticky-nya sekarang ikut header */
+
+header.hm-on .hero{
+  position:relative;
+  padding-bottom:calc(36px + 64px * (1 - var(--p)));    /* 64px = ruang foto di bawah baris lokasi */
+}
+header.hm-on .hero>*{position:relative;z-index:1}
+
+/* foto di belakang header; memudar saat scroll sehingga gradient oranye asli muncul */
+header.hm-on.has-photo .hero::before{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    linear-gradient(180deg,rgba(90,10,0,var(--hero-scrim,.6)),rgba(90,10,0,calc(var(--hero-scrim,.6) * .33)) 55%,rgba(90,10,0,0)),
+    var(--hero-foto,url(/icons/hero-beranda.jpg)) var(--hero-pos,60% 70%)/cover no-repeat;
+  opacity:calc(1 - var(--p));
+}
+header.hm-on.has-photo .brand,
+header.hm-on.has-photo .tagline,
+header.hm-on.has-photo .hm-locrow{text-shadow:0 1px 4px rgba(60,10,0,calc(.4 * (1 - var(--p))))}
+header.hm-on.has-photo .bell-btn{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);background:rgba(255,255,255,.25)}
+
+/* bagian atas memudar, baris lokasi melipat */
+header.hm-on .brand-row{opacity:calc(1 - var(--p) * 1.4)}
+header.hm-on .hm-locrow{
+  overflow:hidden;max-height:calc(44px * (1 - var(--p)));
+  margin-top:calc(10px * (1 - var(--p)));opacity:calc(1 - var(--p) * 1.6);
+}
