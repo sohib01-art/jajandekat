@@ -30,6 +30,29 @@ try {
   initError = e;
   console.error('Gagal membuat koneksi Supabase:', e);
 }
+
+// Server kini membalas HTTP 401 (tanpa isi pesan) saat PIN salah supaya percobaan gagal
+// tercatat permanen (lockout). Isi pesannya di sini agar semua layar tetap menampilkan "PIN salah".
+if (sb && typeof sb.rpc === 'function') {
+  const _origRpc = sb.rpc.bind(sb);
+  sb.rpc = function (...args) {
+    const builder = _origRpc(...args);
+    if (builder && typeof builder.then === 'function') {
+      const _origThen = builder.then.bind(builder);
+      builder.then = function (onOk, onFail) {
+        return _origThen((res) => {
+          try {
+            if (res && res.error && res.status === 401 && !res.error.message) {
+              res.error.message = 'PIN salah';
+            }
+          } catch (e) {}
+          return res;
+        }).then(onOk, onFail);
+      };
+    }
+    return builder;
+  };
+}
 let referralCodeFromLink = null;
 
 // ---------- PENCATATAN EVENT (ringan; server yang menyaring duplikat & membatasi laju) ----------
