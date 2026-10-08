@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v37';
+const CACHE_VERSION = 'v40';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -18,13 +18,17 @@ const offlineFallbackPage = 'offline.html';
 // App shell: file lokal yang WAJIB ada supaya app bisa dibuka offline.
 // Query string (?v=..) di index.html tidak perlu diikutkan di sini —
 // kita precache path aslinya, lalu fetch handler yang mencocokkan
-// tanpa memedulikan query string (lihat matchIgnoringVersion di bawah).
+// (lihat matchIgnoringVersion & penanganan file berversi di bawah).
 const APP_SHELL = [
   '/',
   '/index.html',
   '/css/style.css',
   '/js/config.js',
   '/js/app.js',
+  '/js/header-scroll.js',
+  '/js/header-admin.js',
+  '/css/header-scroll.css',
+  '/icons/hero-beranda.jpg',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -39,7 +43,7 @@ const APP_SHELL = [
   '/klik.mp3',
   '/bel-mangkuk.mp3',
   offlineFallbackPage,
-  '/offline-mascot.png',
+  '/offline-mascot.webp',
   '/icons/install-wave.webp',
   '/icons/install-girl.webp',
   '/icons/install-thumb.webp',
@@ -89,13 +93,15 @@ const APP_SHELL = [
   '/icons/kat-lain.webp',
 ];
 
-// Library pihak ketiga (CDN) yang dipakai app — kita cache runtime
-// supaya peta/QR/koneksi Supabase tetap bisa jalan saat offline
+// Library pihak ketiga (CDN) + font Google yang dipakai app — kita cache runtime
+// supaya peta/QR/koneksi Supabase/font tetap bisa jalan saat offline
 // (setelah pernah diakses sekali secara online).
 const THIRD_PARTY_HOSTS = [
   'unpkg.com',
   'cdn.jsdelivr.net',
   'cdnjs.cloudflare.com',
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
 ];
 
 self.addEventListener('message', (event) => {
@@ -142,6 +148,14 @@ async function matchIgnoringVersion(request) {
   return caches.match(request, { ignoreSearch: true });
 }
 
+// Simpan salinan respons ke cache. Salinan dibuat SEKARANG (sebelum respons asli dipakai halaman),
+// dan hanya respons 200 penuh yang disimpan (206 / error tidak boleh masuk cache).
+function simpanKeCache(cacheName, request, resp) {
+  if (!resp || resp.status !== 200) return;
+  const copy = resp.clone();
+  caches.open(cacheName).then((c) => c.put(request, copy)).catch(() => {});
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return; // biarkan POST/PUT dll (mis. ke Supabase) apa adanya
@@ -178,30 +192,37 @@ self.addEventListener('fetch', (event) => {
 
   // 2) Aset app shell sendiri (sama origin: css/js/manifest/ikon)
   //    -> cache-first, lalu perbarui cache di background (stale-while-revalidate).
+  //    File berversi (…js?v=3): dicocokkan PERSIS dulu. Begitu angka ?v= di index.html naik,
+  //    pengguna langsung mendapat file baru (tidak lagi memakai salinan lama sekali buka).
+  //    Kalau jaringan mati, baru dipakai salinan tanpa memedulikan versi.
   if (url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
-        const cached = await matchIgnoringVersion(request);
+        const berversi = url.searchParams.has('v');
+        const cached = berversi ? await caches.match(request) : await matchIgnoringVersion(request);
         const fetchPromise = fetch(request)
           .then((networkResp) => {
-            if (networkResp && networkResp.ok) {
-              caches.open(STATIC_CACHE).then((cache) => cache.put(request, networkResp.clone()));
-            }
+            simpanKeCache(STATIC_CACHE, request, networkResp);
             return networkResp;
           })
           .catch(() => undefined);
         // Ada di cache -> pakai itu, perbarui di latar belakang (jaga SW tetap hidup sampai selesai).
         if (cached) { event.waitUntil(fetchPromise); return cached; }
-        // Belum ada di cache -> tunggu jaringan. Kalau gagal, balas error yang jelas
-        // (versi lama mengembalikan "undefined", dan baris cadangan offline di bawahnya tidak pernah tercapai).
+        // Belum ada di cache -> tunggu jaringan.
         const networkResp = await fetchPromise;
-        return networkResp || Response.error();
+        if (networkResp) return networkResp;
+        // Offline: file berversi yang belum pernah disimpan persis -> pakai salinan versi lama.
+        if (berversi) {
+          const lama = await matchIgnoringVersion(request);
+          if (lama) return lama;
+        }
+        return Response.error();
       })()
     );
     return;
   }
 
-  // 3) Library CDN pihak ketiga (Leaflet, Supabase JS, QRCode.js)
+  // 3) Library CDN pihak ketiga (Leaflet, Supabase JS, QRCode.js) + font Google
   //    -> cache-first, supaya tetap termuat walau offline setelah pernah online sekali.
   if (THIRD_PARTY_HOSTS.includes(url.hostname)) {
     event.respondWith(
@@ -210,8 +231,10 @@ self.addEventListener('fetch', (event) => {
         if (cached) return cached;
         try {
           const networkResp = await fetch(request);
-          const cache = await caches.open(RUNTIME_CACHE);
-          cache.put(request, networkResp.clone());
+          if (networkResp && (networkResp.ok || networkResp.type === 'opaque')) {
+            const copy = networkResp.clone();
+            caches.open(RUNTIME_CACHE).then((c) => c.put(request, copy)).catch(() => {});
+          }
           return networkResp;
         } catch (err) {
           return cached; // undefined kalau memang belum pernah tersimpan
@@ -221,64 +244,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4) Selain itu (mis. request ke Supabase REST/API, gambar upload, dsb.)
+  // 4) Selain itu (mis. request ke Supabase REST/API, foto header/pedagang dari Supabase Storage, dsb.)
   //    -> biarkan lewat network apa adanya; jangan dicache supaya data selalu fresh.
 });
-
-// ---- Background Sync ----
-// Lets the app queue an action (e.g. "update status jualan pedagang")
-// while offline, and retry automatically once the device reconnects.
-// From the page: navigator.serviceWorker.ready.then(reg => reg.sync.register('sync-status-pedagang'));
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-status-pedagang') {
-    event.waitUntil(syncPedagangStatus());
-  }
-});
-
-async function syncPedagangStatus() {
-  // TODO: ganti dengan endpoint API asli JajanDekat untuk kirim status pedagang
-  // yang tersimpan di IndexedDB/cache saat offline.
-  try {
-    const pending = await getPendingUpdatesFromIndexedDB();
-    for (const update of pending) {
-      await fetch('/api/pedagang/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(update)
-      });
-    }
-  } catch (err) {
-    // Melempar error di sini membuat browser otomatis coba lagi nanti.
-    throw err;
-  }
-}
-
-// TODO: implementasikan sesuai skema penyimpanan lokal kamu.
-async function getPendingUpdatesFromIndexedDB() {
-  return [];
-}
-
-// ---- Periodic Background Sync ----
-// Menyegarkan daftar pedagang terdekat di background secara berkala,
-// selama browser mengizinkan (butuh izin "periodic-background-sync").
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'refresh-pedagang-terdekat') {
-    event.waitUntil(refreshPedagangTerdekat());
-  }
-});
-
-async function refreshPedagangTerdekat() {
-  try {
-    const response = await fetch('/api/pedagang/terdekat');
-    if (response.ok) {
-      const cache = await caches.open(RUNTIME_CACHE);
-      await cache.put('/api/pedagang/terdekat', response.clone());
-    }
-  } catch (err) {
-    console.warn('Periodic sync gagal, akan dicoba lagi nanti:', err);
-  }
-}
-
 
 // ---- Notifikasi Push ----
 // PENTING: tanpa blok ini, event 'push' dari server (send-broadcast-push, send-open-reminders,
