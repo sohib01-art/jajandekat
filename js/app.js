@@ -5548,6 +5548,7 @@ function renderPedagang() {
     <div class="pd-panel" data-tab="bantuan" ${pdTab === 'bantuan' ? '' : 'hidden'} role="tabpanel">
     <button type="button" class="pd-help" onclick="window.__openGuideModal('pedagang')"><span class="pd-help-ic">🧭</span><span class="pd-share-text"><b>Panduan Penggunaan</b><small>Pelajari cara pakai aplikasi</small></span><span class="pd-chev">›</span></button>
     <button type="button" class="pd-help" onclick="window.__openFaqModal()"><span class="pd-help-ic">?</span><span class="pd-share-text"><b>Butuh Bantuan?</b><small>Lihat FAQ atau hubungi kami</small></span><span class="pd-chev">›</span></button>
+    <button type="button" class="pd-help" onclick="window.__openSecurityModal()"><span class="pd-help-ic">🔐</span><span class="pd-share-text"><b>Keamanan Akun</b><small>Ganti PIN &amp; atur pemulihan PIN</small></span><span class="pd-chev">›</span></button>
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
@@ -5557,6 +5558,7 @@ function renderPedagang() {
   initAnnSlider();
   renderVendorQr(v.id);
   loadMyReviews(v.id);
+  loadSecurityNudge();
 
   if (v.is_premium) {
     sb.rpc('jd_count_followers', { p_vendor_id: v.id }).then(({ data }) => {
@@ -6296,13 +6298,268 @@ window.__updatePickWhatsapp = function (value) {
   pickWhatsappValue = value;
 };
 
-window.__forgotPin = function () {
+// ---------- PEMULIHAN & KEAMANAN PIN ----------
+const JD_INP = 'width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:inherit;font-size:14px;box-sizing:border-box;margin-top:6px;';
+const JD_BTN = 'width:100%;margin-top:12px;padding:12px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:13px;cursor:pointer;';
+const JD_BTN2 = 'width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:inherit;font-weight:700;font-size:12.5px;cursor:pointer;text-align:left;';
+const JD_LBL = 'display:block;font-size:12px;font-weight:700;margin-top:12px;';
+const JD_ERR = 'color:#f87171;font-size:12px;min-height:16px;margin-top:8px;';
+const JD_NOTE = 'font-size:11px;color:var(--text-faint);margin-top:6px;line-height:1.45;';
+let jdRecoveryWa = '';
+let jdRecoveryQ = null;
+let jdSecStatus = {};
+
+function jdOpenSheet(id, html) {
+  document.getElementById(id)?.remove();
+  const ov = document.createElement('div');
+  ov.id = id;
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:260;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML = '<div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:88vh;overflow-y:auto;box-sizing:border-box;">' + html + '</div>';
+  ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  return ov;
+}
+window.__closeSheet = function (id) { document.getElementById(id)?.remove(); };
+function jdVal(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function jdCheckNewPin(p1, p2) {
+  if (!/^\d{6}$/.test(p1)) return 'PIN baru harus 6 digit angka.';
+  if (p1 !== p2) return 'Ulangi PIN baru dengan benar, kedua isian belum sama.';
+  return '';
+}
+const JD_PIN_RULE = 'PIN baru: 6 digit angka dan bukan pola mudah seperti 123456 atau 111111.';
+
+window.__forgotPin = async function () {
   const raw = (document.getElementById('pick-whatsapp')?.value || pickWhatsappValue).trim();
   const whatsapp = normalizeWhatsapp(raw);
+  if (!whatsapp) { showToast('Isi dulu nomor WhatsApp yang terdaftar di kolom atas.'); return; }
+  jdRecoveryWa = whatsapp;
+  jdRecoveryQ = null;
+  jdOpenSheet('jd-recovery-sheet',
+    '<div style="font-family:\'Poppins\';font-weight:700;font-size:15px;">Lupa PIN</div>' +
+    '<div id="jd-rec-body" style="margin-top:10px;font-size:12.5px;color:var(--text-faint);">Memeriksa opsi pemulihan…</div>');
+  try {
+    const { data } = await sb.rpc('jd_recovery_questions_for', { p_wa: whatsapp, p_device_id: deviceId });
+    jdRecoveryQ = data || null;
+  } catch (e) {}
+  window.__recoveryMenu();
+};
+
+window.__recoveryMenu = function () {
+  const body = document.getElementById('jd-rec-body');
+  if (!body) return;
+  const hasQ = !!jdRecoveryQ;
+  body.style.color = '';
+  body.style.fontSize = '';
+  body.innerHTML =
+    '<button type="button" style="' + JD_BTN2 + (hasQ ? '' : 'opacity:.55;') + '" onclick="window.__recoveryForm(\'answers\')">❓ Jawab pertanyaan keamanan</button>' +
+    '<div style="' + JD_NOTE + '">' + (hasQ ? 'Tersedia di HP ini.' : 'Hanya di HP yang biasa Anda pakai, dan jika pertanyaan sudah pernah diatur.') + '</div>' +
+    '<button type="button" style="' + JD_BTN2 + '" onclick="window.__recoveryForm(\'code\')">🔑 Pakai kode pemulihan</button>' +
+    '<button type="button" style="' + JD_BTN2 + '" onclick="window.__forgotPinAdmin()">💬 Hubungi admin lewat WhatsApp</button>' +
+    '<div style="' + JD_NOTE + '">Salah 5 kali, pemulihan terkunci 30 menit.</div>' +
+    '<button type="button" style="' + JD_BTN2 + 'text-align:center;" onclick="window.__closeSheet(\'jd-recovery-sheet\')">Tutup</button>';
+};
+
+window.__recoveryForm = function (kind) {
+  if (kind === 'answers' && !jdRecoveryQ) {
+    showToast('Pertanyaan keamanan belum tersedia di HP ini. Pakai kode pemulihan atau hubungi admin.');
+    return;
+  }
+  const body = document.getElementById('jd-rec-body');
+  if (!body) return;
+  const fields = kind === 'answers'
+    ? '<label style="' + JD_LBL + '">' + escapeHtml(jdRecoveryQ.q1) + '</label><input id="rec-a1" type="text" autocomplete="off" style="' + JD_INP + '" />' +
+      '<label style="' + JD_LBL + '">' + escapeHtml(jdRecoveryQ.q2) + '</label><input id="rec-a2" type="text" autocomplete="off" style="' + JD_INP + '" />'
+    : '<label style="' + JD_LBL + '">Kode pemulihan (8 karakter)</label><input id="rec-code" type="text" autocapitalize="characters" autocomplete="off" maxlength="9" placeholder="XXXX-XXXX" style="' + JD_INP + 'text-transform:uppercase;letter-spacing:2px;" />';
+  body.innerHTML = fields +
+    '<label style="' + JD_LBL + '">PIN baru (6 digit)</label><input id="rec-pin1" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" style="' + JD_INP + '" />' +
+    '<label style="' + JD_LBL + '">Ulangi PIN baru</label><input id="rec-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" style="' + JD_INP + '" />' +
+    '<div style="' + JD_NOTE + '">' + JD_PIN_RULE + '</div>' +
+    '<div id="rec-err" style="' + JD_ERR + '"></div>' +
+    '<button id="rec-submit" type="button" style="' + JD_BTN + '" onclick="window.__recoverSubmit(\'' + kind + '\')">Ganti PIN</button>' +
+    '<button type="button" style="' + JD_BTN2 + 'text-align:center;" onclick="window.__recoveryMenu()">‹ Kembali</button>';
+};
+
+window.__recoverSubmit = async function (kind) {
+  const err = document.getElementById('rec-err');
+  const btn = document.getElementById('rec-submit');
+  if (!err || !btn) return;
+  const p1 = jdVal('rec-pin1'), p2 = jdVal('rec-pin2');
+  const bad = jdCheckNewPin(p1, p2);
+  if (bad) { err.textContent = bad; return; }
+  let args, fn;
+  if (kind === 'answers') {
+    const a1 = jdVal('rec-a1'), a2 = jdVal('rec-a2');
+    if (!a1 || !a2) { err.textContent = 'Jawab kedua pertanyaan.'; return; }
+    fn = 'jd_recover_pin_with_answers';
+    args = { p_wa: jdRecoveryWa, p_device_id: deviceId, p_a1: a1, p_a2: a2, p_new_pin: p1 };
+  } else {
+    const code = jdVal('rec-code');
+    if (code.replace(/[^A-Za-z0-9]/g, '').length !== 8) { err.textContent = 'Kode terdiri dari 8 huruf/angka.'; return; }
+    fn = 'jd_recover_pin_with_code';
+    args = { p_wa: jdRecoveryWa, p_code: code, p_new_pin: p1 };
+  }
+  btn.disabled = true;
+  err.textContent = 'Memeriksa…';
+  let res;
+  try { res = await sb.rpc(fn, args); } catch (e) { res = { error: { message: 'Tidak bisa terhubung. Coba lagi.' } }; }
+  btn.disabled = false;
+  if (res.error) { err.textContent = res.error.message || 'Gagal. Coba lagi.'; return; }
+  if (!res.data) { err.textContent = kind === 'answers' ? 'Jawaban belum cocok.' : 'Kode belum cocok.'; return; }
+  window.__closeSheet('jd-recovery-sheet');
+  showToast('PIN berhasil diganti. Silakan masuk dengan PIN baru.');
+  const pinEl = document.getElementById('pick-pin');
+  if (pinEl) { pinEl.value = ''; pinEl.focus(); }
+};
+
+window.__forgotPinAdmin = function () {
+  const whatsapp = jdRecoveryWa || normalizeWhatsapp((document.getElementById('pick-whatsapp')?.value || pickWhatsappValue).trim());
   const msg = whatsapp
     ? `Halo, saya lupa PIN akun pedagang JajanDekat saya. Nomor WhatsApp terdaftar: ${whatsapp}`
     : `Halo, saya lupa PIN akun pedagang JajanDekat saya.`;
   window.open(`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
+};
+
+// ---- Pengingat atur pemulihan PIN (muncul di tab Toko, hanya jika belum lengkap) ----
+let jdSecNudgeStatus = null;
+function jdSecNudgeSnoozed() {
+  try { return Number(localStorage.getItem('jd_sec_nudge_until') || 0) > Date.now(); } catch (e) { return false; }
+}
+window.__dismissSecNudge = function () {
+  try { localStorage.setItem('jd_sec_nudge_until', String(Date.now() + 7 * 24 * 3600 * 1000)); } catch (e) {}
+  document.getElementById('sec-nudge')?.remove();
+};
+function jdSecSyncNudge() {
+  if (jdSecStatus && jdSecStatus.has_code && jdSecStatus.has_questions) {
+    jdSecNudgeStatus = { has_code: true, has_questions: true };
+    document.getElementById('sec-nudge')?.remove();
+  }
+}
+async function loadSecurityNudge() {
+  if (!sb || !myVendorId || !myVendorPin || jdSecNudgeSnoozed()) return;
+  let st = jdSecNudgeStatus;
+  if (!st) {
+    try {
+      const { data, error } = await sb.rpc('jd_recovery_status', { p_vendor_id: myVendorId, p_pin: myVendorPin });
+      if (error || !data) return;
+      st = jdSecNudgeStatus = data;
+    } catch (e) { return; }
+  }
+  if (st.has_code && st.has_questions) return;
+  const host = document.querySelector('.pd-panel[data-tab="toko"] .pd-sec');
+  if (!host || document.getElementById('sec-nudge')) return;
+  host.insertAdjacentHTML('afterend',
+    '<div id="sec-nudge" style="margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid var(--stroke);background:var(--surface);">' +
+      '<div style="font-size:13px;font-weight:700;">🔐 Amankan akun Anda</div>' +
+      '<div style="' + JD_NOTE + '">Atur kode pemulihan dan pertanyaan keamanan, supaya akun tidak terkunci kalau suatu saat lupa PIN.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;">' +
+        '<button type="button" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:12.5px;cursor:pointer;" onclick="window.__openSecurityModal()">Atur sekarang</button>' +
+        '<button type="button" style="padding:10px 14px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:inherit;font-weight:600;font-size:12.5px;cursor:pointer;" onclick="window.__dismissSecNudge()">Nanti</button>' +
+      '</div>' +
+    '</div>');
+}
+
+// ---- Menu "Keamanan Akun" (pedagang yang sudah masuk) ----
+window.__openSecurityModal = async function () {
+  if (!myVendorId || !myVendorPin) { showToast('Masuk dulu sebagai pedagang.'); return; }
+  jdOpenSheet('jd-sec-sheet',
+    '<div style="font-family:\'Poppins\';font-weight:700;font-size:15px;">🔐 Keamanan Akun</div>' +
+    '<div id="jd-sec-body" style="margin-top:10px;font-size:12.5px;color:var(--text-faint);">Memuat…</div>');
+  let st = {};
+  try {
+    const { data, error } = await sb.rpc('jd_recovery_status', { p_vendor_id: myVendorId, p_pin: myVendorPin });
+    if (error) {
+      const b = document.getElementById('jd-sec-body');
+      if (b) b.innerHTML = '<div style="color:#f87171;">' + escapeHtml(error.message || 'Gagal memuat.') + '</div>' +
+        '<button type="button" style="' + JD_BTN2 + 'text-align:center;" onclick="window.__closeSheet(\'jd-sec-sheet\')">Tutup</button>';
+      return;
+    }
+    st = data || {};
+  } catch (e) {}
+  jdSecStatus = st;
+  window.__secRender();
+};
+
+window.__secRender = function () {
+  const body = document.getElementById('jd-sec-body');
+  if (!body) return;
+  const st = jdSecStatus || {};
+  const sum = 'style="font-weight:700;font-size:13px;cursor:pointer;padding:10px 0;"';
+  const box = 'style="border-top:1px solid var(--stroke);"';
+  body.style.color = '';
+  body.style.fontSize = '';
+  body.innerHTML =
+    '<details ' + box + '><summary ' + sum + '>Ganti PIN</summary>' +
+      '<label style="' + JD_LBL + '">PIN lama</label><input id="sec-old" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" style="' + JD_INP + '" />' +
+      '<label style="' + JD_LBL + '">PIN baru (6 digit)</label><input id="sec-new1" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" style="' + JD_INP + '" />' +
+      '<label style="' + JD_LBL + '">Ulangi PIN baru</label><input id="sec-new2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" style="' + JD_INP + '" />' +
+      '<div style="' + JD_NOTE + '">' + JD_PIN_RULE + '</div>' +
+      '<div id="sec-err1" style="' + JD_ERR + '"></div>' +
+      '<button type="button" style="' + JD_BTN + '" onclick="window.__secChangePin()">Simpan PIN baru</button>' +
+    '</details>' +
+    '<details ' + box + '><summary ' + sum + '>Kode pemulihan ' + (st.has_code ? '✅' : '⚠️ belum dibuat') + '</summary>' +
+      '<div style="' + JD_NOTE + '">Kode 8 karakter untuk membuka akun jika lupa PIN, di HP mana pun. Simpan di tempat aman (screenshot atau catatan). Kode hanya ditampilkan sekali dan sekali pakai. Membuat kode baru membuat kode lama tidak berlaku.</div>' +
+      '<div id="sec-code-out"></div>' +
+      '<div id="sec-err2" style="' + JD_ERR + '"></div>' +
+      '<button type="button" style="' + JD_BTN + '" onclick="window.__secMakeCode()">Buat kode pemulihan baru</button>' +
+    '</details>' +
+    '<details ' + box + '><summary ' + sum + '>Pertanyaan keamanan ' + (st.has_questions ? '✅' : '⚠️ belum diatur') + '</summary>' +
+      '<div style="' + JD_NOTE + '">Buat 2 pertanyaan yang hanya Anda yang tahu jawabannya. Hindari yang mudah ditebak keluarga atau tetangga. Dipakai untuk pemulihan di HP ini. Huruf besar/kecil dan spasi tidak berpengaruh.</div>' +
+      '<label style="' + JD_LBL + '">Pertanyaan 1</label><input id="sec-q1" type="text" maxlength="80" placeholder="mis. Nama kucing pertamaku?" value="' + escapeHtml(st.q1 || '') + '" style="' + JD_INP + '" />' +
+      '<label style="' + JD_LBL + '">Jawaban 1</label><input id="sec-a1" type="text" maxlength="60" autocomplete="off" style="' + JD_INP + '" />' +
+      '<label style="' + JD_LBL + '">Pertanyaan 2</label><input id="sec-q2" type="text" maxlength="80" placeholder="mis. Plat motor pertamaku?" value="' + escapeHtml(st.q2 || '') + '" style="' + JD_INP + '" />' +
+      '<label style="' + JD_LBL + '">Jawaban 2</label><input id="sec-a2" type="text" maxlength="60" autocomplete="off" style="' + JD_INP + '" />' +
+      '<div id="sec-err3" style="' + JD_ERR + '"></div>' +
+      '<button type="button" style="' + JD_BTN + '" onclick="window.__secSaveQA()">Simpan pertanyaan</button>' +
+    '</details>' +
+    '<button type="button" style="' + JD_BTN2 + 'text-align:center;" onclick="window.__closeSheet(\'jd-sec-sheet\')">Tutup</button>';
+};
+
+window.__secChangePin = async function () {
+  const err = document.getElementById('sec-err1');
+  const oldPin = jdVal('sec-old'), n1 = jdVal('sec-new1'), n2 = jdVal('sec-new2');
+  if (!oldPin) { err.textContent = 'Isi PIN lama.'; return; }
+  const bad = jdCheckNewPin(n1, n2);
+  if (bad) { err.textContent = bad; return; }
+  err.textContent = 'Menyimpan…';
+  const { data, error } = await sb.rpc('jd_change_vendor_pin', { p_vendor_id: myVendorId, p_old_pin: oldPin, p_new_pin: n1 });
+  if (error) { err.textContent = error.message || 'Gagal. Coba lagi.'; return; }
+  if (!data) { err.textContent = 'PIN lama salah.'; return; }
+  myVendorPin = n1;
+  err.textContent = '';
+  ['sec-old', 'sec-new1', 'sec-new2'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  showToast('PIN berhasil diganti.');
+};
+
+window.__secMakeCode = async function () {
+  const err = document.getElementById('sec-err2');
+  if (jdSecStatus.has_code && !confirm('Kode lama tidak akan berlaku lagi. Buat kode baru?')) return;
+  err.textContent = 'Membuat kode…';
+  const { data, error } = await sb.rpc('jd_generate_recovery_code', { p_vendor_id: myVendorId, p_pin: myVendorPin });
+  if (error || !data) { err.textContent = (error && error.message) || 'Gagal membuat kode.'; return; }
+  err.textContent = '';
+  jdSecStatus.has_code = true;
+  jdSecSyncNudge();
+  const out = document.getElementById('sec-code-out');
+  if (out) {
+    out.innerHTML =
+      '<div style="font-size:26px;font-weight:800;letter-spacing:3px;text-align:center;padding:14px;border-radius:12px;background:var(--bg);border:1px dashed var(--stroke);margin-top:10px;user-select:all;">' + escapeHtml(data) + '</div>' +
+      '<div style="font-size:11.5px;color:#f59e0b;margin-top:6px;">Simpan sekarang. Kode ini tidak akan ditampilkan lagi.</div>' +
+      '<button type="button" style="' + JD_BTN2 + 'text-align:center;" onclick="navigator.clipboard && navigator.clipboard.writeText(\'' + escapeHtml(data) + '\'); showToast(\'Kode disalin\')">Salin kode</button>';
+  }
+};
+
+window.__secSaveQA = async function () {
+  const err = document.getElementById('sec-err3');
+  const q1 = jdVal('sec-q1'), a1 = jdVal('sec-a1'), q2 = jdVal('sec-q2'), a2 = jdVal('sec-a2');
+  if (!q1 || !a1 || !q2 || !a2) { err.textContent = 'Isi kedua pertanyaan dan jawabannya.'; return; }
+  err.textContent = 'Menyimpan…';
+  const { data, error } = await sb.rpc('jd_set_recovery_questions', { p_vendor_id: myVendorId, p_pin: myVendorPin, p_q1: q1, p_a1: a1, p_q2: q2, p_a2: a2 });
+  if (error || !data) { err.textContent = (error && error.message) || 'Gagal menyimpan.'; return; }
+  err.textContent = '';
+  jdSecStatus.has_questions = true; jdSecStatus.q1 = q1; jdSecStatus.q2 = q2;
+  jdSecSyncNudge();
+  ['sec-a1', 'sec-a2'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  showToast('Pertanyaan keamanan disimpan.');
 };
 
 window.__pickVendor = async function () {
@@ -6341,6 +6598,7 @@ window.__logoutVendor = function () {
   myVendorPin = null;
   jdTrackConsent = null;
   lastPendingNotified = 0;
+  jdSecNudgeStatus = null;
   setPedagangDot(0);
   localStorage.removeItem('jd_my_vendor_id');
   refreshMyChatThreads(); // balik ke pantau thread milik device ini sbg pembeli
