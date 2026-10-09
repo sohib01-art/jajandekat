@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v40';
+const CACHE_VERSION = 'v41';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -27,6 +27,7 @@ const APP_SHELL = [
   '/js/app.js',
   '/js/header-scroll.js',
   '/js/header-admin.js',
+  '/js/kesiapan-admin.js',
   '/css/header-scroll.css',
   '/icons/hero-beranda.jpg',
   '/manifest.json',
