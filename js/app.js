@@ -6135,7 +6135,7 @@ function detectRegion() {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       try {
         const { latitude, longitude } = pos.coords;
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1&accept-language=id`);
         const json = await res.json();
         const addr = json.address || {};
         const region = addr.county || addr.city || addr.state_district || addr.city_district || addr.state || null;
@@ -7219,7 +7219,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_label,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -7256,9 +7256,18 @@ async function renderAdminDashboard() {
     </div>
   `;
   // Ringkasan sebaran wilayah (kabupaten/kota), dari deteksi GPS otomatis saat daftar
+  if (!regionsById.size) { try { await fetchRegions(); } catch (_) {} }
+  // Nama wilayah pedagang: teks region (deteksi GPS) dulu; kalau kosong, turunkan dari region_id (kabupaten/kota, atau tingkat tertinggi yang ada)
+  const regionNameOf = (v) => {
+    const t = (v.region || '').trim();
+    if (t) return t;
+    const chain = regionChain(v.region_id);
+    const kab = chain.find(r => r.level === 'kabupaten_kota');
+    return (kab || chain[0] || {}).name || 'Belum terdeteksi';
+  };
   const regionCounts = {};
   data.forEach(v => {
-    const r = v.region || 'Belum terdeteksi';
+    const r = regionNameOf(v);
     regionCounts[r] = (regionCounts[r] || 0) + 1;
   });
   const sortedRegions = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
