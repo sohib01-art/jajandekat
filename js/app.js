@@ -3172,11 +3172,206 @@ function renderPetaView() {
 
 // ---------- CARI VIEW (tab "Cari") ----------
 let cariCat = null;
+// ---------- SARAN PENCARIAN (autocomplete) ----------
+// Sumber saran: (1) kategori & jenis jualan di katalog aplikasi, walau belum ada pedagangnya,
+// (2) jenis/tag buatan pedagang dari database, (3) nama toko di database.
+// Tiap saran menampilkan jumlah pedagang yang ada ("Belum ada pedagang" kalau 0).
+const CARI_RECENT_KEY = 'jd_recent_search';
+function cariRecentGet() { try { const a = JSON.parse(localStorage.getItem(CARI_RECENT_KEY) || '[]'); return Array.isArray(a) ? a.filter(x => typeof x === 'string').slice(0, 6) : []; } catch (e) { return []; } }
+function cariRecentAdd(t) { t = String(t || '').trim(); if (t.length < 2) return; try { const n = foodNorm(t); const a = cariRecentGet().filter(x => foodNorm(x) !== n); a.unshift(t.slice(0, 40)); localStorage.setItem(CARI_RECENT_KEY, JSON.stringify(a.slice(0, 6))); } catch (e) {} }
+function cariRecentClear() { try { localStorage.removeItem(CARI_RECENT_KEY); } catch (e) {} }
+function cariLev(a, b) { // jarak edit + huruf bertukar (untuk menebak salah ketik: "bakos" -> "bakso")
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 2) return 9;
+  const d = [];
+  for (let i = 0; i <= a.length; i++) { d[i] = [i]; }
+  for (let j = 0; j <= b.length; j++) { d[0][j] = j; }
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+function cariBuildIndex() {
+  const mainOf = k => FOOD_MAIN.find(m => m.k === k);
+  const jenisMap = new Map();
+  const add = (label, emoji) => {
+    const n = foodNorm(label);
+    if (!n || n === 'lainnya' || n === 'lain-lain') return;
+    if (!jenisMap.has(n)) jenisMap.set(n, { type: 'jenis', label: String(label).trim(), n, e: emoji || '🔎', count: 0 });
+  };
+  FOOD_MAIN.forEach(m => m.items.forEach(i => add(i, m.e)));
+  vendors.forEach(v => [...(v.categories || []), ...(v.custom_tags || [])].forEach(l => {
+    const mm = foodMainsOfLabel(l);
+    add(l, mm && mainOf(mm[0]) ? mainOf(mm[0]).e : '🔎');
+  }));
+  const kats = FOOD_MAIN.filter(m => m.k !== 'lain').map(m => ({ type: 'kat', k: m.k, label: m.label, n: foodNorm(m.label), e: m.e, count: 0 }));
+  const katNames = new Set(kats.map(k => k.n));
+  const tokoList = [];
+  vendors.forEach(v => {
+    const seen = new Set();
+    [...(v.categories || []), ...(v.custom_tags || [])].forEach(l => {
+      const n = foodNorm(l); const it = jenisMap.get(n);
+      if (it && !seen.has(n)) { seen.add(n); it.count++; }
+    });
+    vendorMainCats(v).forEach(k => { const kk = kats.find(x => x.k === k); if (kk) kk.count++; });
+    if (v.name) tokoList.push({ type: 'toko', label: v.name, n: foodNorm(v.name), e: v.emoji || '🏪', meta: v.wilayah_label || v.region || '', count: 1 });
+  });
+  return { jenis: [...jenisMap.values()].filter(x => !katNames.has(x.n)), kats, tokoList };
+}
+function cariScore(n, nq, toks) { // makin kecil makin cocok; -1 = tidak cocok
+  if (n === nq) return 0;
+  if (n.startsWith(nq)) return 1;
+  const words = n.split(' ');
+  if (words.some(w => w.startsWith(nq))) return 2;
+  if (toks.length > 1 && toks.every(t => words.some(w => w.startsWith(t)))) return 2;
+  if (nq.length >= 3 && n.includes(nq)) return 3; // cocok di tengah kata hanya untuk ketikan 3 huruf ke atas
+  return -1;
+}
+function cariSuggestions(idx, q) {
+  const nq = foodNorm(q), toks = nq.split(' ');
+  const pick = (arr, limit) => arr
+    .map(x => ({ x, s: cariScore(x.n, nq, toks) })).filter(o => o.s >= 0)
+    .sort((a, b) => a.s - b.s || (b.x.count > 0) - (a.x.count > 0) || b.x.count - a.x.count || a.x.label.length - b.x.label.length)
+    .slice(0, limit).map(o => o.x);
+  const tail = pick(idx.tokoList, 3);
+  const head = [...pick(idx.kats, 2), ...pick(idx.jenis, 6)].slice(0, 8 - tail.length);
+  const list = head.concat(tail);
+  if (list.length || nq.length < 3) return { list, fuzzy: false };
+  // tidak ada yang cocok: tebak salah ketik ("bakos" -> "bakso")
+  const maxD = nq.length <= 5 ? 1 : 2;
+  const near = [...idx.kats, ...idx.jenis, ...idx.tokoList]
+    .filter(x => x.n[0] === nq[0]) // salah ketik jarang mengubah huruf pertama
+    .map(x => ({ x, d: Math.min(cariLev(nq, x.n), ...x.n.split(' ').map(w => cariLev(nq, w))) }))
+    .filter(o => o.d <= maxD)
+    .sort((a, b) => a.d - b.d || b.x.count - a.x.count)
+    .slice(0, 4).map(o => o.x);
+  return { list: near, fuzzy: near.length > 0 };
+}
+function cariHl(label, nq) {
+  const i = nq ? label.toLowerCase().indexOf(nq) : -1;
+  return i < 0 ? escapeHtml(label) : escapeHtml(label.slice(0, i)) + '<b>' + escapeHtml(label.slice(i, i + nq.length)) + '</b>' + escapeHtml(label.slice(i + nq.length));
+}
+function cariSuggestStyle() {
+  if (document.getElementById('cari-suggest-style')) return;
+  const st = document.createElement('style');
+  st.id = 'cari-suggest-style';
+  st.textContent = `
+.cari-wrap{position:relative}
+.cari-suggest{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;background:var(--surface);border:1px solid var(--stroke);border-radius:18px;box-shadow:0 12px 32px rgba(0,0,0,.14);max-height:min(62vh,430px);overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch}
+.cari-suggest[hidden]{display:none}
+.cs-h{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--text-faint);text-transform:uppercase}
+.cs-h button{border:none;background:none;color:var(--brand);font-size:11px;font-weight:700;cursor:pointer;padding:2px 4px;text-transform:none}
+.cs-item{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 10px;border:none;background:transparent;border-radius:12px;color:var(--text);font-family:'Inter',sans-serif;font-size:13.5px;text-align:left;cursor:pointer}
+.cs-item:hover,.cs-item.on{background:var(--brand-dim)}
+.cs-ic{flex:0 0 24px;text-align:center;font-size:17px}
+.cs-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cs-tx b{color:var(--brand);font-weight:700}
+.cs-meta{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-faint)}
+.cs-meta.cs-none{font-style:italic}
+.cs-empty{padding:12px;font-size:12.5px;color:var(--text-dim)}`;
+  document.head.appendChild(st);
+}
+function initCariSuggest(input, runSearch) {
+  const box = document.getElementById('cari-suggest');
+  if (!box) return;
+  cariSuggestStyle();
+  const idx = cariBuildIndex();
+  let items = [], active = -1, ready = false;
+  setTimeout(() => { ready = true; }, 0); // fokus otomatis saat tab Cari dibuka tidak langsung menampilkan saran
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('autocapitalize', 'off');
+  input.setAttribute('spellcheck', 'false');
+  input.setAttribute('enterkeyhint', 'search');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-controls', 'cari-suggest');
+  input.setAttribute('aria-expanded', 'false');
+
+  const close = () => { box.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); };
+  const metaOf = it => {
+    if (it.type === 'toko') return it.meta || 'Toko';
+    if (it.type === 'recent') return '';
+    if (it.type === 'kat') return it.count ? `Kategori · ${it.count} pedagang` : 'Kategori';
+    return it.count ? `${it.count} pedagang` : 'Belum ada pedagang';
+  };
+  const row = (it, i, nq) => `<button type="button" class="cs-item" role="option" data-i="${i}"><span class="cs-ic">${escapeHtml(it.e || '🔎')}</span><span class="cs-tx">${cariHl(it.label, nq)}</span><span class="cs-meta${it.type === 'jenis' && !it.count ? ' cs-none' : ''}">${escapeHtml(metaOf(it))}</span></button>`;
+  const render = () => {
+    if (!ready) return;
+    const q = input.value.trim(), nq = foodNorm(q);
+    let html = '';
+    items = [];
+    const push = arr => arr.map(it => { items.push(it); return row(it, items.length - 1, nq); }).join('');
+    if (!nq) {
+      const rec = cariRecentGet().map(t => ({ type: 'recent', label: t, e: '🕘' }));
+      const pop = idx.jenis.filter(x => x.count > 0).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'id')).slice(0, 6);
+      if (rec.length) html += '<div class="cs-h"><span>Terakhir dicari</span><button type="button" data-clear="1">Hapus</button></div>' + push(rec);
+      if (pop.length) html += '<div class="cs-h"><span>Populer di JajanDekat</span></div>' + push(pop);
+    } else {
+      const r = cariSuggestions(idx, q);
+      if (r.fuzzy) html += '<div class="cs-h"><span>Maksud kamu?</span></div>';
+      html += push(r.list);
+      if (!r.list.length) html = `<div class="cs-empty">Belum ada saran untuk “${escapeHtml(q)}”. Tekan Cari di keyboard untuk melihat hasilnya.</div>`;
+    }
+    if (!html) { close(); return; }
+    box.innerHTML = html;
+    box.hidden = false;
+    active = -1;
+    input.setAttribute('aria-expanded', 'true');
+  };
+  const choose = it => {
+    if (!it) return;
+    if (it.type === 'kat') {
+      cariCat = it.k;
+      input.value = '';
+      document.querySelectorAll('#cari-chips .map-chip').forEach(b => b.classList.toggle('active', b.dataset.k === cariCat));
+    } else {
+      input.value = it.label;
+      cariRecentAdd(it.label);
+    }
+    runSearch();
+    close();
+    input.blur();
+  };
+  const setActive = i => {
+    const btns = box.querySelectorAll('.cs-item');
+    if (!btns.length) return;
+    active = (i + btns.length) % btns.length;
+    btns.forEach((b, k) => b.classList.toggle('on', k === active));
+    btns[active].scrollIntoView({ block: 'nearest' });
+  };
+
+  box.onmousedown = e => e.preventDefault(); // jaga fokus input supaya ketukan saran tidak menutup kotak lebih dulu
+  box.onclick = e => {
+    if (e.target.closest('[data-clear]')) { cariRecentClear(); render(); return; }
+    const b = e.target.closest('[data-i]');
+    if (b) choose(items[+b.dataset.i]);
+  };
+  input.addEventListener('input', render);
+  input.addEventListener('focus', render);
+  input.addEventListener('click', render);
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (box.hidden) render(); setActive(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === 'Escape') { close(); }
+    else if (e.key === 'Enter') {
+      if (!box.hidden && active >= 0) { e.preventDefault(); choose(items[active]); }
+      else { cariRecentAdd(input.value); close(); input.blur(); }
+    }
+  });
+}
+
 function renderCariView() {
   main.innerHTML = `
-    <div class="cari-bar">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
+    <div class="cari-wrap">
+      <div class="cari-bar">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search-input" type="text" placeholder="Cari makanan, minuman, toko, atau jasa..." />
+      </div>
+      <div id="cari-suggest" class="cari-suggest" role="listbox" hidden></div>
     </div>
     <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
     <div id="offline-queue-banner"></div>
@@ -3221,6 +3416,7 @@ function renderCariView() {
     };
   });
   input.oninput = runSearch;
+  initCariSuggest(input, runSearch);
   input.focus();
   runSearch();
   updateOfflineQueueBanner();
