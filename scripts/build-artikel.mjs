@@ -1,5 +1,5 @@
 // Membuat halaman artikel STATIS dari tabel Supabase `articles` (dijalankan oleh GitHub Actions, Node 22).
-// Hasil: artikel/index.html (daftar), artikel/<slug>/index.html (per artikel), sitemap-artikel.xml
+// Hasil: artikel/index.html (daftar), artikel/<slug>/index.html (per artikel), sitemap.xml (beranda + daftar + semua artikel)
 import { mkdir, writeFile, readdir, readFile, rm } from 'node:fs/promises';
 
 const SITE = 'https://jajandekat.my.id';
@@ -112,6 +112,7 @@ for (const d of await readdir('artikel', { withFileTypes: true })) {
   try { if ((await readFile(`artikel/${d.name}/index.html`, 'utf8')).includes(MARK)) await rm(`artikel/${d.name}`, { recursive: true }); } catch {}
 }
 
-const urls = [`<url><loc>${SITE}/artikel/</loc></url>`, ...semua.map((a) => `<url><loc>${SITE}/artikel/${a.slug}/</loc><lastmod>${iso(a.created_at)}</lastmod></url>`)];
-await writeFile('sitemap-artikel.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
-console.log(`Selesai: ${semua.length} artikel statis + daftar + sitemap-artikel.xml`);
+const urls = [`<url><loc>${SITE}/</loc><changefreq>weekly</changefreq></url>`, `<url><loc>${SITE}/artikel/</loc><changefreq>weekly</changefreq></url>`, ...semua.map((a) => `<url><loc>${SITE}/artikel/${a.slug}/</loc><lastmod>${iso(a.created_at)}</lastmod></url>`)];
+await writeFile('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
+await rm('sitemap-artikel.xml', { force: true }); // sitemap tunggal sekarang sitemap.xml
+console.log(`Selesai: ${semua.length} artikel statis + daftar + sitemap.xml`);
