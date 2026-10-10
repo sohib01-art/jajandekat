@@ -1020,7 +1020,7 @@ function withTimeout(promise, ms, label) {
 
 async function fetchVendors(retry = 1) {
   try {
-    const { data, error } = await withTimeout(sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').order('name'), 10000, 'Ambil data pedagang');
+    const { data, error } = await withTimeout(sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status,cabang_dari').order('name'), 10000, 'Ambil data pedagang');
     if (error) { console.error(error); throw error; }
     return data;
   } catch (e) {
@@ -3923,7 +3923,7 @@ window.__submitAddVendor = async function () {
   if (!whatsapp || whatsapp.length < 8) { errEl.textContent = 'Nomor WhatsApp wajib diisi.'; return; }
   if (baLat == null || baLng == null) { errEl.textContent = 'Tentukan lokasi dulu — geser peta sampai pin tepat di lokasi toko.'; return; }
 
-  const dupe = vendors.find(v => v.whatsapp === whatsapp);
+  const dupe = vendors.find(v => v.whatsapp === whatsapp && !v.cabang_dari);
   if (dupe) { errEl.textContent = `Nomor ini sudah terdaftar sebagai "${dupe.name}".`; return; }
   const det = baCollectDetails();
   if (det.error) { errEl.textContent = det.error; return; }
@@ -3945,7 +3945,7 @@ window.__submitAddVendor = async function () {
 
     // Ambil ulang baris lengkap (kolom sama seperti loadVendors) supaya field lain
     // (rating, is_premium, dst) konsisten dengan default kolomnya, bukan cuma yang dikembalikan RPC.
-    const { data: fullRow } = await sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status').eq('id', newId).single();
+    const { data: fullRow } = await sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status,cabang_dari').eq('id', newId).single();
 
     vendors.push(fullRow || rows[0]);
 
@@ -5548,7 +5548,9 @@ function renderPedagang() {
       `}
     </div>
 
-<div class="vendor-hero" style="margin-top:14px; text-align:left;">
+${renderLapakCabangCard(v)}
+
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <span style="font-size:20px;">📖</span>
         <div>
@@ -6392,7 +6394,7 @@ window.__registerVendor = async function () {
   }
 
   // Cegah satu nomor WA didaftarkan dua kali
-  const dupe = vendors.find(v => v.whatsapp === whatsapp);
+  const dupe = vendors.find(v => v.whatsapp === whatsapp && !v.cabang_dari);
   if (dupe) {
     errEl.textContent = `Nomor ini sudah terdaftar sebagai "${dupe.name}". Masuk pakai PIN di bawah, atau hubungi admin kalau lupa PIN.`;
     return;
@@ -6766,7 +6768,7 @@ window.__pickVendor = async function () {
   const whatsapp = normalizeWhatsapp((whatsappInput ? whatsappInput.value : pickWhatsappValue).trim());
   if (!whatsapp) { errEl.textContent = 'Isi nomor WhatsApp yang terdaftar.'; return; }
 
-  const vendor = vendors.find(v => v.whatsapp === whatsapp);
+  const vendor = vendors.find(v => v.whatsapp === whatsapp && !v.cabang_dari);
   if (!vendor) { errEl.textContent = 'Nomor ini belum terdaftar. Cek lagi atau daftar baru di bawah.'; return; }
 
   const enteredPin = pinInput ? pinInput.value.trim() : '';
@@ -7415,7 +7417,7 @@ async function renderAdminDashboard() {
     <button class="follow-btn" style="margin-top:16px;width:100%;padding:10px;" onclick="window.__exitAdmin()">← Keluar dari Dashboard Admin</button>
   `;
 
-  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_label,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_label,location_updated_at,location_error_message,location_error_at,cabang_dari').order('created_at', { ascending: false });
   const listEl = document.getElementById('admin-list');
   const statsEl = document.getElementById('admin-stats');
 
@@ -7562,6 +7564,7 @@ function renderAdminVendorList(list) {
         <div class="vendor-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
         <div class="vendor-info">
           <div class="vendor-name">${escapeHtml(v.name)}${v.is_premium ? ' <span class="premium-badge">⭐</span>' : ''}</div>
+          ${v.cabang_dari ? `<div class="vendor-sub" style="color:var(--brand);">🏪 Cabang dari: ${escapeHtml((list.find(x => x.id === v.cabang_dari) || {}).name || 'lapak utama')}</div>` : (list.some(x => x.cabang_dari === v.id) ? `<div class="vendor-sub" style="color:var(--brand);">🏪 Lapak utama · ${list.filter(x => x.cabang_dari === v.id).length} cabang</div>` : '')}
           <div class="vendor-sub mono">WA: ${escapeHtml(v.whatsapp || '-')} · (PIN tersembunyi — pakai "Reset PIN" kalau perlu)</div>
           <div class="vendor-sub">${(v.categories || []).map(c => escapeHtml(c)).join(' · ') || '-'} · ${v.active ? '🟢 aktif' : '🔴 tidak aktif'}</div>
           ${v.is_premium ? `<div class="vendor-sub" style="color:var(--brand);">⭐ Premium sampai ${premiumUntilStr || '(tanpa batas — akun lama)'}</div>` : ''}
@@ -7729,7 +7732,7 @@ window.__adminApproveClaim = async function (claimId, vendorName, claimantWhatsa
       window.open(`https://wa.me/${claimantWhatsapp.replace(/[^\d]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     }
     loadAdminClaims();
-    if (adminVendorData) { const { data: fresh } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at').order('created_at', { ascending: false }); if (fresh) { adminVendorData = fresh; document.getElementById('admin-list').innerHTML = renderAdminVendorList(adminVendorData); } }
+    if (adminVendorData) { const { data: fresh } = await sb.from('vendors').select('id,name,category,categories,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,location_updated_at,location_error_message,location_error_at,cabang_dari').order('created_at', { ascending: false }); if (fresh) { adminVendorData = fresh; document.getElementById('admin-list').innerHTML = renderAdminVendorList(adminVendorData); } }
   } catch (e) {
     alert('Gagal menyetujui klaim: ' + e.message);
   }
@@ -8382,6 +8385,190 @@ window.__adminRejectArticle = async function (id) {
     loadAdminArticles();
   } catch (e) {
     alert('Gagal menolak: ' + e.message);
+  }
+};
+
+// ---------- LAPAK CABANG (satu nomor WhatsApp, beberapa lapak) ----------
+// Lapak cabang memakai nomor WA, PIN, dan perangkat pemilik yang sama dengan lapak utama.
+// Penyimpanannya lewat RPC register_vendor_cabang (server yang mengisi cabang_dari & memeriksa batas).
+const CABANG_MAKS = 3;
+let cabangFixedLat = null;
+let cabangFixedLng = null;
+let cabangHari = [0, 1, 2, 3, 4, 5, 6];
+let isSavingCabang = false;
+
+function lapakKeluarga(v) {
+  const rootId = v.cabang_dari || v.id;
+  return vendors
+    .filter(x => x.id === rootId || x.cabang_dari === rootId)
+    .sort((a, b) => ((b.id === rootId) - (a.id === rootId)) || String(a.created_at).localeCompare(String(b.created_at)));
+}
+
+function renderLapakCabangCard(v) {
+  const rootId = v.cabang_dari || v.id;
+  const fam = lapakKeluarga(v);
+  const jumlahCabang = fam.length - 1;
+  const bolehTambah = v.claim_status !== 'unclaimed' && jumlahCabang < CABANG_MAKS;
+  const baris = fam.length > 1 ? fam.map(x => `
+      <button type="button" onclick="window.__switchLapak('${x.id}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;box-sizing:border-box;text-align:left;padding:9px 11px;margin-bottom:6px;border-radius:10px;background:var(--surface-2);color:var(--text);font-size:12px;border:1.5px solid ${x.id === v.id ? 'var(--brand)' : 'var(--stroke)'};">
+        <span style="font-weight:600;">${x.id === rootId ? '🏠' : '📍'} ${escapeHtml(x.name)}</span>
+        <span style="font-size:10.5px;color:var(--text-faint);">${x.id === v.id ? 'Sedang dikelola' : (x.id === rootId ? 'Lapak utama' : 'Cabang')}</span>
+      </button>`).join('') : '';
+  return `
+    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🏪</span>
+        <div>
+          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Lapak Cabang</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Punya lapak di tempat lain? Tambahkan sebagai cabang — nomor WhatsApp dan PIN tetap sama, tampil sendiri di peta dan pencarian (maksimal ${CABANG_MAKS} cabang).</div>
+        </div>
+      </div>
+      ${baris}
+      ${bolehTambah
+        ? `<button onclick="window.__openCabangForm('${rootId}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">➕ Tambah lapak cabang</button>`
+        : `<div style="font-size:11px;color:var(--text-faint);">${v.claim_status === 'unclaimed' ? 'Toko ini belum dikonfirmasi pemiliknya.' : 'Batas ' + CABANG_MAKS + ' lapak cabang sudah tercapai.'}</div>`}
+    </div>`;
+}
+
+window.__switchLapak = function (id) {
+  if (!vendors.some(x => x.id === id)) return;
+  myVendorId = id;
+  localStorage.setItem('jd_my_vendor_id', id);
+  refreshMyChatThreads();
+  renderPedagang();
+  window.scrollTo(0, 0);
+};
+
+function renderCabangHari() {
+  const el = document.getElementById('cb-hari');
+  if (!el) return;
+  el.innerHTML = HARI_URUTAN.map(d => `
+    <button type="button" onclick="window.__cabangToggleHari(${d})" style="padding:7px 10px;border-radius:999px;font-size:11.5px;font-weight:600;border:1.5px solid ${cabangHari.includes(d) ? 'var(--brand)' : 'var(--stroke)'};background:${cabangHari.includes(d) ? 'var(--brand)' : 'var(--surface-2)'};color:${cabangHari.includes(d) ? '#fff' : 'var(--text-dim)'};">${HARI_SINGKAT[d]}</button>`).join('');
+}
+
+window.__cabangToggleHari = function (d) {
+  cabangHari = cabangHari.includes(d) ? cabangHari.filter(x => x !== d) : [...cabangHari, d];
+  renderCabangHari();
+};
+
+window.__cabangToggle24 = function () {
+  const on = document.getElementById('cb-24')?.checked;
+  const box = document.getElementById('cb-jam-box');
+  if (box) box.style.display = on ? 'none' : 'flex';
+};
+
+window.__captureCabangLocation = function () {
+  const statusEl = document.getElementById('cb-location-status');
+  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
+  if (statusEl) statusEl.textContent = 'Mengambil lokasi…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      cabangFixedLat = pos.coords.latitude;
+      cabangFixedLng = pos.coords.longitude;
+      if (statusEl) statusEl.textContent = '✓ Lokasi tersimpan dari posisi sekarang';
+    },
+    () => { if (statusEl) statusEl.textContent = 'Gagal mengambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+};
+
+window.__openCabangForm = function (rootId) {
+  cabangFixedLat = null; cabangFixedLng = null; cabangHari = [0, 1, 2, 3, 4, 5, 6];
+  document.getElementById('cabang-overlay')?.remove();
+  const inputCss = 'width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);margin:4px 0 12px;';
+  const overlay = document.createElement('div');
+  overlay.id = 'cabang-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;text-align:left;max-height:88vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="font-family:'Poppins';font-weight:700;font-size:15px;margin-bottom:6px;">🏪 Tambah Lapak Cabang</div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:14px;">Nomor WhatsApp dan PIN ikut lapak utama. Jenis dagangan disalin dari lapak utama dan bisa diubah nanti lewat Edit Profil Toko.</div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Nama lapak cabang</label>
+      <input id="cb-name" type="text" maxlength="80" placeholder="Contoh: Bakso Pak Slamet - Cabang Pasar" style="${inputCss}" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Lokasi lapak</label>
+      <button type="button" onclick="window.__captureCabangLocation()" style="display:block;width:100%;padding:10px;margin:4px 0 4px;border-radius:10px;border:1.5px dashed var(--stroke);background:transparent;color:var(--text-dim);font-size:12px;">📍 Pakai lokasi saya sekarang (berdiri di lapaknya)</button>
+      <div id="cb-location-status" style="font-size:11px;color:var(--text-faint);margin-bottom:12px;"></div>
+
+      <label style="font-size:11px;color:var(--text-faint);">Patokan lokasi (opsional)</label>
+      <input id="cb-note" type="text" maxlength="120" placeholder="Contoh: Depan gerbang pasar, sebelah apotek" style="${inputCss}" />
+
+      <label style="font-size:11px;color:var(--text-faint);">Hari buka</label>
+      <div id="cb-hari" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px;"></div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="cb-24" onchange="window.__cabangToggle24()" /> Buka 24 jam</label>
+      <div id="cb-jam-box" style="display:flex;gap:10px;margin-bottom:12px;">
+        <div style="flex:1;"><label style="font-size:11px;color:var(--text-faint);">Jam buka</label><input id="cb-buka" type="time" value="08:00" style="${inputCss}" /></div>
+        <div style="flex:1;"><label style="font-size:11px;color:var(--text-faint);">Jam tutup</label><input id="cb-tutup" type="time" value="21:00" style="${inputCss}" /></div>
+      </div>
+
+      <div id="cb-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('cabang-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button id="cb-submit" onclick="window.__submitCabang('${rootId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Simpan lapak cabang</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  renderCabangHari();
+};
+
+window.__submitCabang = async function (rootId) {
+  if (isSavingCabang) return;
+  const errEl = document.getElementById('cb-error');
+  const name = document.getElementById('cb-name').value.trim();
+  const note = document.getElementById('cb-note').value.trim();
+  const is24 = !!document.getElementById('cb-24')?.checked;
+  const buka = document.getElementById('cb-buka').value;
+  const tutup = document.getElementById('cb-tutup').value;
+
+  if (name.length < 2) { errEl.textContent = 'Nama lapak cabang wajib diisi.'; return; }
+  if (cabangFixedLat == null || cabangFixedLng == null) { errEl.textContent = 'Ambil lokasi lapak dulu supaya muncul di peta.'; return; }
+  if (cabangHari.length === 0) { errEl.textContent = 'Pilih minimal 1 hari buka.'; return; }
+  if (!is24 && (!buka || !tutup)) { errEl.textContent = 'Isi jam buka dan jam tutup.'; return; }
+
+  const root = vendors.find(x => x.id === rootId);
+  if (!root) { errEl.textContent = 'Lapak utama tidak ditemukan. Muat ulang aplikasi.'; return; }
+
+  if (myVendorPin === null) {
+    const enteredPin = prompt('Masukkan PIN akun Anda untuk konfirmasi:');
+    if (enteredPin === null) return;
+    const { data: ok } = await sb.rpc('verify_vendor_pin', { p_vendor_id: rootId, p_pin: enteredPin.trim() });
+    if (!ok) { errEl.textContent = 'PIN salah.'; return; }
+    myVendorPin = enteredPin.trim();
+  }
+
+  const categories = (root.categories && root.categories.length) ? root.categories : (root.category ? [root.category] : []);
+  errEl.textContent = 'Menyimpan...';
+  isSavingCabang = true;
+  const btn = document.getElementById('cb-submit');
+  if (btn) btn.disabled = true;
+  try {
+    const { data: newId, error } = await withTimeout(sb.rpc('register_vendor_cabang', {
+      p_parent_id: rootId, p_pin: myVendorPin || '',
+      p_name: name, p_category: categories[0] || null, p_categories: categories,
+      p_emoji: root.emoji || null, p_mode_icon: root.mode_icon || null,
+      p_fixed_lat: cabangFixedLat, p_fixed_lng: cabangFixedLng,
+      p_schedule_text: null, p_location_note: note || null,
+      p_buka_24jam: is24, p_jam_buka: is24 ? null : buka, p_jam_tutup: is24 ? null : tutup,
+      p_hari_buka: normalizeHariBuka(cabangHari), p_tutup_libur_nasional: !!root.tutup_libur_nasional,
+    }), 25000, REG_SLOW_MSG);
+    if (error) throw error;
+    if (!newId) throw new Error('PIN salah atau akun terkunci sementara. Coba lagi nanti.');
+
+    const { data: row, error: rowErr } = await sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status,cabang_dari').eq('id', newId).single();
+    if (rowErr) throw rowErr;
+    vendors.push(normalizeExpiry(row));
+    document.getElementById('cabang-overlay')?.remove();
+    showToast('Lapak cabang "' + name + '" ditambahkan. Ubah jenis dagangan atau foto lewat Edit Profil Toko.');
+    renderPedagang();
+  } catch (e) {
+    console.error('Gagal tambah lapak cabang:', e);
+    errEl.textContent = 'Gagal menyimpan: ' + (e && e.message ? e.message : 'terjadi kesalahan');
+  } finally {
+    isSavingCabang = false;
+    const b = document.getElementById('cb-submit');
+    if (b) b.disabled = false;
   }
 };
 
@@ -9503,7 +9690,8 @@ async function callAdminAction(action, vendorId, extra = {}) {
 window.__adminResetPin = async function (id, name) {
   try {
     const result = await callAdminAction('reset_pin', id);
-    alert(`PIN baru untuk "${name}": ${result.new_pin}\n\nSampaikan ke pedagangnya lewat WhatsApp.`);
+    const adaCabang = (adminVendorData || []).some(x => x.id === id ? !!x.cabang_dari || (adminVendorData || []).some(y => y.cabang_dari === id) : false);
+    alert(`PIN baru untuk "${name}": ${result.new_pin}\n\nSampaikan ke pedagangnya lewat WhatsApp.${adaCabang ? '\n\nPIN ini berlaku untuk lapak utama dan semua cabangnya.' : ''}`);
     renderAdminDashboard();
   } catch (e) {
     alert('Gagal reset: ' + e.message);
@@ -9562,7 +9750,9 @@ window.__adminRemovePhoto = async function (id) {
 };
 
 window.__adminDeleteVendor = async function (id, name) {
-  if (!confirm(`Yakin hapus akun "${name}"? Ini tidak bisa dibatalkan.`)) return;
+  const jmlCabang = (adminVendorData || []).filter(x => x.cabang_dari === id).length;
+  const extra = jmlCabang ? `\n\nLapak ini punya ${jmlCabang} cabang. Semua cabangnya ikut terhapus.` : '';
+  if (!confirm(`Yakin hapus akun "${name}"? Ini tidak bisa dibatalkan.${extra}`)) return;
   try {
     await callAdminAction('delete_vendor', id);
     renderAdminDashboard();
