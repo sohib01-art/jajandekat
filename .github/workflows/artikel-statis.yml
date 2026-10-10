@@ -1,0 +1,29 @@
+name: Bangun Artikel Statis
+
+on:
+  workflow_dispatch:          # tombol "Run workflow" manual
+  schedule:
+    - cron: '0 18 * * *'      # tiap hari 02:00 WITA
+  push:
+    paths:
+      - 'scripts/build-artikel.mjs'
+
+permissions:
+  contents: write
+
+jobs:
+  bangun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Buat halaman artikel statis dari Supabase
+        run: node scripts/build-artikel.mjs
+      - name: Simpan hasil ke repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artikel sitemap-artikel.xml
+          git diff --cached --quiet || (git commit -m "Bangun ulang artikel statis" && git push)
