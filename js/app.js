@@ -363,6 +363,8 @@ const GUIDE_STEPS = {
       { icon: '✏️', text: 'Ubah nama toko, mode jualan, kategori, atau nomor WhatsApp lewat <b>Edit Profil Toko</b>.', action: () => { if (myVendorId) { goToPedagangDashboard(); window.__openEditProfile(myVendorId); } else { goToPedagangDashboard(); } } },
       { icon: '📦', text: 'Tambahkan menu/dagangan lewat <b>Kelola Produk</b> supaya pembeli bisa lihat sebelum datang.', action: () => { if (myVendorId) { goToPedagangDashboard(); window.__openProductManager(myVendorId); } else { goToPedagangDashboard(); } } },
       { icon: '✅', text: 'Ajukan <b>Verifikasi Toko</b> (unggah foto KTP) supaya tokomu tampil dengan badge terpercaya.', action: () => goToPedagangDashboard() },
+      { icon: '🏪', text: 'Punya lapak di tempat lain? Buka tab <b>Toko</b>, cari kartu <b>Lapak Cabang</b>, lalu tekan <b>Tambah lapak cabang</b>. Nomor WhatsApp dan PIN sama dengan lapak utama, jadi tidak perlu daftar ulang (maksimal 3 cabang).', action: () => { goToPedagangDashboard(); const v = myVendorId ? vendors.find(x => x.id === myVendorId) : null; if (v && v.claim_status !== 'unclaimed' && lapakKeluarga(v).length - 1 < CABANG_MAKS) window.__openCabangForm(v.cabang_dari || v.id); } },
+      { icon: '📍', text: 'Saat menambah cabang, <b>geser peta</b> sampai pin tepat di lapaknya (atau tekan 🎯 kalau sedang berdiri di sana), isi nama, hari, dan jam buka, lalu <b>Simpan</b>. Tiap cabang tampil sendiri di peta dan pencarian. Pindah antar lapak lewat daftar di kartu Lapak Cabang, lalu tekan <b>Mulai Jualan</b> di lapak yang sedang Anda buka.', action: () => goToPedagangDashboard() },
       { icon: '⭐', text: 'Aktifkan <b>Premium</b> dari dashboard pedagang untuk tampil lebih menonjol.', action: () => goToPedagangDashboard() },
       { icon: '🔥', text: 'Pasang <b>Promosi Lokal</b> harian untuk menyorot kartu tokomu ke posisi atas.', action: () => goToPedagangDashboard() },
       { icon: '🔗', text: 'Bagikan <b>QR/link referral</b> di bagian atas dashboard untuk mengajak pembeli & pedagang baru.', action: () => goToPedagangDashboard() },
@@ -5262,6 +5264,85 @@ window.__openRegister = function () {
   const sec = document.getElementById('reg-section'); if (sec) { sec.hidden = false; sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   const btn = document.getElementById('lg-reg-btn'); if (btn) btn.hidden = true;
 };
+// ---------- REDESAIN TAB TOKO PEDAGANG (ikon SVG + kartu berpanah) ----------
+function pdIc(name) {
+  const I = {
+    box: '<path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" fill="#FFC857" stroke="#E8590C" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 7l8 4 8-4M12 11v10" fill="none" stroke="#E8590C" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 5.2l8 4" stroke="#E8590C" stroke-width="1.6" stroke-linecap="round"/>',
+    store: '<path d="M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9" fill="#DCEBFF" stroke="#1E3A8A" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 10 4.6 4.5h14.8L21 10Z" fill="#FF5A2D" stroke="#E8590C" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="9.5" y="14" width="5" height="6" rx=".8" fill="#fff" stroke="#1E3A8A" stroke-width="1.4"/>',
+    clock: '<circle cx="12" cy="12" r="8.5" fill="#fff" stroke="#E8590C" stroke-width="2"/><path d="M12 7v5.2l3.2 2" fill="none" stroke="#1E3A8A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    shield: '<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6L12 3Z" fill="#FF5A2D" stroke="#D93A12" stroke-width="1.5" stroke-linejoin="round"/><path d="m8.6 12.2 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    lock: '<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6L12 3Z" fill="#FF5A2D" stroke="#D93A12" stroke-width="1.5" stroke-linejoin="round"/><rect x="8.8" y="11" width="6.4" height="5" rx="1" fill="#fff"/><path d="M10 11V9.6a2 2 0 0 1 4 0V11" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
+    storepin: '<path d="M3 20h12V10H3Z" fill="#DCEBFF" stroke="#1E3A8A" stroke-width="1.5" stroke-linejoin="round"/><path d="M2.4 10 4 5h10.4L16 10Z" fill="#FF5A2D" stroke="#E8590C" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 20v-5h4v5" fill="#fff" stroke="#1E3A8A" stroke-width="1.3"/><path d="M18.5 21s3.5-3.1 3.5-5.8a3.5 3.5 0 0 0-7 0c0 2.700 3.500 5.800 3.500 5.800Z" fill="#F43F5E" stroke="#BE123C" stroke-width="1.3"/><circle cx="18.500" cy="15.200" r="1.200" fill="#fff"/>',
+    book: '<path d="M12 6.5C10 5 7 4.6 3.5 5v13c3.500-.4 6.500 0 8.500 1.500V6.500Z" fill="#FFE1D6" stroke="#D93A12" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 6.500c2-1.500 5-1.900 8.500-1.500v13c-3.500-.4-6.500 0-8.500 1.500V6.500Z" fill="#FF5A2D" stroke="#D93A12" stroke-width="1.6" stroke-linejoin="round"/><path d="M15 9.500h3M15 12.500h3" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>',
+    map: '<path d="m3 7 6-2 6 2 6-2v12l-6 2-6-2-6 2V7Z" fill="#CFEFE0" stroke="#15803D" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 5v12M15 7v12" stroke="#15803D" stroke-width="1.2"/><path d="M12 12.500s3.200-2.800 3.200-5.200a3.200 3.200 0 0 0-6.400 0c0 2.400 3.200 5.200 3.200 5.200Z" fill="#F43F5E" stroke="#BE123C" stroke-width="1.3"/><circle cx="12" cy="7.300" r="1.100" fill="#fff"/>',
+    pencil: '<path d="M4 20l1-4.500L16.500 4a2 2 0 0 1 2.800 0l.7.7a2 2 0 0 1 0 2.800L8.500 19 4 20Z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+    plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+    check: '<rect x="3.500" y="3.500" width="17" height="17" rx="4" fill="currentColor"/><path d="m8 12.200 3 3 5-5.500" fill="none" stroke="#fff" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"/>',
+    gear: '<circle cx="12" cy="12" r="3.200" fill="none" stroke="currentColor" stroke-width="2.200"/><path d="M12 2.800v2.600M12 18.600v2.600M2.800 12h2.600M18.600 12h2.600M5.500 5.500l1.800 1.800M16.700 16.700l1.800 1.800M5.500 18.500l1.800-1.800M16.700 7.300l1.800-1.800" stroke="currentColor" stroke-width="2.400" stroke-linecap="round"/>',
+    chev: '<path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (I[name] || '') + '</svg>';
+}
+function pdSoftBtn(onclick, icon, label, extra) {
+  return '<button type="button" class="pd-btn" ' + (extra || '') + ' onclick="' + onclick + '"><span class="pd-btn-ic">' + pdIc(icon) + '</span><span class="pd-btn-lb">' + label + '</span><span class="pd-btn-ch">' + pdIc('chev') + '</span></button>';
+}
+function pdCardHead(icon, title, desc) {
+  return '<div class="pd-card-hd"><span class="pd-card-ic">' + pdIc(icon) + '</span><div class="pd-card-tx"><div class="pd-card-tt">' + title + '</div><div class="pd-card-ds">' + desc + '</div></div></div>';
+}
+(function injectPdTokoCss() {
+  if (document.getElementById('pd-toko-css')) return;
+  const st = document.createElement('style');
+  st.id = 'pd-toko-css';
+  st.textContent = `
+  .pd-panel[data-tab="toko"]{--pdo:var(--brand,#FF5A2D);--pdn:#1B2A4E;--pdsoft:#FFEDE6;--pdsoft2:#FFE3D8;--pdtxt:#D93A12}
+  .pd-panel[data-tab="toko"] .pd-sec{display:none}
+  .pd-panel[data-tab="toko"] .pd-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 0}
+  .pd-panel[data-tab="toko"] .pd-tile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;padding:14px 4px 12px;border:0;border-radius:18px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(27,42,78,.05),0 6px 16px -8px rgba(27,42,78,.14);color:var(--pdn);font:700 12px/1.2 'Poppins',system-ui,sans-serif;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s}
+  .pd-panel[data-tab="toko"] .pd-tile:active{transform:scale(.96)}
+  .pd-panel[data-tab="toko"] .pd-tile-ic{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--pdsoft);font-size:0}
+  .pd-panel[data-tab="toko"] .pd-tile-ic svg{width:26px;height:26px}
+  .pd-panel[data-tab="toko"] .pd-tile-lbl{display:block;color:var(--pdn)}
+  .pd-panel[data-tab="toko"] .pd-tile-sub{font-size:10px;font-weight:600;color:#15803D}
+  .pd-card{margin-top:14px;padding:16px;border-radius:20px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(27,42,78,.05),0 8px 20px -10px rgba(27,42,78,.16);text-align:left}
+  .pd-card-hd{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+  .pd-card-ic{flex:0 0 auto;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--pdsoft)}
+  .pd-card-ic svg{width:28px;height:28px}
+  .pd-card-tt{font:700 15px/1.25 'Poppins',system-ui,sans-serif;color:var(--pdn)}
+  .pd-card-ds{margin-top:3px;font-size:12px;line-height:1.5;color:var(--text-faint,#7b8499)}
+  .pd-btn{display:flex;align-items:center;width:100%;box-sizing:border-box;min-height:44px;padding:0 14px;border:0;border-radius:12px;background:var(--pdsoft);color:var(--pdtxt);font:700 13.5px/1.2 'Poppins',system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s,transform .1s}
+  .pd-btn:active{background:var(--pdsoft2);transform:scale(.99)}
+  .pd-btn:focus-visible,.pd-tile:focus-visible,.pd-edit:focus-visible{outline:2px solid var(--pdo);outline-offset:2px}
+  .pd-btn-ic{display:grid;place-items:center;width:20px;height:20px;flex:0 0 auto}
+  .pd-btn-ic svg{width:20px;height:20px}
+  .pd-btn-lb{flex:1;text-align:center;padding:0 6px}
+  .pd-btn-ch{display:grid;place-items:center;width:16px;height:16px;flex:0 0 auto}
+  .pd-btn-ch svg{width:16px;height:16px}
+  .pd-note{display:flex;align-items:center;gap:8px;padding:11px 12px;border-radius:12px;font-size:12px;font-weight:600}
+  .pd-note.ok{background:#E8F5EC;color:#166534}
+  .pd-note.wait{background:#FFF3CD;color:#8A6D00}
+  .pd-note.bad{background:#FEE2E2;color:#991B1B;margin-bottom:10px;font-weight:500;line-height:1.5}
+  .pd-pill{display:inline-flex;align-items:center;gap:6px;margin:0 0 12px;padding:4px 10px;border-radius:99px;background:#EEF0F4;color:#4B556B;font-size:11px;font-weight:600}
+  .pd-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.75}
+  .pd-pill.on{background:#E8F5EC;color:#166534}
+  .pd-fam{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin-bottom:8px;padding:10px 12px;border:1.5px solid var(--stroke,#E5E7EB);border-radius:12px;background:transparent;color:var(--pdn);font-size:12.5px;text-align:left;cursor:pointer}
+  .pd-fam.cur{border-color:var(--pdo);background:var(--pdsoft)}
+  .pd-fam b{font-weight:600}
+  .pd-fam small{font-size:10.5px;color:var(--text-faint,#7b8499);white-space:nowrap}
+  .pd-edit{display:flex;align-items:center;width:100%;box-sizing:border-box;min-height:50px;margin-top:14px;padding:0 16px;border:0;border-radius:14px;background:var(--pdo);color:#fff;font:700 12.5px/1.2 'Poppins',system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 20px -10px var(--pdo);-webkit-tap-highlight-color:transparent}
+  .pd-edit:active{transform:scale(.99)}
+  .pd-edit .pd-btn-ic,.pd-edit .pd-btn-ch{color:#fff}
+  #sec-nudge.pd-nudge{display:flex;gap:12px;align-items:flex-start;margin:12px 0 0;padding:14px;border:1px solid #FFD9CB;border-radius:18px;background:var(--pdsoft)}
+  #sec-nudge .pd-nudge-ic{flex:0 0 auto;display:grid;place-items:center;width:44px;height:44px}
+  #sec-nudge .pd-nudge-ic svg{width:44px;height:44px}
+  #sec-nudge .pd-nudge-tx{flex:1;min-width:0}
+  #sec-nudge .pd-nudge-tt{font-size:13px;line-height:1.45;font-weight:600;color:var(--pdn)}
+  #sec-nudge .pd-nudge-row{display:flex;gap:8px;margin-top:10px}
+  #sec-nudge .pd-nudge-go{flex:1;min-height:40px;border:0;border-radius:11px;background:var(--pdo);color:#fff;font:700 13px 'Poppins',system-ui,sans-serif;cursor:pointer}
+  #sec-nudge .pd-nudge-no{min-height:40px;padding:0 16px;border:1px solid #FFD9CB;border-radius:11px;background:#fff;color:var(--pdn);font:600 13px 'Poppins',system-ui,sans-serif;cursor:pointer}
+  @media (max-width:360px){.pd-panel[data-tab="toko"] .pd-tiles{gap:6px}.pd-panel[data-tab="toko"] .pd-tile{font-size:11px}}
+  `;
+  document.head.appendChild(st);
+})();
 // ---------- BERANDA PEDAGANG: TAB ----------
 let pdTab = 'toko';
 (function injectPdTabCss() {
@@ -5523,62 +5604,38 @@ function renderPedagang() {
     <div class="pd-panel" data-tab="toko" ${pdTab === 'toko' ? '' : 'hidden'} role="tabpanel">
     <div class="pd-sec"><h2>Kelola Toko</h2></div>
     <div class="pd-tiles">
-      <button type="button" class="pd-tile" onclick="window.__openProductManager('${v.id}')"><span class="pd-tile-ic">📦</span><span class="pd-tile-lbl">Produk</span></button>
-      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">🏪</span><span class="pd-tile-lbl">Profil Toko</span></button>
-      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">🕐</span><span class="pd-tile-lbl">Jam Operasional</span></button>
-      <button type="button" class="pd-tile ${v.verification_status === 'verified' ? 'ok' : ''}" onclick="window.__openVerificationForm('${v.id}')"><span class="pd-tile-ic">🛡️</span><span class="pd-tile-lbl">Verifikasi</span>${v.verification_status === 'verified' ? '<span class="pd-tile-sub">Terverifikasi</span>' : ''}</button>
+      <button type="button" class="pd-tile" onclick="window.__openProductManager('${v.id}')"><span class="pd-tile-ic">${pdIc('box')}</span><span class="pd-tile-lbl">Produk</span></button>
+      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">${pdIc('store')}</span><span class="pd-tile-lbl">Profil Toko</span></button>
+      <button type="button" class="pd-tile" onclick="window.__openEditProfile('${v.id}')"><span class="pd-tile-ic">${pdIc('clock')}</span><span class="pd-tile-lbl">Jam Operasional</span></button>
+      <button type="button" class="pd-tile ${v.verification_status === 'verified' ? 'ok' : ''}" onclick="window.__openVerificationForm('${v.id}')"><span class="pd-tile-ic">${pdIc('shield')}</span><span class="pd-tile-lbl">Verifikasi</span>${v.verification_status === 'verified' ? '<span class="pd-tile-sub">Terverifikasi</span>' : ''}</button>
     </div>
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;color:var(--navy);">✓</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Verifikasi Toko</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Toko terverifikasi tampil dengan badge navy dan lebih dipercaya pembeli</div>
-        </div>
-      </div>
+    <div class="pd-card">
+      ${pdCardHead('shield', 'Verifikasi Toko', 'Toko terverifikasi tampil dengan badge navy dan lebih dipercaya pembeli.')}
       ${v.verification_status === 'verified' ? `
-        <div style="background:var(--navy-dim);border:1px solid #B9C4DA;border-radius:12px;padding:10px 12px;font-size:12px;color:var(--navy);font-weight:700;">✓ Toko Anda sudah terverifikasi</div>
+        <div class="pd-note ok">✓ Toko Anda sudah terverifikasi</div>
       ` : v.verification_status === 'pending' ? `
-        <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;font-size:12px;color:#8A6D00;">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
+        <div class="pd-note wait">🕐 Pengajuan sedang ditinjau admin (biasanya 1-2 hari kerja)</div>
       ` : `
-        ${v.verification_status === 'rejected' ? `<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:12px;padding:10px 12px;font-size:11.5px;color:#991B1B;margin-bottom:10px;">Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.</div>` : ''}
-        <button onclick="window.__openVerificationForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
-          ✅ Ajukan Verifikasi Toko
-        </button>
+        ${v.verification_status === 'rejected' ? `<div class="pd-note bad">Pengajuan sebelumnya belum disetujui. Silakan ajukan ulang.</div>` : ''}
+        ${pdSoftBtn("window.__openVerificationForm('" + v.id + "')", 'check', 'Ajukan Verifikasi Toko')}
       `}
     </div>
 
 ${renderLapakCabangCard(v)}
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">📖</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Ceritakan Kisah Dagangan Anda</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Kisah, perjuangan, atau momen berkesan selama berjualan — bisa ditampilkan di halaman Artikel JajanDekat setelah ditinjau admin</div>
-        </div>
-      </div>
-      <button onclick="window.__openVendorStoryForm('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
-        ✍️ Ajukan Cerita Dagangan
-      </button>
+    <div class="pd-card">
+      ${pdCardHead('book', 'Ceritakan Kisah Dagangan Anda', 'Kisah, perjuangan, atau momen berkesan selama berjualan — bisa ditampilkan di halaman Artikel JajanDekat setelah ditinjau admin.')}
+      ${pdSoftBtn("window.__openVendorStoryForm('" + v.id + "')", 'pencil', 'Ajukan Cerita Dagangan')}
     </div>
 
-    <div class="vendor-hero" id="jd-track-card" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">🧭</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Catat Rute Jualan Saya</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Opsional. Bantu JajanDekat mengenali jalur dan jam Anda biasa lewat. Bisa dicabut kapan saja.</div>
-        </div>
-      </div>
-      <div id="jd-track-state" style="font-size:12px;margin-bottom:10px;">${jdTrackStateHtml()}</div>
+    <div class="pd-card" id="jd-track-card">
+      ${pdCardHead('map', 'Catat Rute Jualan Saya', 'Opsional. Bantu JajanDekat mengenali jalur dan jam Anda biasa lewat. Bisa dicabut kapan saja.')}
+      <div id="jd-track-state">${jdTrackStateHtml()}</div>
       <div id="jd-wake-row">${jdWakeRowHtml()}</div>
-      <button onclick="window.__openTrackConsent('${v.id}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">
-        ⚙️ Atur izin jejak rute
-      </button>
+      ${pdSoftBtn("window.__openTrackConsent('" + v.id + "')", 'gear', 'Atur izin jejak rute')}
     </div>
 
-    <button class="follow-btn" style="margin-top:14px;width:100%;padding:10px;background:var(--surface-2);color:var(--text);" onclick="window.__openEditProfile('${v.id}')">✏️ Edit Profil Toko (nama, mode jualan, kategori)</button>
+    <button type="button" class="pd-edit" onclick="window.__openEditProfile('${v.id}')"><span class="pd-btn-ic">${pdIc('pencil')}</span><span class="pd-btn-lb">Edit Profil Toko (nama, mode jualan, kategori)</span><span class="pd-btn-ch">${pdIc('chev')}</span></button>
 
     </div>
     <div class="pd-panel" data-tab="promosi" ${pdTab === 'promosi' ? '' : 'hidden'} role="tabpanel">
@@ -6646,12 +6703,14 @@ async function loadSecurityNudge() {
   const host = document.querySelector('.pd-panel[data-tab="toko"] .pd-sec');
   if (!host || document.getElementById('sec-nudge')) return;
   host.insertAdjacentHTML('afterend',
-    '<div id="sec-nudge" style="margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid var(--stroke);background:var(--surface);">' +
-      '<div style="font-size:13px;font-weight:700;">🔐 Amankan akun Anda</div>' +
-      '<div style="' + JD_NOTE + '">Atur kode pemulihan dan pertanyaan keamanan, supaya akun tidak terkunci kalau suatu saat lupa PIN.</div>' +
-      '<div style="display:flex;gap:8px;margin-top:10px;">' +
-        '<button type="button" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:12.5px;cursor:pointer;" onclick="window.__openSecurityModal()">Atur sekarang</button>' +
-        '<button type="button" style="padding:10px 14px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:inherit;font-weight:600;font-size:12.5px;cursor:pointer;" onclick="window.__dismissSecNudge()">Nanti</button>' +
+    '<div id="sec-nudge" class="pd-nudge">' +
+      '<span class="pd-nudge-ic">' + pdIc('lock') + '</span>' +
+      '<div class="pd-nudge-tx">' +
+        '<div class="pd-nudge-tt">Akun tidak terkunci kalau suatu saat lupa PIN.</div>' +
+        '<div class="pd-nudge-row">' +
+          '<button type="button" class="pd-nudge-go" onclick="window.__openSecurityModal()">Atur sekarang</button>' +
+          '<button type="button" class="pd-nudge-no" onclick="window.__dismissSecNudge()">Nanti</button>' +
+        '</div>' +
       '</div>' +
     '</div>');
 }
@@ -8410,23 +8469,17 @@ function renderLapakCabangCard(v) {
   const jumlahCabang = fam.length - 1;
   const bolehTambah = v.claim_status !== 'unclaimed' && jumlahCabang < CABANG_MAKS;
   const baris = fam.length > 1 ? fam.map(x => `
-      <button type="button" onclick="window.__switchLapak('${x.id}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;box-sizing:border-box;text-align:left;padding:9px 11px;margin-bottom:6px;border-radius:10px;background:var(--surface-2);color:var(--text);font-size:12px;border:1.5px solid ${x.id === v.id ? 'var(--brand)' : 'var(--stroke)'};">
-        <span style="font-weight:600;">${x.id === rootId ? '🏠' : '📍'} ${escapeHtml(x.name)}</span>
-        <span style="font-size:10.5px;color:var(--text-faint);">${x.id === v.id ? 'Sedang dikelola' : (x.id === rootId ? 'Lapak utama' : 'Cabang')}</span>
+      <button type="button" class="pd-fam ${x.id === v.id ? 'cur' : ''}" onclick="window.__switchLapak('${x.id}')">
+        <b>${x.id === rootId ? '🏠' : '📍'} ${escapeHtml(x.name)}</b>
+        <small>${x.id === v.id ? 'Sedang dikelola' : (x.id === rootId ? 'Lapak utama' : 'Cabang')}</small>
       </button>`).join('') : '';
   return `
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">🏪</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Lapak Cabang</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Punya lapak di tempat lain? Tambahkan sebagai cabang — nomor WhatsApp dan PIN tetap sama, tampil sendiri di peta dan pencarian (maksimal ${CABANG_MAKS} cabang).</div>
-        </div>
-      </div>
+    <div class="pd-card">
+      ${pdCardHead('storepin', 'Lapak Cabang', 'Punya lapak di tempat lain? Tambahkan sebagai cabang — nomor WhatsApp dan PIN tetap sama, tampil sendiri di peta dan pencarian (maksimal ' + CABANG_MAKS + ' cabang).')}
       ${baris}
       ${bolehTambah
-        ? `<button onclick="window.__openCabangForm('${rootId}')" class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--surface-2);color:var(--text);">➕ Tambah lapak cabang</button>`
-        : `<div style="font-size:11px;color:var(--text-faint);">${v.claim_status === 'unclaimed' ? 'Toko ini belum dikonfirmasi pemiliknya.' : 'Batas ' + CABANG_MAKS + ' lapak cabang sudah tercapai.'}</div>`}
+        ? pdSoftBtn("window.__openCabangForm('" + rootId + "')", 'plus', 'Tambah lapak cabang')
+        : `<div class="pd-card-ds">${v.claim_status === 'unclaimed' ? 'Toko ini belum dikonfirmasi pemiliknya.' : 'Batas ' + CABANG_MAKS + ' lapak cabang sudah tercapai.'}</div>`}
     </div>`;
 }
 
@@ -8457,24 +8510,88 @@ window.__cabangToggle24 = function () {
   if (box) box.style.display = on ? 'none' : 'flex';
 };
 
+let cabangMap = null;
+let cabangGeoTimer = null;
+let cabangTouched = false; // titik baru dianggap dipilih setelah peta digeser/di-zoom atau GPS berhasil
+
+function cbSetStatus(t) { const el = document.getElementById('cb-location-status'); if (el) el.textContent = t; }
+
+// Alamat perkiraan dari titik pin (OpenStreetMap, gratis); gagal = tampilkan koordinat saja.
+function cbReverse(lat, lng) {
+  clearTimeout(cabangGeoTimer);
+  cbSetStatus('📍 Lokasi dipilih…');
+  cabangGeoTimer = setTimeout(async () => {
+    const same = () => cabangFixedLat === lat && cabangFixedLng === lng;
+    try {
+      const res = await withTimeout(fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`), 8000, 'timeout');
+      const j = await res.json();
+      const a = j.address || {};
+      const parts = [a.road || a.pedestrian || a.neighbourhood, a.suburb || a.village || a.city_district, a.city || a.county || a.town].filter(Boolean);
+      if (same()) cbSetStatus('📍 ' + (parts.length ? parts.join(', ') : `${lat.toFixed(5)}, ${lng.toFixed(5)}`));
+    } catch (_) {
+      if (same()) cbSetStatus(`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    }
+  }, 700);
+}
+
+function cbCloseForm() {
+  clearTimeout(cabangGeoTimer);
+  if (cabangMap) { try { cabangMap.remove(); } catch (_) {} cabangMap = null; }
+  document.getElementById('cabang-overlay')?.remove();
+}
+window.__closeCabangForm = cbCloseForm;
+
+function cbInitMap(rootId) {
+  if (cabangMap) { try { cabangMap.remove(); } catch (_) {} cabangMap = null; }
+  const el = document.getElementById('cb-map');
+  if (!el) return;
+  if (typeof L === 'undefined') { cbSetStatus('Peta belum termuat. Periksa sinyal lalu buka lagi form ini.'); return; }
+  const root = vendors.find(x => x.id === rootId) || {};
+  const rLat = root.fixed_lat != null ? root.fixed_lat : root.lat;
+  const rLng = root.fixed_lng != null ? root.fixed_lng : root.lng;
+  let center, zoom;
+  if (rLat != null && rLng != null) { center = [rLat, rLng]; zoom = 16; }
+  else if (typeof buyerLoc !== 'undefined' && buyerLoc && buyerLoc.lat != null) { center = [buyerLoc.lat, buyerLoc.lng]; zoom = 16; }
+  else { center = (typeof DEFAULT_MAP_CENTER !== 'undefined' ? DEFAULT_MAP_CENTER : [-2.5, 118]); zoom = (typeof DEFAULT_MAP_ZOOM !== 'undefined' ? DEFAULT_MAP_ZOOM : 14); }
+  cabangTouched = false;
+  jdInjectMapCss();
+  cabangMap = L.map(el, { zoomControl: false, maxZoom: 19 }).setView(center, zoom);
+  L.control.zoom({ position: 'topright' }).addTo(cabangMap);
+  jdAddBaseLayer(cabangMap);
+  setTimeout(() => { if (cabangMap) cabangMap.invalidateSize({ pan: false }); }, 80);
+  const pin = document.getElementById('cb-pin');
+  cabangMap.on('dragstart zoomstart', () => { cabangTouched = true; });
+  cabangMap.on('movestart', () => pin && pin.classList.add('lift'));
+  cabangMap.on('moveend', () => {
+    pin && pin.classList.remove('lift');
+    if (!cabangTouched || !cabangMap) return;
+    const c = cabangMap.getCenter();
+    cabangFixedLat = c.lat; cabangFixedLng = c.lng;
+    cbReverse(cabangFixedLat, cabangFixedLng);
+  });
+}
+
+// Tombol 🎯: pindahkan pin ke posisi pedagang sekarang (berdiri di lapaknya)
 window.__captureCabangLocation = function () {
-  const statusEl = document.getElementById('cb-location-status');
-  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'Browser ini tidak mendukung lokasi.'; return; }
-  if (statusEl) statusEl.textContent = 'Mengambil lokasi…';
+  if (!navigator.geolocation) { cbSetStatus('Browser ini tidak mendukung lokasi. Geser peta ke lokasi lapak.'); return; }
+  cbSetStatus('Mengambil lokasi…');
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      cabangFixedLat = pos.coords.latitude;
-      cabangFixedLng = pos.coords.longitude;
-      if (statusEl) statusEl.textContent = '✓ Lokasi tersimpan dari posisi sekarang';
+      if (!cabangMap) return;
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      cabangTouched = true;
+      cabangFixedLat = lat; cabangFixedLng = lng; // diisi langsung, karena moveend tidak muncul kalau titiknya sama
+      cabangMap.setView([lat, lng], 17);
+      cbReverse(lat, lng);
     },
-    () => { if (statusEl) statusEl.textContent = 'Gagal mengambil lokasi. Izinkan akses lokasi lalu coba lagi.'; },
+    () => cbSetStatus('Gagal mengambil lokasi. Izinkan akses lokasi, atau geser peta ke lokasi lapak.'),
     { enableHighAccuracy: true, timeout: 10000 }
   );
 };
 
 window.__openCabangForm = function (rootId) {
   cabangFixedLat = null; cabangFixedLng = null; cabangHari = [0, 1, 2, 3, 4, 5, 6];
-  document.getElementById('cabang-overlay')?.remove();
+  cbCloseForm();
   const inputCss = 'width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);margin:4px 0 12px;';
   const overlay = document.createElement('div');
   overlay.id = 'cabang-overlay';
@@ -8487,9 +8604,24 @@ window.__openCabangForm = function (rootId) {
       <label style="font-size:11px;color:var(--text-faint);">Nama lapak cabang</label>
       <input id="cb-name" type="text" maxlength="80" placeholder="Contoh: Bakso Pak Slamet - Cabang Pasar" style="${inputCss}" />
 
+      <style>
+        #cb-pin-svg{position:absolute;left:-18px;top:-46px;transition:transform .18s ease;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));}
+        #cb-pin-shadow{position:absolute;left:-7px;top:-3px;width:14px;height:6px;border-radius:50%;background:rgba(0,0,0,.28);transition:transform .18s ease,opacity .18s;}
+        #cb-pin.lift #cb-pin-svg{transform:translateY(-12px);}
+        #cb-pin.lift #cb-pin-shadow{transform:scale(.6);opacity:.6;}
+        @media (prefers-reduced-motion:reduce){#cb-pin-svg,#cb-pin-shadow{transition:none;}}
+      </style>
       <label style="font-size:11px;color:var(--text-faint);">Lokasi lapak</label>
-      <button type="button" onclick="window.__captureCabangLocation()" style="display:block;width:100%;padding:10px;margin:4px 0 4px;border-radius:10px;border:1.5px dashed var(--stroke);background:transparent;color:var(--text-dim);font-size:12px;">📍 Pakai lokasi saya sekarang (berdiri di lapaknya)</button>
-      <div id="cb-location-status" style="font-size:11px;color:var(--text-faint);margin-bottom:12px;"></div>
+      <div style="font-size:11px;color:var(--text-faint);margin:2px 0 8px;">Geser peta sampai pin tepat di lapaknya. Cubit atau tekan + / − untuk memperbesar. Sedang berdiri di lapaknya? Tekan 🎯.</div>
+      <div style="position:relative;isolation:isolate;height:230px;border-radius:12px;overflow:hidden;border:1px solid var(--stroke);margin-bottom:6px;">
+        <div id="cb-map" style="position:absolute;inset:0;"></div>
+        <div id="cb-pin" aria-hidden="true" style="position:absolute;left:50%;top:50%;width:0;height:0;z-index:500;pointer-events:none;">
+          <div id="cb-pin-shadow"></div>
+          <svg id="cb-pin-svg" width="36" height="46" viewBox="0 0 36 46"><path d="M18 45C18 45 3 28 3 17a15 15 0 1 1 30 0c0 11-15 28-15 28z" style="fill:var(--brand,#FF6B35);stroke:#fff;stroke-width:2;"/><circle cx="18" cy="17" r="6" fill="#fff"/></svg>
+        </div>
+        <button type="button" aria-label="Pakai lokasi saya sekarang" onclick="window.__captureCabangLocation()" style="position:absolute;right:8px;bottom:8px;z-index:600;width:40px;height:40px;border-radius:50%;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:19px;cursor:pointer;">🎯</button>
+      </div>
+      <div id="cb-location-status" style="font-size:11px;color:var(--text-faint);margin-bottom:12px;min-height:14px;">Belum ada lokasi dipilih. Geser peta atau tekan 🎯.</div>
 
       <label style="font-size:11px;color:var(--text-faint);">Patokan lokasi (opsional)</label>
       <input id="cb-note" type="text" maxlength="120" placeholder="Contoh: Depan gerbang pasar, sebelah apotek" style="${inputCss}" />
@@ -8505,12 +8637,13 @@ window.__openCabangForm = function (rootId) {
 
       <div id="cb-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
       <div style="display:flex;gap:10px;">
-        <button onclick="document.getElementById('cabang-overlay').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
+        <button onclick="window.__closeCabangForm()" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:600;">Batal</button>
         <button id="cb-submit" onclick="window.__submitCabang('${rootId}')" style="flex:2;padding:11px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;">Simpan lapak cabang</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   renderCabangHari();
+  cbInitMap(rootId);
 };
 
 window.__submitCabang = async function (rootId) {
@@ -8523,7 +8656,7 @@ window.__submitCabang = async function (rootId) {
   const tutup = document.getElementById('cb-tutup').value;
 
   if (name.length < 2) { errEl.textContent = 'Nama lapak cabang wajib diisi.'; return; }
-  if (cabangFixedLat == null || cabangFixedLng == null) { errEl.textContent = 'Ambil lokasi lapak dulu supaya muncul di peta.'; return; }
+  if (cabangFixedLat == null || cabangFixedLng == null) { errEl.textContent = 'Tentukan lokasi lapak dulu — geser peta sampai pin tepat di lapaknya, atau tekan 🎯.'; return; }
   if (cabangHari.length === 0) { errEl.textContent = 'Pilih minimal 1 hari buka.'; return; }
   if (!is24 && (!buka || !tutup)) { errEl.textContent = 'Isi jam buka dan jam tutup.'; return; }
 
@@ -8559,7 +8692,7 @@ window.__submitCabang = async function (rootId) {
     const { data: row, error: rowErr } = await sb.from('vendors').select('id,name,slug,category,categories,custom_tags,emoji,mode_icon,whatsapp,show_whatsapp,active,active_until,lat,lng,photo_url,is_premium,premium_until,promo_until,promo_text,reminder_time,created_at,region,region_id,wilayah_kode,wilayah_label,rating_avg,rating_count,verification_status,fixed_lat,fixed_lng,schedule_text,location_note,default_open,jam_buka,jam_tutup,buka_24jam,hari_buka,tutup_libur_nasional,claim_status,cabang_dari').eq('id', newId).single();
     if (rowErr) throw rowErr;
     vendors.push(normalizeExpiry(row));
-    document.getElementById('cabang-overlay')?.remove();
+    cbCloseForm();
     showToast('Lapak cabang "' + name + '" ditambahkan. Ubah jenis dagangan atau foto lewat Edit Profil Toko.');
     renderPedagang();
   } catch (e) {
@@ -9913,9 +10046,9 @@ let jdTrackBusy = false;
 let jdTrackChecking = false;
 
 function jdTrackStateHtml() {
-  if (jdTrackConsent === true) return '✅ <b>Aktif</b> — posisi dicatat selama status Anda "sedang jualan".';
-  if (jdTrackConsent === false) return '⚪ <b>Tidak aktif</b> — tidak ada jejak yang dicatat.';
-  return '⚪ Belum diatur. Ketuk tombol di bawah untuk melihat penjelasan dan memilih.';
+  if (jdTrackConsent === true) return '<span class="pd-pill on">Aktif — posisi dicatat saat status "sedang jualan"</span>';
+  if (jdTrackConsent === false) return '<span class="pd-pill">Tidak aktif</span>';
+  return '<span class="pd-pill">Belum diatur</span>';
 }
 function jdTrackRefreshCard() {
   const el = document.getElementById('jd-track-state');
