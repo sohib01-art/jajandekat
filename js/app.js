@@ -5849,6 +5849,7 @@ ${renderLapakCabangCard(v)}
         <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
       </div>
     </div>
+    </div><!-- tutup panel promosi (sebelumnya hilang, bikin panel Ulasan & Bantuan ikut tersembunyi) -->
     <div class="pd-panel" data-tab="pesan" ${pdTab === 'pesan' ? '' : 'hidden'} role="tabpanel">
     ${CHAT_DALAM_APP_AKTIF ? `
     <div class="vendor-hero" style="margin-top:14px; text-align:left;">
