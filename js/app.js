@@ -5300,6 +5300,7 @@ function pdIc(name) {
     plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
     check: '<rect x="3.500" y="3.500" width="17" height="17" rx="4" fill="currentColor"/><path d="m8 12.200 3 3 5-5.500" fill="none" stroke="#fff" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"/>',
     gear: '<circle cx="12" cy="12" r="3.200" fill="none" stroke="currentColor" stroke-width="2.200"/><path d="M12 2.800v2.600M12 18.600v2.600M2.800 12h2.600M18.600 12h2.600M5.500 5.500l1.800 1.800M16.700 16.700l1.800 1.800M5.500 18.500l1.800-1.800M16.700 7.300l1.800-1.800" stroke="currentColor" stroke-width="2.400" stroke-linecap="round"/>',
+    dl: '<path d="M12 4v10m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"/>',
     chev: '<path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round"/>'
   };
   return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (I[name] || '') + '</svg>';
@@ -5687,6 +5688,13 @@ ${renderLapakCabangCard(v)}
       <button class="follow-btn" style="width:100%;padding:11px;background:#25D366;color:#fff;" onclick="window.__shareStatusImage('${v.id}','${v.name.replace(/'/g, "\\'")}')">
         🖼️ Bagikan
       </button>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--stroke);">
+        <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">🪧 Kartu QR untuk Akrilik</div>
+        <div style="font-size:11px;color:var(--text-faint);margin:3px 0 10px;line-height:1.5;">Tempel di belakang akrilik QRIS Anda. Ukuran A6 (10,5 × 14,8 cm), siap cetak. Pembeli yang scan otomatis mengikuti toko Anda.</div>
+        ${pdSoftBtn("window.__kartuAkrilik('" + v.id + "',true)", 'dl', 'Unduh Kartu (dengan maskot)')}
+        <div style="height:8px;"></div>
+        ${pdSoftBtn("window.__kartuAkrilik('" + v.id + "',false)", 'dl', 'Unduh Kartu (polos)')}
+      </div>
     </div>
 
 <div class="vendor-hero" style="margin-top:14px; text-align:left;">
@@ -6345,6 +6353,89 @@ window.__shareStatusImage = async function (vendorId, vendorName) {
   const blob = await generateVendorShareImage(v, vendorName);
   const caption = v.active ? `${vendorName} lagi jualan sekarang! Cek & follow di: ${link}` : `Yuk follow ${vendorName} di JajanDekat! ${link}`;
   shareGeneratedImage(blob, `jajandekat-${vendorName.replace(/\s+/g, '-')}.png`, caption);
+};
+
+// ---------- KARTU QR AKRILIK (A6, 300 dpi) — ditempel di belakang akrilik QRIS pedagang ----------
+// Layout dalam milimeter (A6 = 105 x 148 mm). Teks & QR berada di dalam margin aman 5 mm.
+async function generateKartuAkrilik(v, withMascot) {
+  const PXMM = 1240 / 105;            // 300 dpi
+  const W = 1240, H = Math.round(148 * PXMM);
+  const mm = (n) => n * PXMM;
+  const pt = (n) => n * 300 / 72;
+  const cx = mm(52.5);
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const FF = "'Poppins', 'Segoe UI', Roboto, sans-serif";
+  try { await Promise.all([document.fonts.load(`700 40px ${FF}`), document.fonts.load(`500 40px ${FF}`), document.fonts.load(`400 40px ${FF}`)]); } catch (_) {}
+  const fit = (text, weight, sizePx, maxW) => { let s = sizePx; ctx.font = `${weight} ${s}px ${FF}`; while (ctx.measureText(text).width > maxW && s > 18) { s -= 1; ctx.font = `${weight} ${s}px ${FF}`; } return s; };
+
+  // Latar + header oranye + lembar krem membulat (sama seperti di aplikasi)
+  ctx.fillStyle = '#FAF7F2'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#FF6B4A'; ctx.fillRect(0, 0, W, mm(44));
+  ctx.fillStyle = '#FAF7F2'; roundRect(ctx, -mm(5), mm(37), W + mm(10), H, mm(8)); ctx.fill();
+
+  // Logo resmi + wordmark
+  const [logo, mascot] = await Promise.all([loadImageSafe('icons/logo_pin.png'), withMascot ? loadImageSafe('icons/maskot.png') : Promise.resolve(null)]);
+  if (logo) { const lh = mm(16), lw = lh * logo.width / logo.height; ctx.drawImage(logo, cx - lw / 2, mm(4.5), lw, lh); }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.font = `700 ${pt(21)}px ${FF}`;
+  const w1 = ctx.measureText('Jajan').width, w2 = ctx.measureText('Dekat').width, x0 = cx - (w1 + w2) / 2;
+  ctx.fillStyle = '#FFFFFF'; ctx.fillText('Jajan', x0, mm(30));
+  ctx.fillStyle = '#FFD54F'; ctx.fillText('Dekat', x0 + w1, mm(30));
+  ctx.textAlign = 'center'; ctx.fillStyle = '#FFFFFF'; ctx.font = `500 ${pt(7.6)}px ${FF}`;
+  ctx.fillText('Cek dulu, baru jalan.', cx, mm(35.4));
+
+  // Teks ajakan (nama toko otomatis mengecil kalau panjang)
+  ctx.fillStyle = '#201A13'; fit('Suka jajanan kami?', 700, pt(14.5), mm(91)); ctx.fillText('Suka jajanan kami?', cx, mm(51));
+  const nm = String(v.name || 'Pedagang Keliling');
+  ctx.fillStyle = '#E8502F'; fit(nm, 700, pt(11.5), mm(91)); ctx.fillText(nm, cx, mm(57.6));
+  const sub = 'Scan & ikuti, dapat kabar tiap kami jualan.';
+  ctx.fillStyle = '#6F675B'; fit(sub, 400, pt(7.8), mm(93)); ctx.fillText(sub, cx, mm(63.2));
+
+  // Panel QR
+  const PX = cx - mm(27), PY = mm(68.5), PS = mm(54);
+  ctx.fillStyle = '#F0E3DA'; roundRect(ctx, PX + mm(0.8), PY + mm(0.8), PS, PS, mm(5)); ctx.fill();
+  ctx.fillStyle = '#FFFFFF'; roundRect(ctx, PX, PY, PS, PS, mm(5)); ctx.fill();
+  const qrPx = Math.round(mm(46));
+  const qr = await generateQrCanvas(followLinkFor(v.id), qrPx);
+  if (!qr) return null;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(qr, PX + mm(4), PY + mm(4), mm(46), mm(46));
+  ctx.imageSmoothingEnabled = true;
+
+  // Maskot menunjuk ke QR (di kiri panel, tidak menyentuh area QR)
+  if (mascot) { const mw = mm(25), mh = mw * mascot.height / mascot.width; ctx.drawImage(mascot, mm(1.2), mm(123) - mh, mw, mh); }
+
+  // Sudut penanda oranye
+  ctx.strokeStyle = '#FF6B4A'; ctx.lineWidth = pt(1.6); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const k = mm(7), m = -mm(2.2);
+  [[PX, PY, 1, 1], [PX + PS, PY, -1, 1], [PX, PY + PS, 1, -1], [PX + PS, PY + PS, -1, -1]].forEach(([x, y, dx, dy]) => {
+    const ax = x - dx * m, ay = y - dy * m;
+    ctx.beginPath(); ctx.moveTo(ax + dx * k, ay); ctx.lineTo(ax, ay); ctx.lineTo(ax, ay + dy * k); ctx.stroke();
+  });
+
+  // Petunjuk + penanda "bukan QR pembayaran" + alamat
+  ctx.fillStyle = '#201A13'; ctx.font = `500 ${pt(7.6)}px ${FF}`; ctx.fillText('Buka kamera HP, arahkan ke kode di atas', cx, mm(128.2));
+  const tag = 'INI BUKAN QR PEMBAYARAN'; ctx.font = `700 ${pt(6.4)}px ${FF}`;
+  const tw = ctx.measureText(tag).width + mm(8), th = mm(5.6), ty = mm(137) - th;
+  ctx.fillStyle = '#FFE9E1'; roundRect(ctx, cx - tw / 2, ty, tw, th, th / 2); ctx.fill();
+  ctx.strokeStyle = '#E8502F'; ctx.lineWidth = pt(0.7); roundRect(ctx, cx - tw / 2, ty, tw, th, th / 2); ctx.stroke();
+  ctx.fillStyle = '#E8502F'; ctx.fillText(tag, cx, mm(137) - mm(1.75));
+  ctx.fillStyle = '#FF6B4A'; ctx.font = `700 ${pt(7.4)}px ${FF}`; ctx.fillText('jajandekat.my.id', cx, mm(143));
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+window.__kartuAkrilik = async function (vendorId, withMascot) {
+  const v = vendors.find(x => x.id === vendorId);
+  if (!v) return;
+  if (typeof QRCode === 'undefined') { showToast('QR belum termuat. Periksa sinyal lalu coba lagi.'); return; }
+  showToast('Membuat kartu akrilik…');
+  const blob = await generateKartuAkrilik(v, !!withMascot);
+  if (!blob) { showToast('Gagal membuat kartu. Coba lagi.'); return; }
+  const nama = String(v.name || 'toko').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'toko';
+  shareGeneratedImage(blob, `kartu-akrilik-jajandekat-${nama}.png`, `Kartu QR akrilik ${v.name} — cetak ukuran A6 (10,5 × 14,8 cm).`);
 };
 
 // Dipanggil dari layar Pembeli (tombol "Bagikan Aplikasi")
