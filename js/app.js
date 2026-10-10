@@ -5315,6 +5315,18 @@ function pdIc(name) {
     cam: '<path d="M4 8.500a2 2 0 0 1 2-2h1.600l1.200-1.800h4.400l1.200 1.800H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.500Z" fill="none" stroke="#E8502F" stroke-width="1.800" stroke-linejoin="round"/><circle cx="12" cy="12.500" r="3" fill="none" stroke="#E8502F" stroke-width="1.800"/><circle cx="19" cy="18" r="4" fill="#FF5A2D"/><path d="M19 16v4M17 18h4" stroke="#fff" stroke-width="1.400" stroke-linecap="round"/>',
     minus: '<circle cx="12" cy="12" r="10" fill="#FF5A2D"/><path d="M7.500 12h9" stroke="#fff" stroke-width="2.400" stroke-linecap="round"/>',
     live: '<circle cx="12" cy="12" r="10" fill="#22A559"/><path d="m7.600 12.300 3 3 5.800-6" fill="none" stroke="#fff" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round"/>',
+    target: '<circle cx="11" cy="13" r="8" fill="#fff" stroke="#E5383B" stroke-width="2"/><circle cx="11" cy="13" r="4.800" fill="#fff" stroke="#E5383B" stroke-width="2"/><circle cx="11" cy="13" r="1.800" fill="#E5383B"/><path d="m11 13 8.500-8.500M16.500 3.500v3.600h3.600" fill="none" stroke="#1B2A4E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    crown: '<path d="M3.500 8.500 8 12l4-6.500 4 6.500 4.500-3.500-1.600 10H5.100L3.500 8.500Z" fill="#FFB020" stroke="#E8890C" stroke-width="1.500" stroke-linejoin="round"/><circle cx="12" cy="14.500" r="1.600" fill="#E5383B"/><rect x="5.200" y="19.200" width="13.600" height="1.800" rx=".9" fill="#E8890C"/>',
+    fire: '<path d="M12 2.800c.6 3-1.800 4.200-3.200 6.300C7.500 11 7 12.500 7 14a5 5 0 0 0 10 0c0-2-1-3.500-2-4.600-.2 1.300-.9 2.100-1.800 2.500.5-3-.2-6.500-1.200-9.100Z" fill="#FF5A2D"/><path d="M12 12.500c-1.500 1.500-2.300 2.500-2.300 3.800a2.300 2.300 0 0 0 4.600 0c0-1.200-.8-2.200-2.300-3.800Z" fill="#FFC857"/>',
+    person: '<circle cx="12" cy="8.500" r="3.800" fill="#fff"/><path d="M4.500 20.500c0-4.200 3.400-6.700 7.500-6.700s7.500 2.500 7.500 6.700Z" fill="#fff"/>',
+    group: '<circle cx="12" cy="8" r="3.200" fill="#fff"/><circle cx="5.800" cy="9.800" r="2.300" fill="#fff"/><circle cx="18.200" cy="9.800" r="2.300" fill="#fff"/><path d="M6.500 19c0-3.600 2.400-5.500 5.500-5.500s5.500 1.900 5.500 5.500Z" fill="#fff"/><path d="M2.500 18c0-2.600 1.500-4 3.600-4 .6 0 1.100.1 1.600.3-1.200 1-1.900 2.300-2 3.700H2.500ZM21.500 18c0-2.600-1.500-4-3.600-4-.6 0-1.100.1-1.600.3 1.200 1 1.900 2.300 2 3.700h3.200Z" fill="#fff"/>',
+    bulb: '<path d="M12 3a6 6 0 0 0-3.600 10.800c.7.600 1.100 1.300 1.100 2.200h5c0-.9.400-1.600 1.100-2.200A6 6 0 0 0 12 3Z" fill="#FFD54F" stroke="#E8A90C" stroke-width="1.400" stroke-linejoin="round"/><path d="M9.700 18.200h4.600M10.500 20.500h3" stroke="#B7791F" stroke-width="1.600" stroke-linecap="round"/>',
+    hourglass: '<path d="M7 3.500h10M7 20.500h10M8 3.500c0 4 3 4.800 4 8.500-1 3.700-4 4.500-4 8.500m8-17c0 4-3 4.800-4 8.500 1 3.700 4 4.500 4 8.500" fill="none" stroke="#8A6D00" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round"/>',
+    copy: '<rect x="8.500" y="8.500" width="11" height="11" rx="2.500" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.500 8.500V6.500a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.700 0l3.300-3.300a4 4 0 0 0-5.700-5.700L12 6.300M14 10a4 4 0 0 0-5.700 0L5 13.300A4 4 0 0 0 10.700 19l1.300-1.300" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    sign: '<path d="M6 21V4M6 5h12l-2 3.500L18 12H6" fill="none" stroke="#E8502F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    save: '<path d="M5 4.500h11.500L19.500 7.500V19a1 1 0 0 1-1 1H5.500a1 1 0 0 1-1-1V5.500a1 1 0 0 1 .5-1Z" fill="none" stroke="#1B2A4E" stroke-width="1.900" stroke-linejoin="round"/><path d="M8 4.500v4.500h7V4.500M8 20v-6h8v6" fill="none" stroke="#1B2A4E" stroke-width="1.900" stroke-linejoin="round"/>',
+    wag: '<circle cx="12" cy="12" r="10" fill="#25D366"/><path d="M12 5.800a6.200 6.200 0 0 0-5.300 9.400L5.800 18.200l3.100-.8A6.200 6.200 0 1 0 12 5.800Z" fill="none" stroke="#fff" stroke-width="1.500"/><path d="M9.700 9.400c.2 2.200 2.200 4.300 4.900 5l.9-1.200-1.500-.8-.7.600c-.8-.3-1.400-1-1.800-1.800l.6-.7-.8-1.500Z" fill="#fff"/>',
     dl: '<path d="M12 4v10m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"/>',
     chev: '<path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round"/>'
   };
@@ -5381,6 +5393,52 @@ function pdCardHead(icon, title, desc) {
   document.head.appendChild(st);
 })();
 // ---------- BERANDA PEDAGANG: TAB ----------
+(function injectPdPromoCss() {
+  if (document.getElementById('pd-promo-css')) return;
+  const st = document.createElement('style'); st.id = 'pd-promo-css';
+  st.textContent = `
+  /* Tombol WhatsApp seragam: hijau khas WhatsApp (dipakai di semua tombol WA); #15843E dipilih agar teks putih terbaca jelas */
+  .pd-wa{background:#15843E!important;box-shadow:0 10px 20px -10px #15843E!important}
+  .pd-wa.sm{min-height:46px;font-size:13.5px;border-radius:12px}
+  .pd-wa svg{width:22px;height:22px;flex:0 0 auto}
+  .pd-btn-gap{height:10px}
+  .cp-row{display:flex;align-items:center;gap:12px;margin-top:10px;padding:12px;border-radius:14px;background:#F6F2EE}
+  .cp-ic{flex:0 0 auto;display:grid;place-items:center;width:42px;height:42px;border-radius:50%}
+  .cp-ic svg{width:24px;height:24px}
+  .cp-tx{flex:1;min-width:0}
+  .cp-tx b{display:block;font:600 13px/1.3 'Poppins',system-ui,sans-serif;color:#1B2A4E}
+  .cp-tx small{display:block;margin-top:1px;font-size:11.5px;line-height:1.4;color:#6F7890}
+  .cp-bar{height:7px;margin-top:8px;border-radius:99px;background:#E4DED8;overflow:hidden}
+  .cp-bar i{display:block;height:100%;border-radius:99px;background:#FF5A2D;transition:width .3s}
+  .cp-bar i.ok{background:#22A559}
+  .cp-val{display:flex;align-items:center;gap:6px;flex:0 0 auto;font:600 13px 'Poppins',system-ui,sans-serif;color:#6F7890}
+  .cp-val svg{width:20px;height:20px}
+  .cp-tip{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:12px;border-radius:14px;background:#FFF6E3;font-size:11.5px;line-height:1.5;color:#7A6A4A}
+  .cp-tip>svg{flex:0 0 auto;width:24px;height:24px}
+  .cp-tip .wa-line{display:flex;gap:6px;align-items:center;margin-top:6px;color:#5A4A2A}
+  .cp-tip .wa-line svg{width:20px;height:20px;flex:0 0 auto}
+  .cp-tip b.wa{color:#E8502F}
+  .cp-done{display:flex;gap:8px;align-items:center;margin-top:10px;padding:12px;border-radius:14px;background:#E6F6EC;color:#15803D;font-weight:700;font-size:12px;line-height:1.45}
+  .cp-done svg{width:22px;height:22px;flex:0 0 auto}
+  .pd-warn{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;padding:10px 12px;border:1px solid #FFE08A;border-radius:12px;background:#FFF3CD;font-size:11.5px;line-height:1.5;color:#8A6D00}
+  .pd-warn svg{width:18px;height:18px;flex:0 0 auto;margin-top:1px}
+  .pd-stats{display:flex;gap:8px;margin-top:4px}
+  .pd-stat{flex:1;padding:12px 8px;border-radius:14px;background:#F6F2EE;text-align:center}
+  .pd-stat b{display:block;font:800 19px 'Poppins',system-ui,sans-serif;color:#FF5A2D}
+  .pd-stat small{display:block;margin-top:2px;font-size:10.5px;color:#6F7890}
+  .pd-promo-sec{margin-top:14px;padding-top:14px;border-top:1px solid #EFE7E0}
+  .pd-promo-sec h4{margin:0 0 3px;font:700 14px 'Poppins',system-ui,sans-serif;color:#1B2A4E}
+  .pd-promo-row{display:flex;gap:8px;margin-top:10px;align-items:stretch}
+  .pd-promo-row input{flex:1;min-width:0}
+  .pd-savebtn{flex:0 0 auto;width:52px;display:grid;place-items:center;border:1px solid var(--stroke,#E5E7EB);border-radius:12px;background:#fff;cursor:pointer;padding:0}
+  .pd-savebtn svg{width:22px;height:22px}
+  .pd-sec2 button{display:flex;align-items:center;justify-content:center;gap:6px}
+  .pd-sec2 button svg{width:16px;height:16px;flex:0 0 auto}
+  .pd-acc summary svg{width:18px;height:18px;margin-right:8px;flex:0 0 auto}
+  .pd-acc summary>span{display:flex;align-items:center}
+  `;
+  document.head.appendChild(st);
+})();
 let pdTab = ''; // '' = menu tertutup (tampilan Beranda seperti mockup); ketuk menu untuk membuka panelnya
 (function injectPdHomeCss() {
   if (document.getElementById('pd-home-css')) return;
@@ -5724,12 +5782,12 @@ ${renderLapakCabangCard(v)}
       <div id="share-preview-box" class="pd-prev"><div class="pd-prev-msg">Membuat pratinjau…</div></div>
       <button type="button" class="pd-wa" onclick="window.__shareStatusImage('${v.id}')">${pdIc('wa')}<span>Bagikan ke WhatsApp</span></button>
       <div class="pd-sec2">
-        <button type="button" onclick="window.__copyVendorLink('${v.id}')">📋 Salin link toko</button>
-        <button type="button" onclick="window.__shareVendorLink('${v.id}')">🔗 Bagikan link saja</button>
+        <button type="button" onclick="window.__copyVendorLink('${v.id}')">${pdIc('copy')}<span>Salin link toko</span></button>
+        <button type="button" onclick="window.__shareVendorLink('${v.id}')">${pdIc('link')}<span>Bagikan link saja</span></button>
       </div>
       <div class="pd-linkline">${escapeHtml(vendorLinkFor(v) || '')}</div>
       <details class="pd-acc">
-        <summary>🪧 Kartu QR untuk akrilik QRIS</summary>
+        <summary><span>${pdIc('sign')}Kartu QR untuk akrilik QRIS</span></summary>
         <div class="pd-card-ds">Tempel di belakang akrilik QRIS Anda. Ukuran A6 (10,5 × 14,8 cm), siap cetak. Pembeli yang scan otomatis mengikuti toko Anda.</div>
         ${pdSoftBtn("window.__kartuAkrilik('" + v.id + "',true)", 'dl', 'Unduh Kartu (dengan maskot)')}
         <div style="height:8px;"></div>
@@ -5737,21 +5795,12 @@ ${renderLapakCabangCard(v)}
       </details>
     </div>
 
-<div class="vendor-hero" style="margin-top:14px; text-align:left;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <span style="font-size:20px;">🎯</span>
-        <div>
-          <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Kampanye: Rekrut & Dapat Premium Gratis</div>
-          <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Ajak 1 pedagang lain (yang benar-benar aktif jualan) + 10 pembeli baru lewat link Anda → 1 bulan Premium GRATIS</div>
-        </div>
-      </div>
-      <div id="campaign-progress" style="margin-bottom:4px;">Memuat progres...</div>
-      <div style="font-size:11px;color:var(--text-faint);text-align:center;padding-top:6px;border-top:1px solid var(--stroke);margin-top:6px;">
-        💡 Pakai tombol <b style="color:var(--brand);">"Bagikan ke WhatsApp"</b> di atas untuk kejar target ini
-      </div>
+<div class="pd-card" id="campaign-card">
+      ${pdCardHead('target', 'Kampanye: Rekrut & Dapat Premium Gratis', 'Ajak 1 pedagang lain (yang benar-benar aktif jualan) + 10 pembeli baru lewat link Anda, dapat 1 bulan Premium GRATIS.')}
+      <div id="campaign-progress">Memuat progres...</div>
     </div>
 
-    <div class="vendor-hero" style="margin-top:14px; text-align:left;">
+    <div class="pd-card">
       ${v.is_premium ? `
         ${(() => {
           if (!v.premium_until) return '';
@@ -5759,76 +5808,37 @@ ${renderLapakCabangCard(v)}
           if (daysLeft > 10) return '';
           const untilStr = new Date(v.premium_until).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
           return `
-            <div style="background:#FFF3CD;border:1px solid #FFE08A;border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start;">
-              <span style="font-size:16px;">⏳</span>
-              <div style="font-size:11.5px;color:#8A6D00;line-height:1.5;">
-                ${daysLeft <= 0
-                  ? `Premium Anda <b>sudah habis</b>. Hubungi admin untuk perpanjang.`
-                  : `Premium Anda akan habis dalam <b>${daysLeft} hari</b> (${untilStr}). Hubungi admin untuk perpanjang.`}
-              </div>
-            </div>`;
+            <div class="pd-warn">${pdIc('hourglass')}<div>
+              ${daysLeft <= 0
+                ? `Premium Anda <b>sudah habis</b>. Hubungi admin untuk perpanjang.`
+                : `Premium Anda akan habis dalam <b>${daysLeft} hari</b> (${untilStr}). Hubungi admin untuk perpanjang.`}
+            </div></div>`;
         })()}
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:20px;">⭐</span>
-          <div>
-            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Akun Premium Aktif</div>
-            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Terima kasih sudah mendukung JajanDekat!</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:12px;">
-          <div style="flex:1;background:var(--bg);border-radius:12px;padding:10px;text-align:center;">
-            <div id="premium-follow-count" style="font-family:'Poppins';font-weight:800;font-size:18px;color:var(--brand);">...</div>
-            <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Pengikut</div>
-          </div>
-          <div style="flex:1;background:var(--bg);border-radius:12px;padding:10px;text-align:center;">
-            <div style="font-family:'Poppins';font-weight:800;font-size:18px;color:var(--brand);">8 jam</div>
-            <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">Durasi maks.</div>
-          </div>
+        ${pdCardHead('crown', 'Akun Premium Aktif', 'Terima kasih sudah mendukung JajanDekat!')}
+        <div class="pd-stats">
+          <div class="pd-stat"><b id="premium-follow-count">...</b><small>Pengikut</small></div>
+          <div class="pd-stat"><b>8 jam</b><small>Durasi maks.</small></div>
         </div>
       ` : `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="font-size:20px;">⭐</span>
-          <div>
-            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Upgrade ke Premium</div>
-            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Tampil di atas daftar + badge terpercaya</div>
-          </div>
-        </div>
-        <button onclick="window.__requestPremium('${v.id}')"
-           class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:var(--brand);color:#fff;border:none;">
-          💬 Hubungi Admin via WhatsApp
-        </button>
+        ${pdCardHead('crown', 'Upgrade ke Premium', 'Tampil di atas daftar + badge terpercaya')}
+        <button type="button" class="pd-wa sm" onclick="window.__requestPremium('${v.id}')">${pdIc('wa')}<span>Hubungi Admin via WhatsApp</span></button>
       `}
     </div>
 
-        <div class="vendor-hero" id="vendor-promo-card" style="margin-top:14px; text-align:left;">
+    <div class="pd-card" id="vendor-promo-card">
       ${isPromoActive(v) ? `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:20px;">🔥</span>
-          <div>
-            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promo Lokal Aktif</div>
-            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sampai ${new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} — kartu Anda disorot & tampil lebih atas</div>
-          </div>
-        </div>
+        ${pdCardHead('fire', 'Promo Lokal Aktif', 'Sampai ' + new Date(v.promo_until).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + ' — kartu Anda disorot & tampil lebih atas.')}
       ` : `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="font-size:20px;">🔥</span>
-          <div>
-            <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">Promosi Lokal Harian</div>
-            <div style="font-size:11px;color:var(--text-faint);margin-top:1px;">Sorot kartu Anda ke posisi atas mulai Rp10rb/hari — cocok buat hari ramai/dagangan baru</div>
-          </div>
-        </div>
-        <button onclick="window.__requestPromo('${v.id}')"
-           class="follow-btn" style="display:block;text-align:center;width:100%;padding:10px;background:#F5A623;color:#fff;border:none;">
-          💬 Pasang Promosi via WhatsApp
-        </button>
+        ${pdCardHead('megaphone', 'Promosi Lokal Harian', 'Sorot kartu Anda ke posisi atas mulai Rp10rb/hari — cocok buat hari ramai/dagangan baru')}
+        <button type="button" class="pd-wa sm" onclick="window.__requestPromo('${v.id}')">${pdIc('wa')}<span>Pasang Promosi via WhatsApp</span></button>
       `}
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke);">
-        <div style="font-size:12px;font-weight:700;margin-bottom:2px;">Tulisan promo di kartu</div>
-        <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;line-height:1.45;">Tampil di pita oranye pada foto kartu Anda saat promo aktif. Tulis <b>singkat</b> (maks. ±20 huruf) supaya terbaca penuh. Ketuk salah satu pilihan di bawah, atau tulis sendiri.</div>
+      <div class="pd-promo-sec">
+        <h4>Tulisan promo di kartu</h4>
+        <div class="pd-card-ds" style="margin:0 0 10px;">Tampil di pita oranye pada foto kartu Anda saat promo aktif. Tulis <b>singkat</b> (maks. ±20 huruf) supaya terbaca penuh. Ketuk salah satu pilihan di bawah, atau tulis sendiri.</div>
         <div class="promo-chips">${PROMO_CHIPS.map(t => `<button type="button" class="promo-chip" onclick="window.__promoPick(this.textContent)">${t}</button>`).join('')}</div>
-        <div style="display:flex;gap:6px;margin-top:8px;">
+        <div class="pd-promo-row">
           <input id="promo-text-input" type="text" maxlength="80" value="${(v.promo_text || '').replace(/"/g, '&quot;')}" placeholder="Contoh: Diskon 20%" oninput="window.__promoCount()" style="flex:1;" />
-          <button onclick="window.__savePromoText('${v.id}')" style="width:auto;padding:0 14px;" aria-label="Simpan tulisan promo">💾</button>
+          <button onclick="window.__savePromoText('${v.id}')" class="pd-savebtn" aria-label="Simpan tulisan promo">${pdIc('save')}</button>
         </div>
         <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:11px;">
           <span id="promo-hint" style="color:var(--text-faint);">${promoGuideState(v.promo_text).hint}</span>
@@ -5838,9 +5848,6 @@ ${renderLapakCabangCard(v)}
         <div class="promo-preview"><span id="promo-preview-text" class="promo-preview-rb">${escapeHtml(promoGuideState(v.promo_text).preview)}</span></div>
         <div id="promo-text-error" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
       </div>
-    </div>
-
-    
     </div>
     <div class="pd-panel" data-tab="pesan" ${pdTab === 'pesan' ? '' : 'hidden'} role="tabpanel">
     ${CHAT_DALAM_APP_AKTIF ? `
@@ -5879,9 +5886,9 @@ ${renderLapakCabangCard(v)}
     </div>
 
     <div class="hm-rows">
-      <button type="button" class="hm-row" onclick="window.__openSecurityModal()"><span class="hm-ric" style="background:#2F6FED;">${pdIc('rsec')}</span><span class="hm-rtx"><b>Keamanan Akun</b><small>Lindungi akun dan data usaha Anda</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
-      <button type="button" class="hm-row" onclick="window.__hmOpenTab('bantuan')"><span class="hm-ric" style="background:#2F6FED;">${pdIc('rhelp')}</span><span class="hm-rtx"><b>Pusat Bantuan</b><small>Panduan, FAQ dan kontak layanan</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
-      <button type="button" class="hm-row" onclick="window.open('terms.html','_blank')"><span class="hm-ric" style="background:#22A559;">${pdIc('rdoc')}</span><span class="hm-rtx"><b>Syarat &amp; Ketentuan</b><small>Ketentuan penggunaan aplikasi</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
+      <button type="button" class="hm-row" onclick="window.__openSecurityModal()"><span class="hm-ric" style="background:linear-gradient(135deg,#4C8DFF,#2F6FED);">${pdIc('rsec')}</span><span class="hm-rtx"><b>Keamanan Akun</b><small>Lindungi akun dan data usaha Anda</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
+      <button type="button" class="hm-row" onclick="window.__hmOpenTab('bantuan')"><span class="hm-ric" style="background:linear-gradient(135deg,#9B7BFF,#6D45E8);">${pdIc('rhelp')}</span><span class="hm-rtx"><b>Pusat Bantuan</b><small>Panduan, FAQ dan kontak layanan</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
+      <button type="button" class="hm-row" onclick="window.open('terms.html','_blank')"><span class="hm-ric" style="background:linear-gradient(135deg,#34D27B,#1FA85A);">${pdIc('rdoc')}</span><span class="hm-rtx"><b>Syarat &amp; Ketentuan</b><small>Ketentuan penggunaan aplikasi</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
     </div>
   `;
 
@@ -5949,21 +5956,28 @@ async function loadCampaignProgress(vendorId) {
   const buyerDone = buyerCount >= 10;
   const allDone = vendorDone && buyerDone;
 
+  const okIc = pdIc('live');
   el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <span style="font-size:14px;">${vendorDone ? '🟢' : '⚪'}</span>
-      <span style="font-size:11.5px;">1 pedagang aktif direkrut ${vendorDone ? `(${escapeHtml(validVendorRecruit.name)})` : '— belum ada yang memenuhi syarat'}</span>
+    <div class="cp-row">
+      <span class="cp-ic" style="background:#22A559;">${pdIc('person')}</span>
+      <div class="cp-tx">
+        <b>1 pedagang aktif direkrut</b>
+        <small>${vendorDone ? escapeHtml(validVendorRecruit.name) : '— belum ada yang memenuhi syarat'}</small>
+        <div class="cp-bar"><i class="${vendorDone ? 'ok' : ''}" style="width:${vendorDone ? 100 : 0}%;"></i></div>
+      </div>
+      <span class="cp-val">${vendorDone ? 1 : 0}/1 ${vendorDone ? okIc : ''}</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <span style="font-size:14px;">${buyerDone ? '🟢' : '⚪'}</span>
-      <span style="font-size:11.5px;">${buyerCount}/10 pembeli baru lewat link Anda</span>
-    </div>
-    <div style="background:var(--stroke);border-radius:999px;height:7px;overflow:hidden;margin-bottom:6px;">
-      <div style="background:${allDone ? 'var(--aktif)' : 'var(--brand)'};height:100%;width:${((buyerCount / 10) * 0.5 + (vendorDone ? 0.5 : 0)) * 100}%;transition:width .3s;"></div>
+    <div class="cp-row">
+      <span class="cp-ic" style="background:#2F6FED;">${pdIc('group')}</span>
+      <div class="cp-tx">
+        <b>10 pembeli baru lewat link Anda</b>
+        <div class="cp-bar"><i class="${buyerDone ? 'ok' : ''}" style="width:${(buyerCount / 10) * 100}%;"></i></div>
+      </div>
+      <span class="cp-val">${buyerCount}/10 ${buyerDone ? okIc : ''}</span>
     </div>
     ${allDone
-      ? '<div style="font-size:11.5px;color:var(--aktif);font-weight:700;">🎉 Syarat terpenuhi! Admin akan meninjau dan mengaktifkan Premium Anda dalam 1-2 hari.</div>'
-      : '<div style="font-size:10.5px;color:var(--text-faint);">Pedagang dihitung sah setelah aktif jualan minimal 3x. Pembeli dihitung dari yang follow lewat link/QR Anda.</div>'}
+      ? `<div class="cp-done">${okIc}<span>Syarat terpenuhi! Admin akan meninjau dan mengaktifkan Premium Anda dalam 1-2 hari.</span></div>`
+      : `<div class="cp-tip">${pdIc('bulb')}<div>Pedagang dihitung sah setelah aktif jualan minimal 3x. Pembeli dihitung dari yang follow lewat link/QR Anda.<div class="wa-line">${pdIc('wag')}<span>Pakai tombol <b class="wa">"Bagikan ke WhatsApp"</b> di atas untuk kejar target ini.</span></div></div></div>`}
   `;
 }
 
