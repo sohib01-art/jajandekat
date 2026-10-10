@@ -1601,6 +1601,7 @@ function hmSearchHtml() {
   return HM_SEARCH_HTML + `<button type="button" class="hm-locrow" onclick="window.__enableLocation && window.__enableLocation()" aria-label="Lokasi"><svg viewBox="0 0 24 24" width="16" height="16" fill="#fff" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 6.2 12.2 6.5 12.5.3.3.7.3 1 0C12.8 21.2 19 14.2 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg><span id="loc-pill-text">${escapeHtml(n)}</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`;
 }
 function renderPembeli() {
+  { const tg = document.querySelector('header .tagline'); if (tg) tg.textContent = 'Jajan Enak, Dekat di Sekitar Kamu'; }
   { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = (bottomView === 'status') ? hmSearchHtml() : ''; }
   if (bottomView === 'peta') return renderPetaView();
   if (bottomView === 'cari') return renderCariView();
@@ -5302,6 +5303,18 @@ function pdIc(name) {
     gear: '<circle cx="12" cy="12" r="3.200" fill="none" stroke="currentColor" stroke-width="2.200"/><path d="M12 2.800v2.600M12 18.600v2.600M2.800 12h2.600M18.600 12h2.600M5.500 5.500l1.800 1.800M16.700 16.700l1.800 1.800M5.500 18.500l1.800-1.800M16.700 7.300l1.800-1.800" stroke="currentColor" stroke-width="2.400" stroke-linecap="round"/>',
     share: '<circle cx="6.500" cy="12" r="2.800" fill="#FF5A2D"/><circle cx="17.500" cy="6" r="2.800" fill="#FF5A2D"/><circle cx="17.500" cy="18" r="2.800" fill="#FF5A2D"/><path d="m8.700 10.800 6.600-3.600M8.700 13.200l6.600 3.600" stroke="#E8590C" stroke-width="1.600" stroke-linecap="round"/>',
     wa: '<path d="M12 3.500a8.500 8.500 0 0 0-7.300 12.800L3.500 20.500l4.300-1.100A8.500 8.500 0 1 0 12 3.500Z" fill="currentColor"/><path d="M9 8.500c.3 2.600 2.700 5.200 6 6l1-1.400-1.800-.9-.8.700c-.9-.4-1.700-1.200-2.100-2.100l.7-.8-.9-1.800Z" fill="#25D366"/>',
+    megaphone: '<path d="M3.500 10.200v3.600a1 1 0 0 0 1 1H7l9.500 4.200V5L7 9.200H4.500a1 1 0 0 0-1 1Z" fill="#FF5A2D" stroke="#D93A12" stroke-width="1.400" stroke-linejoin="round"/><path d="M7 14.800l1.200 4.400h2.600L9.700 15" fill="#FFB020" stroke="#D93A12" stroke-width="1.200" stroke-linejoin="round"/><path d="M19 9.200a4.200 4.200 0 0 1 0 5.600" fill="none" stroke="#D93A12" stroke-width="1.800" stroke-linecap="round"/>',
+    star: '<path d="m12 3.200 2.700 5.600 6.100.9-4.400 4.300 1 6.100L12 17.200l-5.400 2.900 1-6.100L3.200 9.700l6.100-.9L12 3.200Z" fill="#FFB020" stroke="#E8890C" stroke-width="1.400" stroke-linejoin="round"/>',
+    headset: '<path d="M5 14v-2a7 7 0 0 1 14 0v2" fill="none" stroke="#2F6FED" stroke-width="2.200" stroke-linecap="round"/><rect x="3.200" y="12.800" width="4.200" height="6.400" rx="1.700" fill="#2F6FED"/><rect x="16.600" y="12.800" width="4.200" height="6.400" rx="1.700" fill="#2F6FED"/><path d="M18.700 19.200c0 1.500-2.100 2.400-4.700 2.400" fill="none" stroke="#2F6FED" stroke-width="1.800" stroke-linecap="round"/>',
+    rsec: '<path d="M12 3 4.800 6v5.600c0 4.400 3 7.700 7.200 9.200 4.200-1.500 7.200-4.800 7.200-9.200V6L12 3Z" fill="#fff"/><path d="m8.800 12.200 2.200 2.200 4.200-4.400" fill="none" stroke="#2F6FED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    rhelp: '<path d="M9.200 9.400a2.900 2.900 0 1 1 4.200 2.600c-.9.500-1.400 1-1.400 2" fill="none" stroke="#fff" stroke-width="2.400" stroke-linecap="round"/><circle cx="12" cy="17.600" r="1.400" fill="#fff"/>',
+    rdoc: '<path d="M7 3.500h7l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" fill="#fff"/><path d="M9 11h6M9 14h6M9 17h4" stroke="#22A559" stroke-width="1.600" stroke-linecap="round"/>',
+    play: '<path d="M7 4.800v14.400a1 1 0 0 0 1.500.9l11-7.200a1 1 0 0 0 0-1.700L8.500 3.900A1 1 0 0 0 7 4.800Z" fill="#fff"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2.500" fill="#fff"/>',
+    clk: '<circle cx="12" cy="12" r="8.500" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.500V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    cam: '<path d="M4 8.500a2 2 0 0 1 2-2h1.600l1.200-1.800h4.400l1.200 1.800H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.500Z" fill="none" stroke="#E8502F" stroke-width="1.800" stroke-linejoin="round"/><circle cx="12" cy="12.500" r="3" fill="none" stroke="#E8502F" stroke-width="1.800"/><circle cx="19" cy="18" r="4" fill="#FF5A2D"/><path d="M19 16v4M17 18h4" stroke="#fff" stroke-width="1.400" stroke-linecap="round"/>',
+    minus: '<circle cx="12" cy="12" r="10" fill="#FF5A2D"/><path d="M7.500 12h9" stroke="#fff" stroke-width="2.400" stroke-linecap="round"/>',
+    live: '<circle cx="12" cy="12" r="10" fill="#22A559"/><path d="m7.600 12.300 3 3 5.800-6" fill="none" stroke="#fff" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round"/>',
     dl: '<path d="M12 4v10m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"/>',
     chev: '<path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" stroke-linejoin="round"/>'
   };
@@ -5368,7 +5381,73 @@ function pdCardHead(icon, title, desc) {
   document.head.appendChild(st);
 })();
 // ---------- BERANDA PEDAGANG: TAB ----------
-let pdTab = 'toko';
+let pdTab = ''; // '' = menu tertutup (tampilan Beranda seperti mockup); ketuk menu untuk membuka panelnya
+(function injectPdHomeCss() {
+  if (document.getElementById('pd-home-css')) return;
+  const st = document.createElement('style'); st.id = 'pd-home-css';
+  st.textContent = `
+  .pd-greet{display:flex!important;align-items:center;gap:14px;width:100%;box-sizing:border-box;margin:12px 0 0;padding:12px 16px 12px 12px!important;border:0!important;border-radius:20px!important;background:var(--surface,#fff)!important;box-shadow:0 1px 2px rgba(27,42,78,.05),0 8px 20px -10px rgba(27,42,78,.16)!important;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .pd-greet .pd-avatar.pd-mascot{flex:0 0 auto;width:66px!important;height:66px!important;border-radius:50%!important;object-fit:cover;object-position:50% 14%;background:#FFE7DB!important}
+  .pd-greet-text{flex:1;min-width:0}
+  .pd-greet .pd-greet-name{font:700 17px/1.25 'Poppins',system-ui,sans-serif;color:#1B2A4E;word-break:break-word}
+  .pd-greet .pd-greet-sub{margin-top:2px;font-size:13px;color:#6F7890}
+  .pd-greet .pd-chev{font-size:26px;color:#6F7890;line-height:1}
+  .hs-card{margin-top:14px;padding:16px 14px 18px;border-radius:22px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(27,42,78,.05),0 8px 20px -10px rgba(27,42,78,.16);text-align:center}
+  .hs-store{width:104px;height:104px;margin:0 auto;border-radius:24px;display:grid;place-items:center;font-size:54px;background-color:#FFF3EC;background-repeat:no-repeat;background-position:center}
+  .hs-store.mode{background-size:contain!important;background-color:transparent}
+  .hs-store.photo{background-size:cover!important;border-radius:50%}
+  .hs-name{margin-top:6px;font:700 20px/1.25 'Poppins',system-ui,sans-serif;color:#1B2A4E;word-break:break-word}
+  .hs-status{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px;border-radius:16px;text-align:left;background:#FFEDE8}
+  .hs-status.on{background:#E6F6EC}
+  .hs-sic{flex:0 0 auto;width:40px;height:40px}.hs-sic svg{width:40px;height:40px;display:block}
+  .hs-stx{flex:1;min-width:0}
+  .hs-st{font:700 16px/1.2 'Poppins',system-ui,sans-serif;color:#C81E1E}
+  .hs-status.on .hs-st{color:#15803D}
+  .hs-ss{margin-top:3px;font-size:12.5px;line-height:1.45;color:#6F7890}
+  .hs-up{flex:0 0 auto;width:86px;padding:10px 6px;border-radius:12px;background:#FFE3D8;text-align:center;cursor:pointer;color:#D93A12;font:600 11.5px/1.25 'Poppins',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+  .hs-up svg{width:30px;height:30px;display:block;margin:0 auto 4px}
+  .hs-up small{display:block;font-weight:500;font-size:10.5px;color:#E8502F}
+  .hs-up img{width:100%;height:46px;object-fit:cover;border-radius:8px;display:block;margin-bottom:4px}
+  .hs-note{margin-top:8px;font-size:10px;line-height:1.5;color:var(--text-faint,#7b8499);text-align:left}
+  .hs-go{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;box-sizing:border-box;min-height:66px;margin-top:14px;padding:10px 16px;border:0;border-radius:20px;color:#fff;cursor:pointer;background:linear-gradient(135deg,#FF7A47,#FF5A2D);box-shadow:0 12px 22px -12px #FF5A2D;-webkit-tap-highlight-color:transparent;transition:transform .12s}
+  .hs-go:active{transform:scale(.985)}
+  .hs-go.on{background:linear-gradient(135deg,#F0556A,#D62839);box-shadow:0 12px 22px -12px #D62839}
+  .hs-go-ic{width:34px;height:34px;flex:0 0 auto}.hs-go-ic svg{width:34px;height:34px;display:block}
+  .hs-go-tx{text-align:left}
+  .hs-go-tx b{display:block;font:700 19px/1.15 'Poppins',system-ui,sans-serif;letter-spacing:.2px}
+  .hs-go-tx small{display:block;margin-top:2px;font:500 13px/1.3 'Poppins',system-ui,sans-serif;opacity:.95}
+  .hs-dur-t{display:flex;align-items:center;gap:8px;margin-top:16px;text-align:left;font:600 13.5px/1.2 'Poppins',system-ui,sans-serif;color:#1B2A4E}
+  .hs-dur-t svg{width:20px;height:20px;flex:0 0 auto}
+  .hs-dur{display:grid;gap:8px;margin-top:10px}
+  .hs-chip{min-height:46px;border:1.5px solid #E9E2DB;border-radius:99px;background:#fff;color:#6F7890;font:600 14px 'Poppins',system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .hs-chip.picked{background:#FF5A2D;border-color:#FF5A2D;color:#fff;box-shadow:0 8px 16px -8px #FF5A2D}
+  /* Menu cepat: Toko / Promosi / Ulasan / Bantuan */
+  #pd-tabs.pd-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:14px 0 0;padding:14px 2px 12px;border-radius:20px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(27,42,78,.05),0 8px 20px -10px rgba(27,42,78,.16)}
+  #pd-tabs .pd-tab{position:relative;overflow:visible;gap:8px;padding:0 2px;border-radius:0;background:transparent!important;color:#1B2A4E;font:600 13px/1.15 'Poppins',system-ui,sans-serif;transform:none!important;box-shadow:none!important;animation:none!important}
+  #pd-tabs .pd-tab + .pd-tab::before{content:'';position:absolute;left:0;top:14%;height:62%;width:1px;background:#EEE6DF}
+  #pd-tabs .pd-tab.on::after{content:none;animation:none}
+  #pd-tabs .pd-tab-ic{width:54px;height:54px;border-radius:50%;background:#FFEDE6;font-size:0;animation:none!important}
+  #pd-tabs .pd-tab-ic svg{width:30px;height:30px}
+  #pd-tabs .pd-tab[data-tab="pesan"] .pd-tab-ic{background:#FFF1D6}
+  #pd-tabs .pd-tab[data-tab="bantuan"] .pd-tab-ic{background:#E3EDFF}
+  #pd-tabs .pd-tab.on .pd-tab-ic{box-shadow:0 0 0 2.5px #FF5A2D;background-clip:padding-box}
+  #pd-tabs .pd-tab.on .pd-tab-lb{color:#D93A12}
+  #pd-tabs .pd-tab-badge{top:-2px;right:14px}
+  /* Daftar pintasan */
+  .hm-rows{margin-top:14px;display:grid;gap:10px}
+  .hm-row{display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;padding:14px;border:0;border-radius:18px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(27,42,78,.05),0 6px 16px -10px rgba(27,42,78,.18);text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .hm-ric{flex:0 0 auto;display:grid;place-items:center;width:46px;height:46px;border-radius:13px}
+  .hm-ric svg{width:28px;height:28px}
+  .hm-rtx{flex:1;min-width:0}
+  .hm-rtx b{display:block;font:700 15px/1.25 'Poppins',system-ui,sans-serif;color:#1B2A4E}
+  .hm-rtx small{display:block;margin-top:2px;font-size:12px;color:#6F7890}
+  .hm-chev{width:18px;height:18px;color:#6F7890;flex:0 0 auto}.hm-chev svg{width:18px;height:18px;display:block}
+  #hm-nudge-slot:empty{display:none}
+  @media (max-width:360px){.hs-go-tx b{font-size:17px}.hs-up{width:84px}}
+  `;
+  document.head.appendChild(st);
+})();
+
 (function injectPdTabCss() {
   if (document.getElementById('pd-tabs-css')) return;
   const st = document.createElement('style');
@@ -5396,6 +5475,7 @@ let pdTab = 'toko';
 })();
 
 window.__pdTab = function (t, scroll) {
+  if (!scroll && t === pdTab) t = ''; // ketuk menu yang sedang terbuka = tutup panelnya
   pdTab = t;
   document.querySelectorAll('.pd-tab').forEach(b => {
     const on = b.dataset.tab === t;
@@ -5409,11 +5489,13 @@ window.__pdTab = function (t, scroll) {
     if (on) { void p.offsetWidth; p.classList.add('pd-in'); }
   });
   if (t === 'promosi' && typeof myVendorId !== 'undefined' && myVendorId) renderSharePreview(myVendorId);
-  if (!scroll) { const bar = document.getElementById('pd-tabs'); if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  if (!scroll && t) { const bar = document.getElementById('pd-tabs'); if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 };
+window.__hmOpenTab = function (t) { window.__pdTab(t, true); const bar = document.getElementById('pd-tabs'); if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
 function renderPedagang() {
   { const hs = document.getElementById('hero-search'); if (hs) hs.innerHTML = ''; }
+  { const tg = document.querySelector('header .tagline'); if (tg) tg.textContent = myVendorId ? 'Jualan Dekat, Rezeki Meningkat' : 'Jajan Enak, Dekat di Sekitar Kamu'; }
   if (!myVendorId) {
     const regVisible = !vendors.length || regOpen || regStep > 0;
     main.innerHTML = `
@@ -5536,33 +5618,31 @@ function renderPedagang() {
         <div class="pd-badges">${v.is_premium ? '<span class="pd-badge prem">👑 Unggulan</span>' : ''}${v.verification_status === 'verified' ? '<span class="pd-badge ver">✓ Terverifikasi</span>' : ''}</div></span>
       <span class="pd-chev">›</span>
     </button>
-    <div class="vendor-hero pd-hero-status ${v.active ? 'on' : ''}">
-      <div class="vendor-hero-emoji" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
-      <div class="vendor-hero-name">${escapeHtml(v.name)}</div>
-      <div class="status-banner ${v.active ? 'active' : 'inactive'}">
-        <div>
-          <div class="status-banner-title">${v.active ? 'Sedang Jualan' : 'Belum Jualan Hari Ini'}</div>
-          <div class="status-banner-sub">${v.active ? 'Lokasi & status kamu kelihatan sama pembeli · tutup otomatis jam ' + untilStr : 'Tekan tombol di bawah buat mulai jualan sekarang'}</div>
+    <div class="hs-card ${v.active ? 'on' : ''}">
+      <div class="hs-store ${v.active && v.photo_url ? 'photo' : (v.mode_icon ? 'mode' : '')}" style="${vendorIconStyle(v)}">${vendorIconInner(v)}</div>
+      <div class="hs-name">${escapeHtml(v.name)}</div>
+      <div class="hs-status ${v.active ? 'on' : 'off'}">
+        <span class="hs-sic">${pdIc(v.active ? 'live' : 'minus')}</span>
+        <div class="hs-stx">
+          <div class="hs-st">${v.active ? 'Sedang Jualan' : 'Belum Jualan Hari Ini'}</div>
+          <div class="hs-ss">${v.active ? 'Lokasi & status kamu kelihatan sama pembeli · tutup otomatis jam ' + untilStr : 'Yuk mulai jualan agar toko Anda terlihat oleh lebih banyak pembeli!'}</div>
         </div>
-        <div class="status-banner-icon">
-          ${v.active ? `
-            <svg width="52" height="52" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="10" y="24" width="34" height="20" rx="3" stroke="white" stroke-width="2.5"/>
-              <path d="M10 30h34" stroke="white" stroke-width="2"/>
-              <circle cx="18" cy="48" r="4" stroke="white" stroke-width="2.5"/>
-              <circle cx="38" cy="48" r="4" stroke="white" stroke-width="2.5"/>
-              <path d="M44 28h6l4 8v8h-4" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 18h6l3 6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-            </svg>
-          ` : `
-            <svg width="52" height="52" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M40 12c-11 0-20 9-20 20s9 20 20 20c6 0 11.4-2.7 15-7-3 1.3-6.3 2-9.8 2-11 0-20-9-20-20 0-8.2 5-15.3 12-18.3-2.3-.5-4.7-.7-7.2-.7z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
-              <circle cx="46" cy="20" r="1.6" fill="white"/>
-              <circle cx="50" cy="28" r="1.2" fill="white"/>
-            </svg>
-          `}
-        </div>
+        ${!v.active ? `
+          <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="window.__onPhotoSelected(event)" />
+          <div id="photo-zone" class="hs-up" role="button" tabindex="0" onclick="window.__openPhotoChooser('photo-input')">
+            ${pendingPhotoPreview ? `<img src="${pendingPhotoPreview}" alt="Foto dagangan" /><small>Ganti foto</small>` : `${pdIc('cam')}Upload Foto<small>(opsional)</small>`}
+          </div>
+        ` : ''}
       </div>
+      ${!v.active ? `
+        <div class="hs-note">Foto dagangan/gerobak saja. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar akan dihapus tanpa pemberitahuan.</div>
+        ${pendingPhotoFile ? `
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;text-align:left;">
+          <input id="photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
+          <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
+        </label>
+        ` : ''}
+      ` : ''}
 
       ${v.fixed_lat ? `
         <div style="text-align:left;background:var(--bg);border:1px solid var(--stroke);border-radius:12px;padding:12px;margin-top:12px;">
@@ -5577,54 +5657,25 @@ function renderPedagang() {
         </div>
       ` : ''}
 
-      ${!v.active ? `
-        <div style="margin-top:16px;">
-          <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="window.__onPhotoSelected(event)" />
-          <div id="photo-zone" onclick="window.__openPhotoChooser('photo-input')" style="
-            border:1.5px dashed var(--stroke); border-radius:14px; padding:16px;
-            text-align:center; cursor:pointer; color:var(--text-dim); font-size:12.5px;">
-            ${pendingPhotoPreview
-              ? `<img src="${pendingPhotoPreview}" style="width:100%;border-radius:10px;margin-bottom:8px;" /><span style="color:var(--brand);">Ganti foto</span>`
-              : '📷 Ambil / Pilih foto dagangan (opsional)'}
-          </div>
-          <div style="font-size:10px;color:var(--text-faint);margin-top:5px;text-align:left;">
-            Foto dagangan/gerobak saja. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar akan dihapus tanpa pemberitahuan.
-          </div>
-          ${pendingPhotoFile ? `
-          <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;text-align:left;">
-            <input id="photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
-            <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
-          </label>
-          ` : ''}
-        </div>
-      ` : ''}
-
-      <div class="go-wrap ${v.active ? 'on' : 'off'}">
-        ${v.active ? '' : '<img class="go-mascot" src="icons/maskot-jualan.png" alt="" aria-hidden="true" />'}
-        <button class="big-toggle ${v.active ? 'on' : 'off'}" onclick="window.__toggleStatus()">
-          ${v.active
-            ? '🔴 SELESAI JUALAN <small>Tekan untuk berhenti</small>'
-            : '▶ MULAI JUALAN <small>Lokasi & status akan aktif</small>'}
-        </button>
-      </div>
+      <button type="button" class="hs-go ${v.active ? 'on' : 'off'}" onclick="window.__toggleStatus()">
+        <span class="hs-go-ic">${pdIc(v.active ? 'stop' : 'play')}</span>
+        <span class="hs-go-tx"><b>${v.active ? 'SELESAI JUALAN' : 'MULAI JUALAN'}</b><small>${v.active ? 'Tekan untuk berhenti' : 'Lokasi & status akan aktif'}</small></span>
+      </button>
 
       ${!v.active ? `
-        <div style="font-size:11px;color:var(--text-faint);margin-top:14px;text-align:left;">Berapa lama Anda jualan?</div>
-        <div class="duration-row">
-          ${durations.map(m => `
-            <button class="${pickedDuration === m ? 'picked' : ''}" onclick="window.__setDuration(${m})">
-              ${m < 60 ? m + ' mnt' : (m / 60) + ' jam'}
-            </button>
-          `).join('')}
+        <div class="hs-dur-t">${pdIc('clk')}<span>Berapa lama Anda jualan?</span></div>
+        <div class="hs-dur" style="grid-template-columns:repeat(${durations.length},1fr);">
+          ${durations.map(m => `<button type="button" class="hs-chip ${pickedDuration === m ? 'picked' : ''}" onclick="window.__setDuration(${m})">${m < 60 ? m + ' mnt' : (m / 60) + ' jam'}</button>`).join('')}
         </div>
       ` : ''}
     </div>
+    <div id="hm-nudge-slot"></div>
 
-    <div class="pd-tabs" id="pd-tabs" role="tablist">
-      <button type="button" class="pd-tab ${pdTab === 'toko' ? 'on' : ''}" data-tab="toko" role="tab" aria-selected="${pdTab === 'toko'}" style="--tc:#FF6B35;--tc2:#FF9A3D;--tcs:rgba(255,107,53,.14);--tcg:rgba(255,107,53,.55);" onclick="window.__pdTab('toko')"><span class="pd-tab-ic">🏪</span><span class="pd-tab-lb">Toko</span></button>
-      <button type="button" class="pd-tab ${pdTab === 'promosi' ? 'on' : ''}" data-tab="promosi" role="tab" aria-selected="${pdTab === 'promosi'}" style="--tc:#F43F5E;--tc2:#FB7185;--tcs:rgba(244,63,94,.13);--tcg:rgba(244,63,94,.5);" onclick="window.__pdTab('promosi')"><span class="pd-tab-ic">🎯</span><span class="pd-tab-lb">Promosi</span></button>
-      <button type="button" class="pd-tab ${pdTab === 'pesan' ? 'on' : ''}" data-tab="pesan" role="tab" aria-selected="${pdTab === 'pesan'}" style="--tc:#0EA5A4;--tc2:#2DD4BF;--tcs:rgba(14,165,164,.14);--tcg:rgba(14,165,164,.5);" onclick="window.__pdTab('pesan')"><span class="pd-tab-ic">💬</span><span class="pd-tab-lb">${CHAT_DALAM_APP_AKTIF ? 'Pesan' : 'Ulasan'}</span><span class="pd-tab-badge" id="pd-badge-pesan" hidden></span></button>
-      <button type="button" class="pd-tab ${pdTab === 'bantuan' ? 'on' : ''}" data-tab="bantuan" role="tab" aria-selected="${pdTab === 'bantuan'}" style="--tc:#3B82F6;--tc2:#60A5FA;--tcs:rgba(59,130,246,.14);--tcg:rgba(59,130,246,.5);" onclick="window.__pdTab('bantuan')"><span class="pd-tab-ic">🧭</span><span class="pd-tab-lb">Bantuan</span></button>
+    <div class="pd-tabs" id="pd-tabs" role="tablist" aria-label="Menu pedagang">
+      <button type="button" class="pd-tab ${pdTab === 'toko' ? 'on' : ''}" data-tab="toko" role="tab" aria-selected="${pdTab === 'toko'}" style="--tc:#FF5A2D;" onclick="window.__pdTab('toko')"><span class="pd-tab-ic">${pdIc('store')}</span><span class="pd-tab-lb">Toko</span></button>
+      <button type="button" class="pd-tab ${pdTab === 'promosi' ? 'on' : ''}" data-tab="promosi" role="tab" aria-selected="${pdTab === 'promosi'}" style="--tc:#FF5A2D;" onclick="window.__pdTab('promosi')"><span class="pd-tab-ic">${pdIc('megaphone')}</span><span class="pd-tab-lb">Promosi</span></button>
+      <button type="button" class="pd-tab ${pdTab === 'pesan' ? 'on' : ''}" data-tab="pesan" role="tab" aria-selected="${pdTab === 'pesan'}" style="--tc:#FF5A2D;" onclick="window.__pdTab('pesan')"><span class="pd-tab-ic">${pdIc('star')}</span><span class="pd-tab-lb">${CHAT_DALAM_APP_AKTIF ? 'Pesan' : 'Ulasan'}</span><span class="pd-tab-badge" id="pd-badge-pesan" hidden></span></button>
+      <button type="button" class="pd-tab ${pdTab === 'bantuan' ? 'on' : ''}" data-tab="bantuan" role="tab" aria-selected="${pdTab === 'bantuan'}" style="--tc:#FF5A2D;" onclick="window.__pdTab('bantuan')"><span class="pd-tab-ic">${pdIc('headset')}</span><span class="pd-tab-lb">Bantuan</span></button>
     </div>
     <div class="pd-panel" data-tab="toko" ${pdTab === 'toko' ? '' : 'hidden'} role="tabpanel">
     <div class="pd-sec"><h2>Kelola Toko</h2></div>
@@ -5825,6 +5876,12 @@ ${renderLapakCabangCard(v)}
     <button class="follow-btn" style="margin-top:8px;width:100%;padding:10px;" onclick="window.__logoutVendor()">Ganti akun pedagang</button>
     <a href="privacy.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:12px;text-decoration:underline;">Kebijakan Privasi</a>
     <a href="terms.html" style="display:block;text-align:center;font-size:11px;color:var(--text-faint);margin-top:6px;text-decoration:underline;">Ketentuan Layanan</a>
+    </div>
+
+    <div class="hm-rows">
+      <button type="button" class="hm-row" onclick="window.__openSecurityModal()"><span class="hm-ric" style="background:#2F6FED;">${pdIc('rsec')}</span><span class="hm-rtx"><b>Keamanan Akun</b><small>Lindungi akun dan data usaha Anda</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
+      <button type="button" class="hm-row" onclick="window.__hmOpenTab('bantuan')"><span class="hm-ric" style="background:#2F6FED;">${pdIc('rhelp')}</span><span class="hm-rtx"><b>Pusat Bantuan</b><small>Panduan, FAQ dan kontak layanan</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
+      <button type="button" class="hm-row" onclick="window.open('terms.html','_blank')"><span class="hm-ric" style="background:#22A559;">${pdIc('rdoc')}</span><span class="hm-rtx"><b>Syarat &amp; Ketentuan</b><small>Ketentuan penggunaan aplikasi</small></span><span class="hm-chev">${pdIc('chev')}</span></button>
     </div>
   `;
 
@@ -6840,9 +6897,9 @@ async function loadSecurityNudge() {
     } catch (e) { return; }
   }
   if (st.has_code && st.has_questions) return;
-  const host = document.querySelector('.pd-panel[data-tab="toko"] .pd-sec');
+  const host = document.getElementById('hm-nudge-slot');
   if (!host || document.getElementById('sec-nudge')) return;
-  host.insertAdjacentHTML('afterend',
+  host.insertAdjacentHTML('afterbegin',
     '<div id="sec-nudge" class="pd-nudge">' +
       '<span class="pd-nudge-ic">' + pdIc('lock') + '</span>' +
       '<div class="pd-nudge-tx">' +
