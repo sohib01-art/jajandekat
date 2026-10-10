@@ -1628,7 +1628,7 @@ function renderPembeli() {
     <div class="hm-banner"><div><h2>Dukung Pedagang<br>Lokal di Sekitarmu</h2><p>Temukan kuliner, toko, dan jasa terdekat dengan mudah.</p><button onclick="window.__goView('cari')">Cari Sekarang →</button></div><div class="hm-banner-art">🧑‍🍳</div></div>`;
   const near = buyerLoc ? nearbyVendors(filteredVendors).slice(0, 8) : [];
   const filterPill = hmActive ? `<div class="hm-filterpill"><span>Menampilkan: <b>${hmActive.short}${homeType ? ' · ' + escapeHtml(homeType) : ''}</b></span><button type="button" onclick="window.__setCat('semua')" aria-label="Hapus filter">✕</button></div>` : '';
-  const recs = sortVendorsForDisplay(filteredVendors).slice(0, 8);
+  const recs = recommendVendors(filteredVendors).slice(0, 8);
 
   main.innerHTML = `
     ${renderPushPromptBanner()}
@@ -1643,7 +1643,7 @@ function renderPembeli() {
     <div class="sec-head" style="margin-top:12px;"><h2>Kategori Lainnya</h2></div>
     <div class="fm-sqgrid compact">${othGridHtml}</div>${hmActive && !hmActive.kul ? typeChipsHtml : ''}
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
-    ${recs.length ? hmGridHtml(recs) : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>'}
+    ${recs.length ? hmGridHtml(recs) : `<div style="color:var(--text-faint);font-size:13px;">${buyerLoc ? 'Belum ada pedagang di sekitarmu (radius 50 km).' : 'Tidak ada pedagang.'}</div>`}
   `;
   initAnnSlider();
 }
@@ -2647,6 +2647,27 @@ function renderVendorGridHtml(list) {
 
 
 // ---------- PEDAGANG TERDEKAT (beranda) + halaman "Lihat semua" ----------
+// "Rekomendasi Untuk Kamu": dulu urutannya se-Indonesia (aktif > premium > promo), jadi pedagang premium
+// dari kota lain (mis. Jakarta) bisa nongol di atas untuk pembeli di Kutai Timur. Sekarang dibatasi ke sekitar pembeli.
+const REC_MAX_M = 50000; // radius rekomendasi 50 km dari lokasi pembeli
+function recommendVendors(list) {
+  const base = sortVendorsForDisplay(list); // urutan lama tetap dipakai: aktif, premium, promo
+  if (buyerLoc) {
+    const near = base.filter(v => {
+      const p = vendorDisplayLatLng(v);
+      return p && haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) <= REC_MAX_M;
+    });
+    // pedagang tanpa titik lokasi hanya ikut kalau wilayahnya sama dengan wilayah pembeli
+    const sameRegion = buyerRegionId ? base.filter(v => !vendorDisplayLatLng(v) && v.region_id === buyerRegionId) : [];
+    return near.concat(sameRegion);
+  }
+  if (buyerRegionId) {
+    const inRegion = base.filter(v => v.region_id === buyerRegionId);
+    if (inRegion.length) return inRegion;
+  }
+  return base; // lokasi & wilayah pembeli belum diketahui: tampilan seperti biasa
+}
+
 const NEARBY_MAX_M = 10000; // hanya pedagang aktif dalam radius 10 km yang dianggap "terdekat"
 
 function nearbyVendors(list) {
