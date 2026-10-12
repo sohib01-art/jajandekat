@@ -1,5 +1,0 @@
-# JajanDekat - preview link artikel untuk WhatsApp/Facebook/Telegram
-RewriteEngine On
-RewriteCond %{HTTP_USER_AGENT} (WhatsApp|facebookexternalhit|Facebot|Twitterbot|TelegramBot|LinkedInBot|Slackbot|Discordbot) [NC]
-RewriteCond %{QUERY_STRING} (^|&)artikel=[a-z0-9-]+ [NC]
-RewriteRule ^$ share.php [L,QSA]
