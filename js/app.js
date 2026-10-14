@@ -1654,7 +1654,7 @@ function renderPembeli() {
     ${near.length ? `<div class="hm-vrow">${near.map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml()}
     <div style="margin-top:14px;">${bannerHtml}</div>
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
-    ${recs.length ? hmGridHtml(recs) : `<div style="color:var(--text-faint);font-size:13px;">${buyerLoc ? 'Belum ada pedagang di sekitarmu (radius 50 km).' : 'Tidak ada pedagang.'}</div>`}
+    ${recs.length ? hmGridHtml(recs) : (buyerLoc ? sekitarKosongHtml(false) : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>')}
   `;
   initAnnSlider();
 }
@@ -2705,7 +2705,12 @@ function nearbyEmptyHtml() {
       <button class="near-btn" onclick="window.__enableLocation()">Aktifkan lokasi</button>
     </div>`;
   }
-  return `<div class="near-empty"><div class="near-empty-text">Belum ada pedagang yang sedang jualan dalam radius ${NEARBY_MAX_M / 1000} km.</div></div>`;
+  return `<div class="near-empty sk-empty">
+    <div class="sk-emo">🍢</div>
+    <div class="sk-title">Belum ada yang buka di dekatmu nih</div>
+    <div class="near-empty-text">Mungkin lagi libur, atau belum terdaftar. Daftarin jajanan langgananmu yuk!</div>
+    <button type="button" class="near-btn" onclick="window.__openAddVendorModal()">➕ Daftarin jajanan langgananmu</button>
+  </div>`;
 }
 
 function renderVendorMiniCardHtml(v) {
@@ -2748,6 +2753,7 @@ function tokoFiltered() {
   let list = vendors.filter(v => (!tokoOnlyOpen || hmIsOpen(v)) &&
     (!q || foodNorm([v.name, hmCatLabel(v), ...(v.categories || []), ...(v.custom_tags || [])].join(' ')).includes(q)));
   if (buyerLoc) {
+    if (!q) list = jdNearList(list);   // tanpa kata kunci: hanya yang dekat; mengetik = cari ke semua toko
     const dist = v => { const p = vendorDisplayLatLng(v); return p ? haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) : 1e12; };
     return list.map(v => ({ v, d: dist(v) })).sort((a, b) => (hmIsOpen(b.v) - hmIsOpen(a.v)) || (a.d - b.d)).map(x => x.v);
   }
@@ -2758,9 +2764,14 @@ function tokoRefresh() {
   const list = tokoFiltered();
   const cnt = document.getElementById('toko-count');
   if (cnt) cnt.textContent = list.length ? `${list.length} toko` : '';
-  box.innerHTML = list.length
-    ? list.slice(0, tokoLimit).map(renderTokoRow).join('') + (list.length > tokoLimit ? '<button type="button" class="near-btn tk-more" onclick="window.__tokoMore()">Tampilkan lebih banyak</button>' : '')
-    : '<div class="nb-empty">Tidak ada toko yang cocok. Coba kata kunci lain.</div>';
+  if (list.length) {
+    box.innerHTML = list.slice(0, tokoLimit).map(renderTokoRow).join('') + (list.length > tokoLimit ? '<button type="button" class="near-btn tk-more" onclick="window.__tokoMore()">Tampilkan lebih banyak</button>' : '') + (buyerLoc && !tokoQuery.trim() ? sekitarAjakHtml() : '');
+  } else if (buyerLoc && !tokoQuery.trim() && !tokoOnlyOpen) {
+    const far = window.__farOn ? jdFarList(vendors, 12) : [];
+    box.innerHTML = sekitarKosongHtml(true) + (far.length ? `<div class="sec-head"><h2 style="font-size:14px;">Di tempat lain (yang paling dekat dari kamu)</h2></div>` + far.map(renderTokoRow).join('') : '');
+  } else {
+    box.innerHTML = '<div class="nb-empty">Tidak ada toko yang cocok. Coba kata kunci lain.</div>';
+  }
 }
 window.__tokoMore = function () { tokoLimit += 30; tokoRefresh(); };
 function renderTerdekatView() {
@@ -3195,15 +3206,89 @@ function jdLocateMe() {
 function jdRefocus() {
   if (!map) return;
   if (!mapQuery.trim() && !mapCat && !mapOnlyOpen && buyerLoc) { map.setView([buyerLoc.lat, buyerLoc.lng], 15); return; }
-  const list = Object.values(markers);
+  let list = Object.values(markers);
+  if (buyerLoc) {   // jangan zoom-out sampai pedagang di kota lain ikut masuk
+    const nl = list.filter(mk => { const ll = mk.getLatLng(); return haversineMeters(buyerLoc.lat, buyerLoc.lng, ll.lat, ll.lng) <= REC_MAX_M; });
+    if (!nl.length) { map.setView([buyerLoc.lat, buyerLoc.lng], 14); return; }
+    list = nl;
+  }
   if (list.length) map.fitBounds(L.featureGroup(list).getBounds(), { padding: [30, 30], maxZoom: 16 });
+}
+
+// ---------- Sistem hybrid jarak: terdekat dulu; kalau radius kosong -> ajakan ramah + opsi intip kota lain ----------
+window.__farOn = false;
+function jdFarList(list, n) {
+  if (!buyerLoc) return [];
+  return list.map(v => { const p = vendorDisplayLatLng(v); return { v, d: p ? haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) : null }; })
+    .filter(x => x.d !== null).sort((a, b) => a.d - b.d).slice(0, n || 12).map(x => x.v);
+}
+function sekitarKosongHtml(withFar) {
+  return `<div class="near-empty sk-empty">
+    <div class="sk-emo">🍢</div>
+    <div class="sk-title">Yah, di dekatmu belum ada yang jualan nih</div>
+    <div class="near-empty-text">Jajanan langgananmu belum nongol di sini? Yuk daftarin, gampang kok, cuma beberapa menit. Tetanggamu juga jadi bisa ikut jajan!</div>
+    <button type="button" class="near-btn" onclick="window.__openAddVendorModal()">➕ Daftarin jajanan langgananmu</button>
+    ${withFar ? `<button type="button" class="sk-link" onclick="window.__toggleFar()">${window.__farOn ? 'Sembunyikan pedagang kota lain' : 'Intip pedagang di kota lain, yuk'}</button>` : ''}
+  </div>`;
+}
+function sekitarAjakHtml() {
+  return `<button type="button" class="sk-ajak" onclick="window.__openAddVendorModal()">Jajanan langgananmu belum ada? <b>Daftarin yuk!</b></button>`;
+}
+window.__toggleFar = function () {
+  window.__farOn = !window.__farOn;
+  if (bottomView === 'peta') jdRenderPetaList(); else if (bottomView === 'terdekat') tokoRefresh(); else if (bottomView === 'cari' && window.__cariRun) window.__cariRun();
+};
+// Pedagang yang pantas disebut "sekitar": dalam radius REC_MAX_M dari pembeli, terdekat dulu.
+// Pedagang tanpa titik lokasi ikut hanya bila satu wilayah dengan pembeli. Lokasi mati -> pakai wilayah (recommendVendors).
+function jdNearList(list) {
+  if (!buyerLoc) return recommendVendors(list);
+  const near = list.map(v => { const p = vendorDisplayLatLng(v); return { v, d: p ? haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) : null }; })
+    .filter(x => x.d !== null && x.d <= REC_MAX_M)
+    .sort((a, b) => (hmIsOpen(b.v) - hmIsOpen(a.v)) || (a.d - b.d)).map(x => x.v);
+  const same = buyerRegionId ? list.filter(v => !vendorDisplayLatLng(v) && v.region_id === buyerRegionId) : [];
+  return near.concat(same);
+}
+// ---------- Chip kategori Peta: 3 utama + "Lainnya" -> lembar kotak berwarna (tanpa ikon) ----------
+const JD_CAT_COLORS = { kuliner: '#F4511E', kebutuhan: '#D97706', segar: '#16A34A', fashion: '#DB2777', servis: '#2563EB',
+  kecantikan: '#C026D3', rumah: '#0891B2', otomotif: '#475569', digital: '#4F46E5', pertanian: '#65A30D',
+  kado: '#E11D48', pendidikan: '#0284C7', kreatif: '#EA580C', kesehatan: '#0D9488', lain: '#78716C' };
+const JD_CAT_FALLBACK = ['#7C3AED', '#0D9488', '#E11D48', '#4F46E5', '#CA8A04'];
+function jdChipsHtml() {
+  const sec = jdSectors(), main = sec.slice(0, 3), picked = sec.slice(3).find(c => c.k === mapCat);
+  const chip = c => `<button type="button" class="${mapCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.icon}<span>${escapeHtml(c.label)}</span></button>`;
+  const chev = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  return main.map(chip).join('') + (picked ? chip(picked) : '') + (sec.length > 3 ? `<button type="button" id="map-more" class="more" aria-haspopup="dialog">Lainnya ${chev}</button>` : '');
+}
+function jdOpenCatSheet(onPick) {
+  document.getElementById('jd-cs')?.remove();
+  const sec = jdSectors();
+  const wrap = document.createElement('div');
+  wrap.id = 'jd-cs'; wrap.className = 'jd-cs';
+  const close = () => { wrap.classList.add('out'); setTimeout(() => wrap.remove(), 180); };
+  wrap.innerHTML = `<div class="jd-cs-panel" role="dialog" aria-label="Pilih kategori">
+    <div class="jd-cs-grip"></div>
+    <div class="jd-cs-title">Lagi cari apa nih?</div>
+    <div class="jd-cs-sub">Pilih satu, peta dan daftar langsung ikut menyesuaikan.</div>
+    <div class="jd-cs-grid">${sec.map((c, i) => `<button type="button" class="jd-cs-tile ${mapCat === c.k ? 'on' : ''}" data-k="${c.k}" style="--c:${JD_CAT_COLORS[c.k] || JD_CAT_FALLBACK[i % JD_CAT_FALLBACK.length]}"><span>${escapeHtml(c.label)}</span></button>`).join('')}</div>
+    <button type="button" class="jd-cs-all">Tampilkan semua kategori</button>
+  </div>`;
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  wrap.querySelectorAll('.jd-cs-tile').forEach(b => { b.onclick = () => { onPick(mapCat === b.dataset.k ? null : b.dataset.k); close(); }; });
+  wrap.querySelector('.jd-cs-all').onclick = () => { onPick(null); close(); };
+  document.body.appendChild(wrap);
 }
 
 function jdRenderPetaList() {
   const box = document.getElementById('peta-list');
   if (!box) return;
-  const list = jdMapVendors();
-  box.innerHTML = list.length ? hmGridHtml(sortVendorsForDisplay(list)) : '<div class="nb-empty">Tidak ada pedagang yang cocok.</div>';
+  const all = jdMapVendors();
+  const searching = !!mapQuery.trim();      // saat mencari, tampilkan semua hasil walau jauh
+  if (searching) { box.innerHTML = all.length ? hmGridHtml(sortVendorsForDisplay(all)) : '<div class="nb-empty">Tidak ada pedagang yang cocok.</div>'; return; }
+  const list = jdNearList(all);
+  if (list.length) { box.innerHTML = hmGridHtml(list) + (buyerLoc ? sekitarAjakHtml() : ''); return; }
+  if (!buyerLoc) { box.innerHTML = '<div class="nb-empty">Tidak ada pedagang yang cocok.</div>'; return; }
+  const far = window.__farOn ? jdFarList(all, 12) : [];
+  box.innerHTML = sekitarKosongHtml(true) + (far.length ? `<div class="sec-head"><h2 style="font-size:14px;">Di tempat lain (yang paling dekat dari kamu)</h2></div>${hmGridHtml(far)}` : '');
 }
 
 function renderPetaView() {
@@ -3215,7 +3300,7 @@ function renderPetaView() {
       <input id="map-search" type="text" placeholder="Cari jajanan di sekitar..." value="${escapeHtml(mapQuery)}" autocomplete="off" />
       <button type="button" class="jd-pt-filter ${mapOnlyOpen ? 'on' : ''}" id="map-filter" aria-label="Tampilkan yang buka saja" aria-pressed="${mapOnlyOpen}">${jdSvg('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>')}</button>
     </div>
-    <div class="jd-pt-chips" id="map-chips">${jdSectors().map(c => `<button type="button" class="${mapCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.icon}<span>${escapeHtml(c.label)}</span></button>`).join('')}</div>
+    <div class="jd-pt-chips" id="map-chips">${jdChipsHtml()}</div>
     <div class="jd-pt-map" id="jd-pt-map">
       <div id="map" style="position:absolute;inset:0;width:100%;height:100%;min-height:0;border-radius:0;margin:0"></div>
       <button type="button" class="jd-pt-btn jd-pt-locate" id="map-locate" aria-label="Lokasi saya">${jdSvg('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>')}</button>
@@ -3233,13 +3318,16 @@ function renderPetaView() {
   const input = document.getElementById('map-search');
   let t = null;
   input.oninput = () => { mapQuery = input.value; clearTimeout(t); t = setTimeout(refresh, 150); };
-  document.querySelectorAll('#map-chips button').forEach(btn => {
-    btn.onclick = () => {
-      mapCat = mapCat === btn.dataset.k ? null : btn.dataset.k;
-      document.querySelectorAll('#map-chips button').forEach(b => b.classList.toggle('active', b.dataset.k === mapCat));
-      refresh();
-    };
-  });
+  const bindChips = () => {
+    const box = document.getElementById('map-chips'); if (!box) return;
+    box.innerHTML = jdChipsHtml();
+    box.querySelectorAll('button[data-k]').forEach(btn => {
+      btn.onclick = () => { mapCat = mapCat === btn.dataset.k ? null : btn.dataset.k; bindChips(); refresh(); };
+    });
+    const more = document.getElementById('map-more');
+    if (more) more.onclick = () => jdOpenCatSheet(k => { mapCat = k; bindChips(); refresh(); });
+  };
+  bindChips();
   document.getElementById('map-filter').onclick = (e) => {
     mapOnlyOpen = !mapOnlyOpen;
     e.currentTarget.classList.toggle('on', mapOnlyOpen);
@@ -3486,8 +3574,15 @@ function renderCariView() {
       (!q || v.name.toLowerCase().includes(q) || (v.categories || []).some(c => c.toLowerCase().includes(q)) || (v.custom_tags || []).some(t => t.toLowerCase().includes(q))) &&
       (!cat || vendorMainCats(v).includes(cat.k))
     );
+    const browsing = !q && !!buyerLoc;   // tanpa kata kunci: terdekat dulu; mengetik = cari ke semua pedagang
+    const ordered = browsing ? jdNearList(filtered) : sortVendorsForDisplay(filtered);
+    if (browsing && filtered.length && !ordered.length) {
+      const far = window.__farOn ? jdFarList(filtered, 12) : [];
+      results.innerHTML = sekitarKosongHtml(true) + (far.length ? `<div class="sec-head"><h2 style="font-size:14px;">Di tempat lain (yang paling dekat dari kamu)</h2></div>${hmGridHtml(far)}` : '');
+      return;
+    }
     results.innerHTML = filtered.length
-      ? hmGridHtml(sortVendorsForDisplay(filtered))
+      ? hmGridHtml(ordered) + (browsing ? sekitarAjakHtml() : '')
       : `<div class="nb-empty">Tidak ada pedagang yang cocok.<button type="button" onclick="window.__openAddVendorModal()" style="display:block;margin:10px auto 0;padding:9px 14px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:11.5px;">➕ Tambahkan toko ini</button></div>`;
   }
   document.querySelectorAll('#cari-chips .map-chip').forEach(btn => {
@@ -3497,6 +3592,7 @@ function renderCariView() {
       runSearch();
     };
   });
+  window.__cariRun = runSearch;
   input.oninput = runSearch;
   initCariSuggest(input, runSearch);
   input.focus();
@@ -4252,7 +4348,7 @@ function jdInjectMapCss() {
     .jd-pt-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font:500 14px 'Poppins',sans-serif;color:#111827}
     .jd-pt-filter{width:34px;height:34px;border-radius:10px;border:none;background:transparent;color:#4B5563;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
     .jd-pt-filter.on{background:#FFEDE7;color:#FF6B4A}
-    .jd-pt-chips{display:flex;gap:8px;overflow-x:auto;padding:12px 2px 8px;scrollbar-width:none;margin:0 -2px}
+    .jd-pt-chips{display:flex;flex-wrap:wrap;gap:8px;padding:12px 2px 8px;margin:0 -2px}
     .jd-pt-chips::-webkit-scrollbar{display:none}
     .jd-pt-chips button{flex:0 0 auto;display:flex;align-items:center;gap:7px;border:none;background:#fff;color:#374151;font:600 12.5px 'Poppins',sans-serif;padding:9px 14px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;white-space:nowrap}
     .jd-pt-chips button svg{color:#FF6B4A;flex:0 0 auto}
