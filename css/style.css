@@ -1245,3 +1245,34 @@ header{ position:static; display:contents; }
 .promo-chip:active{ background:#FFF1E0; border-color:#F5A623; }
 .promo-preview{ position:relative; width:150px; max-width:100%; aspect-ratio:4/3; border-radius:12px; background:var(--surface-2); border:1px solid var(--stroke); overflow:hidden; }
 .promo-preview-rb{ position:absolute; left:0; bottom:0; max-width:75%; background:linear-gradient(90deg,#F26A1B 0%,#FF8F2E 70%,#FFA94D 100%); color:#fff; font-size:10.5px; font-weight:700; line-height:1.2; padding:6px 12px 6px 9px; border-radius:0 12px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,.18); }
+
+/* ===== Beranda baru (v72): aksi utama, kategori 4, kartu jelas ===== */
+.hm-acts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:6px 0 4px; }
+.hm-act{ display:flex; align-items:center; gap:10px; padding:11px; text-align:left; cursor:pointer; background:var(--surface); color:var(--text); border:1px solid var(--stroke); border-radius:16px; box-shadow:var(--shadow); font-family:'Poppins',sans-serif; font-size:14px; font-weight:700; line-height:1.25; }
+.hm-act small{ display:block; margin-top:1px; font-family:'Inter',sans-serif; font-size:10.5px; font-weight:500; opacity:.8; }
+.hm-act-i{ flex:0 0 38px; width:38px; height:38px; border-radius:12px; display:grid; place-items:center; background:rgba(255,107,74,.12); color:var(--brand); }
+.hm-act.p{ background:var(--brand); border-color:var(--brand); color:#fff; }
+.hm-act.p .hm-act-i{ background:rgba(255,255,255,.25); color:#fff; }
+.hm-act:active{ transform:scale(.97); }
+.hm-cats{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.hm-cat{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:0; background:none; border:0; cursor:pointer; color:var(--text); font-family:'Poppins',sans-serif; font-size:12px; font-weight:600; }
+.hm-cat-i{ width:100%; max-width:68px; aspect-ratio:1; border-radius:18px; overflow:hidden; display:grid; place-items:center; font-size:30px; background:var(--surface); border:2px solid transparent; box-shadow:var(--shadow); }
+.hm-cat-i img{ width:100%; height:100%; object-fit:cover; display:block; }
+.hm-cat.active .hm-cat-i{ border-color:var(--brand); }
+.hm-vc-foot{ display:flex; justify-content:space-between; align-items:center; gap:4px; padding:0 8px; font-size:11px; font-weight:600; }
+.hm-vc-foot .hm-vc-km{ margin:0; font-size:11px; }
+.hm-vc-rt{ white-space:nowrap; }
+.hm-vc-meta{ color:var(--text-dim); }
+:focus-visible{ outline-offset:2px; }
+
+/* ===== Daftar Toko (v73): daftar baris + kolom cari ===== */
+.tk-list{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.tk-row{ display:flex; gap:10px; align-items:stretch; padding:8px; text-align:left; width:100%; background:var(--surface); border:1px solid var(--stroke); border-radius:14px; box-shadow:var(--shadow); cursor:pointer; color:var(--text); font-family:'Inter',sans-serif; }
+.tk-row:active{ transform:scale(.99); }
+.tk-ph{ flex:0 0 64px; width:64px; height:64px; border-radius:10px; background:var(--surface-2) center/cover; display:flex; align-items:center; justify-content:center; font-size:28px; }
+.tk-b{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.tk-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:6px; }
+.tk-name{ font-family:'Poppins',sans-serif; font-weight:600; font-size:13px; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.tk-cat{ font-size:11px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tk-foot{ display:flex; justify-content:space-between; gap:6px; margin-top:auto; font-size:11px; font-weight:600; }
+.tk-more{ align-self:center; margin-top:6px; }
