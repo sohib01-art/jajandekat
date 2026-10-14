@@ -256,7 +256,7 @@ btnPedagang.onclick = () => {
 let bottomView = 'status';
 function setNavActive(view) {
   document.body.setAttribute('data-jd-tab', view); // dipakai CSS: widget instal disembunyikan di tab Peta
-  const navView = view === 'artikel' ? 'akun' : (view === 'terdekat' ? 'status' : view);
+  const navView = view === 'artikel' ? 'akun' : ((view === 'terdekat' || view === 'kategori') ? 'status' : view);
   document.querySelectorAll('nav.bottom .nav-item').forEach(n => {
     const on = n.dataset.view === navView;
     n.classList.toggle('active', on);
@@ -1608,6 +1608,7 @@ function renderPembeli() {
   if (bottomView === 'favorit') return renderFavoritView();
   if (bottomView === 'akun') return renderAkunView();
   if (bottomView === 'terdekat') return renderTerdekatView();
+  if (bottomView === 'kategori') return renderKategoriView();
   if (bottomView === 'artikel') return artikelDetailSlug ? renderArtikelDetailView(artikelDetailSlug) : renderArtikelListView();
 
   const hmActive = FOOD_MAIN.find(c => 'grp:' + c.k === activeCat);
@@ -1638,23 +1639,23 @@ function renderPembeli() {
   }).join('');
   const allCatsHtml = window.__allCats ? `<div class="fm-row" style="margin-top:12px;">${kulGridHtml}</div><div class="sec-head" style="margin-top:12px;"><h2>Kategori Lainnya</h2></div><div class="fm-sqgrid compact">${othGridHtml}</div>` : '';
   const actsHtml = `<div class="hm-acts">
-    <button type="button" class="hm-act p" onclick="window.__goView('peta')"><span class="hm-act-i"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/></svg></span><span>Lihat Peta<small>Temukan penjual terdekat</small></span></button>
-    <button type="button" class="hm-act" onclick="window.__goView('terdekat')"><span class="hm-act-i"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9 5.500 4h13L20 9M4 9h16v1a3 3 0 0 1-5.300 1.900A3 3 0 0 1 12 13a3 3 0 0 1-2.700-1.100A3 3 0 0 1 4 10zM5 13v7h14v-7"/></svg></span><span>Daftar Toko<small>Jelajahi semua kategori</small></span></button>
+    <button type="button" class="hm-act pk" onclick="window.__goView('peta')"><span class="hm-act-i"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/></svg></span><span>Lihat Peta<small>Temukan penjual terdekat</small></span></button>
+    <button type="button" class="hm-act dt" onclick="window.__goView('terdekat')"><span class="hm-act-i"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9 5.500 4h13L20 9M4 9h16v1a3 3 0 0 1-5.300 1.900A3 3 0 0 1 12 13a3 3 0 0 1-2.700-1.100A3 3 0 0 1 4 10zM5 13v7h14v-7"/></svg></span><span>Daftar Toko<small>Jelajahi semua kategori</small></span></button>
   </div>`;
 
   main.innerHTML = `
     ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
     ${actsHtml}
-    <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__toggleAllCats()">${window.__allCats ? 'Ringkas ↑' : 'Lihat Semua →'}</button></div>
-    <div class="hm-cats">${homeCats}</div>${hmActive ? typeChipsHtml : ''}${allCatsHtml}
+    <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__goView('kategori')">Lihat Semua →</button></div>
+    <div class="hm-cats">${homeCats}</div>${hmActive ? typeChipsHtml : ''}
     <div id="hm-near-anchor"></div>
     ${filterPill}
     <div class="sec-head"><h2>📍 Pedagang di Sekitar Kamu</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
-    ${near.length ? `<div class="hm-vrow">${near.map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml()}
+    ${near.length ? `<div class="hm-vrow three">${near.slice(0, 3).map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml()}
     <div style="margin-top:14px;">${bannerHtml}</div>
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
-    ${recs.length ? hmGridHtml(recs) : (buyerLoc ? sekitarKosongHtml(false) : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>')}
+    ${recs.length ? `<div class="hm-vgrid">${recs.slice(0, 6).map(renderHmNearVCard).join('')}</div>` : (buyerLoc ? sekitarKosongHtml(false) : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>')}
   `;
   initAnnSlider();
 }
@@ -3278,6 +3279,41 @@ function jdOpenCatSheet(onPick) {
   document.body.appendChild(wrap);
 }
 
+// ---------- SEMUA KATEGORI: panel Pilihan (hijau) + Lainnya (oranye), kartu ikon 4 kolom ----------
+window.__pickKategori = function (k) { activeCat = 'grp:' + k; homeType = null; goToBottomView('status'); window.scrollTo(0, 0); window.__scrollNear(); };
+function renderKategoriView() {
+  const PIL = ['jajanan', 'berat', 'minuman', 'kebutuhan', 'segar', 'fashion', 'servis', 'kecantikan'];
+  const NAMA = { jajanan: 'Jajanan', berat: 'Makanan', minuman: 'Minuman', kebutuhan: 'Kebutuhan Harian' };
+  const nama = c => NAMA[c.k] || c.short || c.label;
+  const tile = c => `<button type="button" class="kt-tile" data-n="${escapeHtml((nama(c) + ' ' + c.label).toLowerCase())}" onclick="window.__pickKategori('${c.k}')"><span class="kt-img"><img src="${c.img}" alt="" loading="lazy" onerror="this.replaceWith(document.createTextNode('${c.e || '🏪'}'))"></span><span>${escapeHtml(nama(c))}</span></button>`;
+  const pil = PIL.map(k => FOOD_MAIN.find(c => c.k === k)).filter(Boolean);
+  const lain = FOOD_MAIN.filter(c => !PIL.includes(c.k));
+  main.innerHTML = `
+    <div class="kt-top"><button type="button" class="kt-back" onclick="window.__goView('status')" aria-label="Kembali">←</button><h1>Semua Kategori</h1></div>
+    <label class="kt-search">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="kt-q" type="search" placeholder="Cari kategori atau nama penjual..." autocomplete="off" enterkeyhint="search">
+    </label>
+    <div class="kt-hint" id="kt-hint" hidden></div>
+    <section class="kt-panel g"><h2>🌿 Kategori Pilihan</h2><div class="kt-grid">${pil.map(tile).join('')}</div></section>
+    <section class="kt-panel o"><h2>🧩 Kategori Lainnya</h2><div class="kt-grid">${lain.map(tile).join('')}</div></section>
+    <div class="kt-empty" id="kt-empty" hidden>Tidak ada kategori yang cocok.</div>
+  `;
+  const q = document.getElementById('kt-q'), hint = document.getElementById('kt-hint');
+  q.oninput = () => {
+    const t = q.value.trim().toLowerCase();
+    let any = false;
+    document.querySelectorAll('.kt-panel').forEach(pn => {
+      let vis = 0;
+      pn.querySelectorAll('.kt-tile').forEach(b => { const ok = !t || b.dataset.n.includes(t); b.hidden = !ok; if (ok) vis++; });
+      pn.hidden = vis === 0; if (vis) any = true;
+    });
+    document.getElementById('kt-empty').hidden = any;
+    hint.hidden = !t; hint.textContent = t ? `Tekan Enter untuk mencari "${q.value.trim()}" di semua penjual` : '';
+  };
+  q.onkeydown = (e) => { if (e.key === 'Enter' && q.value.trim()) { window.__cariPrefill = q.value.trim(); window.__goView('cari'); } };
+}
+
 function jdRenderPetaList() {
   const box = document.getElementById('peta-list');
   if (!box) return;
@@ -3595,6 +3631,7 @@ function renderCariView() {
   window.__cariRun = runSearch;
   input.oninput = runSearch;
   initCariSuggest(input, runSearch);
+  if (window.__cariPrefill) { input.value = window.__cariPrefill; window.__cariPrefill = ''; runSearch(); }
   input.focus();
   runSearch();
   updateOfflineQueueBanner();
