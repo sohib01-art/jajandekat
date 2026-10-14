@@ -1276,3 +1276,33 @@ header{ position:static; display:contents; }
 .tk-cat{ font-size:11px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tk-foot{ display:flex; justify-content:space-between; gap:6px; margin-top:auto; font-size:11px; font-weight:600; }
 .tk-more{ align-self:center; margin-top:6px; }
+
+/* ===== Ajakan ramah saat sekitar kosong (v74) ===== */
+.sk-empty{ text-align:center; }
+.sk-emo{ font-size:38px; line-height:1; margin-bottom:6px; }
+.sk-title{ font-family:'Poppins',sans-serif; font-weight:700; font-size:14px; margin-bottom:4px; color:var(--text); }
+.sk-link{ display:block; margin:10px auto 0; background:none; border:0; color:var(--brand); font-weight:600; font-size:12.5px; cursor:pointer; text-decoration:underline; }
+.sk-ajak{ display:block; width:100%; margin:14px 0 4px; padding:12px; background:rgba(255,107,74,.1); border:1px dashed var(--brand); border-radius:14px; color:var(--text); font-size:12.5px; cursor:pointer; text-align:center; }
+.sk-ajak b{ color:var(--brand); }
+
+/* ===== Lembar kategori kotak berwarna (v75) ===== */
+.jd-pt-chips button.more{ background:rgba(255,107,74,.12); color:#FF6B4A; box-shadow:none; }
+.jd-pt-chips button.more svg{ color:#FF6B4A; }
+.jd-cs{ position:fixed; inset:0; z-index:400; background:rgba(17,24,39,.5); display:flex; align-items:flex-end; justify-content:center; animation:jdCsFade .18s ease; }
+.jd-cs.out{ opacity:0; transition:opacity .18s; }
+.jd-cs-panel{ width:100%; max-width:480px; max-height:82vh; overflow-y:auto; background:var(--surface,#fff); color:var(--text,#1F2937); border-radius:24px 24px 0 0; padding:10px 16px calc(18px + env(safe-area-inset-bottom,0px)); animation:jdCsUp .22s ease; }
+.jd-cs-grip{ width:40px; height:4px; border-radius:2px; background:rgba(128,128,128,.35); margin:0 auto 12px; }
+.jd-cs-title{ font:700 16px 'Poppins',sans-serif; }
+.jd-cs-sub{ font-size:12px; opacity:.7; margin:2px 0 14px; }
+.jd-cs-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.jd-cs-tile{ position:relative; overflow:hidden; aspect-ratio:1; border:0; border-radius:18px; background:var(--c); color:#fff; padding:10px; display:flex; align-items:flex-end; text-align:left; font:700 13px/1.2 'Poppins',sans-serif; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.12); }
+.jd-cs-tile::before{ content:''; position:absolute; right:-22px; top:-22px; width:80px; height:80px; border-radius:50%; background:rgba(255,255,255,.18); }
+.jd-cs-tile::after{ content:''; position:absolute; left:-14px; top:28%; width:44px; height:44px; border-radius:12px; background:rgba(255,255,255,.1); transform:rotate(18deg); }
+.jd-cs-tile span{ position:relative; z-index:1; }
+.jd-cs-tile.on{ outline:3px solid #fff; box-shadow:0 0 0 3px var(--c),0 6px 14px rgba(0,0,0,.2); }
+.jd-cs-tile.on span::after{ content:' ✓'; }
+.jd-cs-tile:active{ transform:scale(.96); }
+.jd-cs-all{ display:block; width:100%; margin-top:12px; padding:12px; border:1.5px dashed rgba(128,128,128,.5); border-radius:14px; background:none; color:inherit; font:600 13px 'Poppins',sans-serif; cursor:pointer; }
+@keyframes jdCsUp{ from{ transform:translateY(40px); opacity:.6; } to{ transform:none; opacity:1; } }
+@keyframes jdCsFade{ from{ opacity:0; } to{ opacity:1; } }
+@media (prefers-reduced-motion:reduce){ .jd-cs, .jd-cs-panel{ animation:none; } }
