@@ -1395,7 +1395,7 @@ function foodTidy(s) { return String(s).trim().replace(/\s+/g, ' ').slice(0, 40)
 function foodIsListed(n) { return !!FOOD_INDEX[n] || CATEGORY_OPTIONS.some(c => foodNorm(c.label) === n); }
 function foodMainsHtml() {
   const on = k => foodS().mains().includes(k);
-  const kul = FOOD_MAIN.filter(m => m.kul).map(m => `<button type="button" class="food-main ${on(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${on(m.k)}"><img src="${m.img}" alt="${m.label}" loading="lazy" /><span class="food-check">✓</span></button>`).join('');
+  const kul = FOOD_MAIN.filter(m => m.kul).map(m => `<button type="button" class="food-main ${NEW_KAT_ICONS.has(m.k) ? 'sq' : ''} ${on(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${on(m.k)}"><img src="${m.img}" alt="${m.label}" loading="lazy" />${NEW_KAT_ICONS.has(m.k) ? `<span class="food-main-lb">${m.short || m.label}</span>` : ''}<span class="food-check">✓</span></button>`).join('');
   const oth = FOOD_MAIN.filter(m => !m.kul).map(m => `<button type="button" class="food-sq ${on(m.k) ? 'picked' : ''}" onclick="window.__foodMain('${m.k}')" aria-pressed="${on(m.k)}"><img src="${m.img}" alt="" loading="lazy" /><span>${m.short}</span><i class="food-check">✓</i></button>`).join('');
   return `<div class="food-sub-lbl">Kuliner</div><div class="food-mains">${kul}</div><div class="food-sub-lbl">Lainnya</div><div class="fm-sqgrid">${oth}</div>`;
 }
@@ -1652,10 +1652,10 @@ function renderPembeli() {
     <div id="hm-near-anchor"></div>
     ${filterPill}
     <div class="sec-head"><h2>📍 Pedagang di Sekitar Kamu</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
-    ${near.length ? `<div class="hm-vrow three">${near.slice(0, 3).map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml()}
+    ${near.length ? `<div class="hm-vrow three">${near.slice(0, 3).map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml(hmActive ? hmActive.short : '')}
     <div style="margin-top:14px;">${bannerHtml}</div>
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
-    ${recs.length ? `<div class="hm-vgrid">${recs.slice(0, 6).map(renderHmNearVCard).join('')}</div>` : (buyerLoc ? sekitarKosongHtml(false) : '<div style="color:var(--text-faint);font-size:13px;">Tidak ada pedagang.</div>')}
+    ${recs.length ? `<div class="hm-vgrid">${recs.slice(0, 6).map(renderHmNearVCard).join('')}</div>` : (buyerLoc ? '<div class="nb-empty">Belum ada rekomendasi dalam radius 50 km.</div>' : '<div class="nb-empty">Tidak ada pedagang.</div>')}
   `;
   initAnnSlider();
 }
@@ -2699,12 +2699,21 @@ window.__enableLocation = function () {
 
 window.__goView = function (view) { goToBottomView(view); window.scrollTo(0, 0); };
 
-function nearbyEmptyHtml() {
+function nearbyEmptyHtml(label) {
   if (!buyerLoc) {
     return `<div class="near-empty">
       <div class="near-empty-text">Aktifkan lokasi untuk melihat pedagang yang sedang jualan di dekatmu.</div>
       <button class="near-btn" onclick="window.__enableLocation()">Aktifkan lokasi</button>
     </div>`;
+  }
+  if (label) {   // ada filter kategori aktif: jangan menyalahkan lokasi
+    return `<div class="near-empty sk-empty">
+    <div class="sk-emo">🍢</div>
+    <div class="sk-title">Belum ada ${escapeHtml(label)} yang buka di dekatmu</div>
+    <div class="near-empty-text">Coba kategori lain dulu, atau daftarin jajanan langgananmu yuk!</div>
+    <button type="button" class="near-btn" onclick="window.__openAddVendorModal()">➕ Daftarin jajanan langgananmu</button>
+    <button type="button" class="sk-link" onclick="window.__setCat('semua')">Tampilkan semua kategori</button>
+  </div>`;
   }
   return `<div class="near-empty sk-empty">
     <div class="sk-emo">🍢</div>
@@ -2732,7 +2741,7 @@ function renderNearbyHtml(list) {
   const more = near.length > 3 ? '<button onclick="window.__goView(\'terdekat\')">Lihat semua ›</button>' : '';
   return `
     <div class="sec-head"><h2>Pedagang terdekat</h2>${more}</div>
-    ${near.length ? `<div class="vm-row ${near.length > 3 ? 'scroll' : ''}">${near.slice(0, 6).map(renderVendorMiniCardHtml).join('')}</div>` : nearbyEmptyHtml()}
+    ${near.length ? `<div class="vm-row ${near.length > 3 ? 'scroll' : ''}">${near.slice(0, 6).map(renderVendorMiniCardHtml).join('')}</div>` : nearbyEmptyHtml(hmActive ? hmActive.short : '')}
   `;
 }
 
@@ -3250,6 +3259,8 @@ function jdNearList(list) {
   return near.concat(same);
 }
 // ---------- Chip kategori Peta: 3 utama + "Lainnya" -> lembar kotak berwarna (tanpa ikon) ----------
+// Ikon 3D baru (persegi, tanpa teks di gambar) -> label ditampilkan oleh kode. Kategori lain masih ikon lama berteks.
+const NEW_KAT_ICONS = new Set(['jajanan','berat','minuman','kebutuhan','segar','fashion','servis','kecantikan','rumah','jasa_rumah','otomotif','kado','kreatif','pendidikan','kesehatan','lain']);
 const JD_CAT_COLORS = { kuliner: '#F4511E', kebutuhan: '#D97706', segar: '#16A34A', fashion: '#DB2777', servis: '#2563EB',
   kecantikan: '#C026D3', rumah: '#0891B2', otomotif: '#475569', digital: '#4F46E5', pertanian: '#65A30D',
   kado: '#E11D48', pendidikan: '#0284C7', kreatif: '#EA580C', kesehatan: '#0D9488', lain: '#78716C' };
