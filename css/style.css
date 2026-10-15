@@ -1337,3 +1337,16 @@ header{ position:static; display:contents; }
 .kt-img{ width:100%; aspect-ratio:1; display:grid; place-items:center; font-size:30px; }
 .kt-img img{ width:100%; height:100%; object-fit:contain; display:block; }
 .kt-empty{ padding:28px 10px; text-align:center; color:var(--text-dim); font-size:13px; }
+
+/* ===== Ikon kategori 3D baru (v77) ===== */
+.hm-cat-i img,.kt-img img,.food-sq img,.food-main.sq img{ filter:drop-shadow(0 2px 3px rgba(120,60,10,.18)); }
+.food-main.sq{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 4px 6px; }
+.food-main.sq img{ width:100%; max-width:104px; height:auto; aspect-ratio:1; object-fit:contain; }
+.food-main-lb{ font:600 12px/1.2 'Poppins',sans-serif; text-align:center; color:var(--text); }
+
+/* ===== Perbaikan bug (v78): kartu kosong rusak & halaman melebar ===== */
+.sk-empty{ flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; padding:18px 14px; }
+.sk-empty .near-empty-text{ flex:none; max-width:300px; }
+.sk-empty .near-btn{ white-space:normal; margin-top:6px; padding:11px 18px; }
+.near-btn{ max-width:100%; }
+main{ overflow-x:clip; }
