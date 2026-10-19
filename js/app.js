@@ -2710,16 +2710,16 @@ function nearbyEmptyHtml(label) {
     return `<div class="near-empty sk-empty">
     <div class="sk-emo">🍢</div>
     <div class="sk-title">Belum ada ${escapeHtml(label)} yang buka di dekatmu</div>
-    <div class="near-empty-text">Coba kategori lain dulu, atau daftarin jajanan langgananmu yuk!</div>
-    <button type="button" class="near-btn" onclick="window.__openAddVendorModal()">➕ Daftarin jajanan langgananmu</button>
+    <div class="near-empty-text">Coba kategori lain dulu, atau daftarin toko langgananmu yuk!</div>
+    ${addStoreBtn()}
     <button type="button" class="sk-link" onclick="window.__setCat('semua')">Tampilkan semua kategori</button>
   </div>`;
   }
   return `<div class="near-empty sk-empty">
     <div class="sk-emo">🍢</div>
     <div class="sk-title">Belum ada yang buka di dekatmu nih</div>
-    <div class="near-empty-text">Mungkin lagi libur, atau belum terdaftar. Daftarin jajanan langgananmu yuk!</div>
-    <button type="button" class="near-btn" onclick="window.__openAddVendorModal()">➕ Daftarin jajanan langgananmu</button>
+    <div class="near-empty-text">Mungkin lagi libur, atau belum terdaftar. Daftarin toko langgananmu yuk!</div>
+    ${addStoreBtn()}
   </div>`;
 }
 
@@ -3236,14 +3236,24 @@ function sekitarKosongHtml(withFar) {
   return `<div class="near-empty sk-empty">
     <div class="sk-emo">🍢</div>
     <div class="sk-title">Yah, di dekatmu belum ada yang jualan nih</div>
-    <div class="near-empty-text">Jajanan langgananmu belum nongol di sini? Yuk daftarin, gampang kok, cuma beberapa menit. Tetanggamu juga jadi bisa ikut jajan!</div>
-    <button type="button" class="near-btn" onclick="window.__openAddVendorModal()">➕ Daftarin jajanan langgananmu</button>
+    <div class="near-empty-text">Toko langgananmu belum nongol di sini? Yuk daftarin, gampang kok, cuma beberapa menit. Tetanggamu juga jadi bisa ikut jajan!</div>
+    ${addStoreBtn()}
     ${withFar ? `<button type="button" class="sk-link" onclick="window.__toggleFar()">${window.__farOn ? 'Sembunyikan pedagang kota lain' : 'Intip pedagang di kota lain, yuk'}</button>` : ''}
   </div>`;
 }
-function sekitarAjakHtml() {
-  return `<button type="button" class="sk-ajak" onclick="window.__openAddVendorModal()">Jajanan langgananmu belum ada? <b>Daftarin yuk!</b></button>`;
+// ---------- Satu komponen "Tambah toko" untuk semua tempat (kartu & tombol) ----------
+const ADD_STORE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9 5.5 4h13L20 9M4 9h16v1a3 3 0 0 1-5.3 1.9A3 3 0 0 1 12 13a3 3 0 0 1-2.7-1.1A3 3 0 0 1 4 10zM5 13v7h9"/><path d="M18 15v6M15 18h6"/></svg>';
+function addStoreCard() {
+  return `<button type="button" class="as-card" onclick="window.__openAddVendorModal()">
+    <span class="as-ic">${ADD_STORE_ICON}</span>
+    <span class="as-tx"><b>Toko langgananmu belum ada?</b><small>Daftarin sendiri, cuma beberapa menit. Tetanggamu jadi ikut kebantu!</small></span>
+    <span class="as-go" aria-hidden="true">›</span>
+  </button>`;
 }
+function addStoreBtn() {
+  return `<button type="button" class="near-btn as-btn" onclick="window.__openAddVendorModal()">${ADD_STORE_ICON.replace('width="22" height="22"', 'width="18" height="18"')}<span>Daftarin toko langgananmu</span></button>`;
+}
+function sekitarAjakHtml() { return addStoreCard(); }
 window.__toggleFar = function () {
   window.__farOn = !window.__farOn;
   if (bottomView === 'peta') jdRenderPetaList(); else if (bottomView === 'terdekat') tokoRefresh(); else if (bottomView === 'cari' && window.__cariRun) window.__cariRun();
@@ -3261,7 +3271,7 @@ function jdNearList(list) {
 // ---------- Chip kategori Peta: 3 utama + "Lainnya" -> lembar kotak berwarna (tanpa ikon) ----------
 // Ikon 3D baru (persegi, tanpa teks di gambar) -> label ditampilkan oleh kode. Kategori lain masih ikon lama berteks.
 const NEW_KAT_ICONS = new Set(['jajanan','berat','minuman','kebutuhan','segar','fashion','servis','kecantikan','rumah','jasa_rumah','otomotif','kado','kreatif','pendidikan','kesehatan','lain']);
-const JD_CAT_COLORS = { kuliner: '#F4511E', kebutuhan: '#D97706', segar: '#16A34A', fashion: '#DB2777', servis: '#2563EB',
+const JD_CAT_COLORS = { kuliner: '#F4511E', jajanan: '#F4511E', berat: '#B45309', minuman: '#0284C7', manis: '#DB2777', fast: '#BE123C', kebutuhan: '#D97706', segar: '#16A34A', fashion: '#7C3AED', servis: '#2563EB',
   kecantikan: '#C026D3', rumah: '#0891B2', otomotif: '#475569', digital: '#4F46E5', pertanian: '#65A30D',
   kado: '#E11D48', pendidikan: '#0284C7', kreatif: '#EA580C', kesehatan: '#0D9488', lain: '#78716C' };
 const JD_CAT_FALLBACK = ['#7C3AED', '#0D9488', '#E11D48', '#4F46E5', '#CA8A04'];
@@ -3271,21 +3281,23 @@ function jdChipsHtml() {
   const chev = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   return main.map(chip).join('') + (picked ? chip(picked) : '') + (sec.length > 3 ? `<button type="button" id="map-more" class="more" aria-haspopup="dialog">Lainnya ${chev}</button>` : '');
 }
-function jdOpenCatSheet(onPick) {
+function jdOpenCatSheet(onPick, opts) {
+  opts = opts || {};
   document.getElementById('jd-cs')?.remove();
-  const sec = jdSectors();
+  const sec = opts.items || jdSectors().map(c => ({ k: c.k, label: c.label }));
+  const cur = opts.current !== undefined ? opts.current : mapCat;
   const wrap = document.createElement('div');
   wrap.id = 'jd-cs'; wrap.className = 'jd-cs';
   const close = () => { wrap.classList.add('out'); setTimeout(() => wrap.remove(), 180); };
   wrap.innerHTML = `<div class="jd-cs-panel" role="dialog" aria-label="Pilih kategori">
     <div class="jd-cs-grip"></div>
     <div class="jd-cs-title">Lagi cari apa nih?</div>
-    <div class="jd-cs-sub">Pilih satu, peta dan daftar langsung ikut menyesuaikan.</div>
-    <div class="jd-cs-grid">${sec.map((c, i) => `<button type="button" class="jd-cs-tile ${mapCat === c.k ? 'on' : ''}" data-k="${c.k}" style="--c:${JD_CAT_COLORS[c.k] || JD_CAT_FALLBACK[i % JD_CAT_FALLBACK.length]}"><span>${escapeHtml(c.label)}</span></button>`).join('')}</div>
+    <div class="jd-cs-sub">Pilih satu, daftar langsung ikut menyesuaikan.</div>
+    <div class="jd-cs-grid">${sec.map((c, i) => `<button type="button" class="jd-cs-tile ${cur === c.k ? 'on' : ''}" data-k="${c.k}" style="--c:${JD_CAT_COLORS[c.k] || JD_CAT_FALLBACK[i % JD_CAT_FALLBACK.length]}"><span>${escapeHtml(c.label)}</span></button>`).join('')}</div>
     <button type="button" class="jd-cs-all">Tampilkan semua kategori</button>
   </div>`;
   wrap.onclick = (e) => { if (e.target === wrap) close(); };
-  wrap.querySelectorAll('.jd-cs-tile').forEach(b => { b.onclick = () => { onPick(mapCat === b.dataset.k ? null : b.dataset.k); close(); }; });
+  wrap.querySelectorAll('.jd-cs-tile').forEach(b => { b.onclick = () => { onPick(cur === b.dataset.k ? null : b.dataset.k); close(); }; });
   wrap.querySelector('.jd-cs-all').onclick = () => { onPick(null); close(); };
   document.body.appendChild(wrap);
 }
@@ -3543,7 +3555,7 @@ function initCariSuggest(input, runSearch) {
     if (it.type === 'kat') {
       cariCat = it.k;
       input.value = '';
-      document.querySelectorAll('#cari-chips .map-chip').forEach(b => b.classList.toggle('active', b.dataset.k === cariCat));
+      if (window.__cariChips) window.__cariChips();
     } else {
       input.value = it.label;
       cariRecentAdd(it.label);
@@ -3581,6 +3593,12 @@ function initCariSuggest(input, runSearch) {
   });
 }
 
+function cariChipsHtml() {
+  const main = FOOD_MAIN.slice(0, 3), picked = FOOD_MAIN.slice(3).find(c => c.k === cariCat);
+  const chip = c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`;
+  const chev = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  return main.map(chip).join('') + (picked ? chip(picked) : '') + `<button type="button" id="cari-more" class="map-chip more" aria-haspopup="dialog">Lainnya ${chev}</button>`;
+}
 function renderCariView() {
   main.innerHTML = `
     <div class="cari-wrap">
@@ -3590,9 +3608,8 @@ function renderCariView() {
       </div>
       <div id="cari-suggest" class="cari-suggest" role="listbox" hidden></div>
     </div>
-    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${FOOD_MAIN.map(c => `<button type="button" class="map-chip ${cariCat === c.k ? 'active' : ''}" data-k="${c.k}">${c.e} ${c.short || c.label}</button>`).join('')}</div>
+    <div class="map-chip-row" id="cari-chips" style="margin-top:10px;">${cariChipsHtml()}</div>
     <div id="offline-queue-banner"></div>
-    <button type="button" onclick="window.__openAddVendorModal()" style="display:flex;align-items:center;gap:6px;width:100%;padding:9px 12px;border-radius:10px;border:1px dashed var(--stroke);background:transparent;color:var(--brand);font-weight:700;font-size:11.5px;margin:4px 0 8px;">➕ Toko belum ada di JajanDekat? Tambahkan sendiri</button>
     <div id="search-results" style="margin-top:8px;"></div>
 
     <div class="vendor-hero" style="margin-top:20px;text-align:left;">
@@ -3629,16 +3646,20 @@ function renderCariView() {
       return;
     }
     results.innerHTML = filtered.length
-      ? hmGridHtml(ordered) + (browsing ? sekitarAjakHtml() : '')
-      : `<div class="nb-empty">Tidak ada pedagang yang cocok.<button type="button" onclick="window.__openAddVendorModal()" style="display:block;margin:10px auto 0;padding:9px 14px;border-radius:10px;border:none;background:var(--brand);color:#fff;font-weight:700;font-size:11.5px;">➕ Tambahkan toko ini</button></div>`;
+      ? hmGridHtml(ordered) + addStoreCard()
+      : `<div class="nb-empty">Belum ketemu yang kamu cari.</div>${addStoreCard()}`;
   }
-  document.querySelectorAll('#cari-chips .map-chip').forEach(btn => {
-    btn.onclick = () => {
-      cariCat = cariCat === btn.dataset.k ? null : btn.dataset.k;
-      document.querySelectorAll('#cari-chips .map-chip').forEach(b => b.classList.toggle('active', b.dataset.k === cariCat));
-      runSearch();
-    };
-  });
+  const bindCariChips = () => {
+    const box = document.getElementById('cari-chips'); if (!box) return;
+    box.innerHTML = cariChipsHtml();
+    box.querySelectorAll('button[data-k]').forEach(btn => {
+      btn.onclick = () => { cariCat = cariCat === btn.dataset.k ? null : btn.dataset.k; bindCariChips(); runSearch(); };
+    });
+    const more = document.getElementById('cari-more');
+    if (more) more.onclick = () => jdOpenCatSheet(k => { cariCat = k; bindCariChips(); runSearch(); }, { items: FOOD_MAIN.map(c => ({ k: c.k, label: c.short || c.label })), current: cariCat });
+  };
+  window.__cariChips = bindCariChips;
+  bindCariChips();
   window.__cariRun = runSearch;
   input.oninput = runSearch;
   initCariSuggest(input, runSearch);
