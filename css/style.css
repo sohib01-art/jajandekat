@@ -1350,3 +1350,18 @@ header{ position:static; display:contents; }
 .sk-empty .near-btn{ white-space:normal; margin-top:6px; padding:11px 18px; }
 .near-btn{ max-width:100%; }
 main{ overflow-x:clip; }
+
+/* ===== Komponen seragam "Tambah toko" (v79) ===== */
+.as-card{ display:flex; align-items:center; gap:12px; width:100%; margin:16px 0 4px; padding:12px; text-align:left; cursor:pointer; color:var(--text); background:linear-gradient(135deg,rgba(255,107,74,.10),rgba(255,107,74,.03)); border:1.5px dashed rgba(255,107,74,.5); border-radius:16px; font-family:'Inter',sans-serif; }
+.as-card:active{ transform:scale(.985); }
+.as-ic{ flex:0 0 44px; width:44px; height:44px; border-radius:14px; background:var(--brand); color:#fff; display:grid; place-items:center; }
+.as-tx{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.as-tx b{ font:700 13.5px/1.25 'Poppins',sans-serif; }
+.as-tx small{ font-size:11.5px; line-height:1.35; color:var(--text-dim); }
+.as-go{ flex:none; color:var(--brand); font-size:24px; line-height:1; }
+.as-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.as-btn svg{ flex:none; }
+
+/* ===== Chip kategori Cari: tanpa geser samping (v80) ===== */
+#cari-chips{ flex-wrap:wrap; overflow:visible; }
+.map-chip.more{ background:rgba(255,107,74,.12); border-color:transparent; color:var(--brand); font-weight:700; display:inline-flex; align-items:center; gap:4px; }
