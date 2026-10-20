@@ -265,7 +265,9 @@ function setNavActive(view) {
 }
 document.querySelectorAll('nav.bottom .nav-item').forEach(el => {
   el.onclick = () => {
+    const prevView = bottomView;
     bottomView = el.dataset.view;
+    if (bottomView === 'peta' && prevView !== 'peta') { window.__jdAutoFull = true; window.__jdPetaFrom = prevView; }
     setNavActive(bottomView);
     // Nav bawah selalu membawa ke mode Pembeli
     if (mode !== 'pembeli') {
@@ -327,6 +329,7 @@ let guideActiveTab = mode;
 // Aksi navigasi nyata dari langkah panduan — tiap step yang punya "action" bisa ditekan
 // dan langsung membawa pengguna ke menu terkait, bukan cuma teks.
 function goToBottomView(view) {
+  if (view === 'peta' && bottomView !== 'peta') { window.__jdAutoFull = true; window.__jdPetaFrom = bottomView; }
   bottomView = view;
   setNavActive(view);
   if (mode !== 'pembeli') {
@@ -3171,6 +3174,82 @@ function jdSetMapInteractive(on) {
 }
 
 // Buka/tutup peta layar penuh. Elemen dipindah ke <body> supaya tidak terjebak container induk.
+// ---------- KARTU GESER TERSINKRON DENGAN PIN (peta layar penuh) ----------
+let jdSelId = null, jdCrLock = false, jdCrTimer = null, jdMapAuto = false;
+const jdWalkMin = (m) => Math.max(1, Math.round(m * 1.25 / 80));   // ±5 km/jam + jalan berkelok
+function vendorDistM(v) {
+  if (!buyerLoc) return null;
+  const p = vendorDisplayLatLng(v);
+  return p ? haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) : null;
+}
+function jdPinIcon(v, sel) {
+  const html = jdPinHtml(v).replace('width="34" height="43"', sel ? 'width="46" height="58"' : 'width="34" height="43"');
+  return L.divIcon({ html, className: sel ? 'jd-pin-sel' : '', iconSize: sel ? [46, 58] : [34, 43], iconAnchor: sel ? [23, 58] : [17, 43] });
+}
+function jdSetSelected(id, o) {
+  o = o || {};
+  if (jdSelId && markers[jdSelId]) {
+    const pv = vendors.find(x => x.id === jdSelId);
+    if (pv) markers[jdSelId].setIcon(jdPinIcon(pv, false)).setZIndexOffset(hmIsOpen(pv) ? 1000 : 0);
+  }
+  jdSelId = id;
+  const v = vendors.find(x => x.id === id), mk = markers[id];
+  if (v && mk) {
+    mk.setIcon(jdPinIcon(v, true)); mk.setZIndexOffset(5000);
+    const p = vendorDisplayLatLng(v);
+    if (o.pan && p && map) map.panTo([p.lat, p.lng], { animate: true });
+  }
+  const cr = document.getElementById('jd-cr'); if (!cr) return;
+  let target = null;
+  cr.querySelectorAll('.jd-cr-c').forEach(c => { const on = c.dataset.id === id; c.classList.toggle('sel', on); if (on) target = c; });
+  if (o.scroll && target) {
+    jdCrLock = true; clearTimeout(jdCrTimer); jdCrTimer = setTimeout(() => { jdCrLock = false; }, 500);
+    cr.scrollTo({ left: target.offsetLeft - (cr.clientWidth - target.clientWidth) / 2, behavior: 'smooth' });
+  }
+}
+function jdCarouselCard(v) {
+  const d = vendorDistM(v), open = hmIsOpen(v);
+  return `<div class="jd-cr-c" data-id="${v.id}" role="button" tabindex="0" onclick="window.__openVendorSheet('${v.id}')">
+    <span class="jd-cr-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}</span>
+    <span class="jd-cr-b">
+      <span class="jd-cr-n">${escapeHtml(v.name)}</span>
+      <span class="jd-cr-m">${escapeHtml(hmCatLabel(v))}</span>
+      <span class="jd-cr-t"><b class="${open ? 'ok' : 'off'}">${open ? 'Buka' : 'Tutup'}</b>${d != null ? ` · ${formatDistance(d)} · ±${jdWalkMin(d)} mnt jalan` : ''}</span>
+      <span class="jd-cr-a"><button type="button" onclick="event.stopPropagation();window.__jdPickOnMap('${v.id}')">Rute</button></span>
+    </span>
+  </div>`;
+}
+function jdBuildCarousel() {
+  const wrap = document.getElementById('jd-pt-map');
+  let cr = document.getElementById('jd-cr');
+  if (!wrap || !jdMapFull) { if (cr) cr.remove(); return; }
+  const all = jdMapVendors();
+  const list = (buyerLoc ? jdNearList(all) : sortVendorsForDisplay(all)).slice(0, 15);
+  if (!cr) {
+    cr = document.createElement('div'); cr.id = 'jd-cr'; cr.className = 'jd-cr';
+    cr.addEventListener('scroll', () => {
+      if (jdCrLock) return;
+      clearTimeout(jdCrTimer);
+      jdCrTimer = setTimeout(() => {
+        const mid = cr.scrollLeft + cr.clientWidth / 2; let best = null, bd = 1e9;
+        cr.querySelectorAll('.jd-cr-c').forEach(c => { const dd = Math.abs(c.offsetLeft + c.clientWidth / 2 - mid); if (dd < bd) { bd = dd; best = c; } });
+        if (best && best.dataset.id !== jdSelId) jdSetSelected(best.dataset.id, { pan: true });
+      }, 120);
+    }, { passive: true });
+    wrap.appendChild(cr);
+  }
+  cr.innerHTML = list.map(jdCarouselCard).join('');
+  cr.style.display = list.length ? '' : 'none';
+  const keep = (jdSelId && list.some(v => v.id === jdSelId)) ? jdSelId : (list[0] && list[0].id);
+  jdSelId = null;
+  if (keep) jdSetSelected(keep, { scroll: false });
+}
+window.__jdSelectPin = function (id) {
+  if (!jdMapFull) jdToggleMapFull(true);   // membangun kartu geser
+  if (!document.querySelector(`#jd-cr .jd-cr-c[data-id="${id}"]`)) { window.__jdPickOnMap(id); return; }  // pin jauh di luar daftar kartu: perilaku lama (rute)
+  jdSetSelected(id, { scroll: true, pan: true });
+};
+
 function jdToggleMapFull(on) {
   const wrap = document.getElementById('jd-pt-map');
   if (!wrap || !map) return;
@@ -3182,14 +3261,23 @@ function jdToggleMapFull(on) {
     wrap.parentNode.insertBefore(ph, wrap);
     document.body.appendChild(wrap);
     wrap.classList.add('full');
-    if (btn) btn.innerHTML = jdSvg('<path d="M6 6l12 12M18 6 6 18"/>');
+    if (btn) btn.innerHTML = jdSvg(jdMapAuto ? '<path d="M19 12H5M11 6l-6 6 6 6"/>' : '<path d="M6 6l12 12M18 6 6 18"/>');
+    if (jdMapAuto && !document.getElementById('jd-fs-list')) {
+      const b = document.createElement('button'); b.type = 'button'; b.id = 'jd-fs-list'; b.className = 'jd-fs-list';
+      b.innerHTML = jdSvg('<path d="M4 6h16M4 12h16M4 18h10"/>') + '<span>Daftar &amp; filter</span>';
+      b.onclick = () => { jdMapAuto = false; jdToggleMapFull(false); };
+      wrap.appendChild(b);
+    }
   } else {
     const ph = document.getElementById('jd-pt-ph');
     if (ph) { ph.parentNode.insertBefore(wrap, ph); ph.remove(); }
     wrap.classList.remove('full');
     if (btn) btn.innerHTML = jdSvg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>');
+    const fl = document.getElementById('jd-fs-list'); if (fl) fl.remove();
   }
   jdSetMapInteractive(on);
+  if (on) jdBuildCarousel();
+  else { const c = document.getElementById('jd-cr'); if (c) c.remove(); if (jdSelId && markers[jdSelId]) { const pv = vendors.find(x => x.id === jdSelId); if (pv) markers[jdSelId].setIcon(jdPinIcon(pv, false)); } jdSelId = null; }
   [30, 250].forEach(ms => setTimeout(() => { if (map) map.invalidateSize({ pan: false }); }, ms));
 }
 
@@ -3395,8 +3483,13 @@ function renderPetaView() {
     refresh();
   };
   document.getElementById('map-locate').onclick = jdLocateMe;
-  document.getElementById('map-expand').onclick = () => jdToggleMapFull(!jdMapFull);
+  document.getElementById('map-expand').onclick = () => {
+    if (jdMapFull && jdMapAuto) { jdMapAuto = false; jdToggleMapFull(false); window.__goView(window.__jdPetaFrom || 'status'); return; }  // seperti Grab: panah = kembali
+    jdToggleMapFull(!jdMapFull);
+  };
   document.getElementById('map-all').onclick = () => { const n = document.querySelector('.nav-item[data-view="cari"]'); if (n) n.click(); };
+  // Dari tab Peta / tombol Lihat Peta: langsung layar penuh + kartu geser (seperti Grab)
+  if (window.__jdAutoFull) { window.__jdAutoFull = false; jdMapAuto = true; jdToggleMapFull(true); }
 }
 
 // ---------- CARI VIEW (tab "Cari") ----------
@@ -4454,7 +4547,7 @@ function jdMarkerHost() {
   if (typeof L.markerClusterGroup !== 'function') return map;
   if (!jdCluster) {
     jdCluster = L.markerClusterGroup({
-      showCoverageOnHover: false, maxClusterRadius: 46, spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false, maxClusterRadius: 36, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 15,
       iconCreateFunction: (c) => L.divIcon({ html: `<div class="jd-cluster">${c.getChildCount()}</div>`, className: '', iconSize: [38, 38] }),
     });
     map.addLayer(jdCluster);
@@ -4701,9 +4794,10 @@ function renderMap() {
     const icon = L.divIcon({ html: jdPinHtml(v), className: '', iconSize: [34, 43], iconAnchor: [17, 43] });
     // Ketuk pin -> sheet detail pedagang (chat, WhatsApp, menu, ikuti, ulasan sudah ada di sheet)
     markers[v.id] = L.marker([p.lat, p.lng], { icon, title: v.name, zIndexOffset: hmIsOpen(v) ? 1000 : 0 })
-      .on('click', () => window.__jdPickOnMap(v.id));
+      .on('click', () => window.__jdSelectPin(v.id));
     jdMarkerHost().addLayer(markers[v.id]);
   });
+  jdBuildCarousel();
 
   if (jdRoute && jdRoute.from) {
     const rv = vendors.find(x => x.id === jdRoute.vendorId);
