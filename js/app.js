@@ -1490,6 +1490,29 @@ function hmVendorEmoji(v) { return (v.photo_url || v.mode_icon) ? '' : (v.emoji 
 function hmRating(v) { return v.rating_count > 0 ? `<span style="color:#F5A800">★</span> ${v.rating_avg} <span style="color:var(--text-dim);font-weight:500">(${v.rating_count})</span>` : ''; }
 // Status buka disamakan dengan lembar detail pedagang: aktif, atau punya lokasi & tidak tutup hari ini.
 function hmIsOpen(v) { return !!(v.active || (!vendorClosedTodayNote(v) && vendorIsShowable(v))); }
+// Status ringkas kartu: Buka / Tutup, plus petunjuk "Segera tutup" (sisa <= 60 menit) dan
+// "Segera buka" (buka <= 60 menit lagi). Hanya untuk toko berjadwal jam; pedagang dengan mode jualan aktif tidak dihitung.
+const HM_SOON_MIN = 60;
+function hmStatus(v) {
+  const open = hmIsOpen(v);
+  const base = { open, label: open ? 'Buka' : 'Tutup', cls: open ? '' : 'off', rank: open ? 0 : 2, title: '' };
+  if (v.active || v.buka_24jam || !v.jam_buka || !v.jam_tutup) return base;
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const openMin = toMin(v.jam_buka), closeMin = toMin(v.jam_tutup);
+  if (openMin === closeMin) return base;
+  const now = new Date(), cur = now.getHours() * 60 + now.getMinutes();
+  const diff = (t) => (t - cur + 1440) % 1440;
+  if (open) {
+    const left = diff(closeMin);
+    if (left > 0 && left <= HM_SOON_MIN) return { ...base, label: 'Segera tutup', cls: 'soon', title: `Tutup pukul ${v.jam_tutup.slice(0, 5)} (${left} menit lagi)` };
+    return base;
+  }
+  const note = vendorClosedTodayNote(v) || '';
+  if (!note.startsWith('Tutup sekarang')) return base; // tutup karena hari/libur, bukan jam
+  const wait = diff(openMin);
+  if (wait > 0 && wait <= HM_SOON_MIN) return { ...base, label: 'Segera buka', cls: 'soon', rank: 1, title: `Buka pukul ${v.jam_buka.slice(0, 5)} (${wait} menit lagi)` };
+  return base;
+}
 // Subjudul kartu: jenis jualan yang dikenal; label lama "Lainnya" diganti nama kategori utamanya.
 function hmCatLabel(v) {
   const labels = [...(v.categories || []), ...(v.custom_tags || [])];
@@ -1500,9 +1523,9 @@ function hmCatLabel(v) {
   return m ? m.short : '';
 }
 function renderHmNearVCard(v) {
-  const d = vendorDistanceLabel(v), open = hmIsOpen(v), rt = hmRating(v);
-  return `<button type="button" class="hm-vc" onclick="window.__openVendorSheet('${v.id}')">
-    <span class="hm-vc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}<span class="hm-vc-st ${open ? '' : 'off'}">${open ? 'Buka' : 'Tutup'}</span></span>
+  const d = vendorDistanceLabel(v), st = hmStatus(v), rt = hmRating(v);
+  return `<button type="button" class="hm-vc${st.rank === 2 ? ' closed' : ''}" onclick="window.__openVendorSheet('${v.id}')">
+    <span class="hm-vc-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}<span class="hm-vc-st ${st.cls}" ${st.title ? `title="${st.title}"` : ''}>${st.label}</span></span>
     <span class="hm-vc-name">${escapeHtml(v.name)}</span>
     <span class="hm-vc-meta">${escapeHtml(hmCatLabel(v))}</span>
     <span class="hm-vc-foot"><span class="hm-vc-km">${d ? '📍 ' + d : ''}</span><span class="hm-vc-rt">${rt}</span></span>
@@ -1633,7 +1656,7 @@ function renderPembeli() {
     <div class="hm-banner"><div><h2>Dukung Pedagang<br>Lokal di Sekitarmu</h2><p>Temukan kuliner, toko, dan jasa terdekat dengan mudah.</p><button onclick="window.__goView('cari')">Cari Sekarang →</button></div><div class="hm-banner-art">🧑‍🍳</div></div>`;
   const near = buyerLoc ? nearbyVendors(filteredVendors).slice(0, 8) : [];
   const filterPill = hmActive ? `<div class="hm-filterpill"><span>Menampilkan: <b>${hmActive.short}${homeType ? ' · ' + escapeHtml(homeType) : ''}</b></span><button type="button" onclick="window.__setCat('semua')" aria-label="Hapus filter">✕</button></div>` : '';
-  const recs = recommendVendors(filteredVendors).slice(0, 8);
+  const recs = recommendVendors(filteredVendors).map((v, i) => ({ v, i })).sort((a, b) => (hmStatus(a.v).rank - hmStatus(b.v).rank) || (a.i - b.i)).map(x => x.v).slice(0, 8);
 
   const homeCats = [['jajanan', 'Jajanan'], ['berat', 'Makanan'], ['minuman', 'Minuman'], ['kebutuhan', 'Sembako']].map(([k, n]) => {
     const c = FOOD_MAIN.find(x => x.k === k); if (!c) return '';
@@ -1649,16 +1672,15 @@ function renderPembeli() {
   main.innerHTML = `
     ${renderPushPromptBanner()}
     ${renderAnnouncementBanner(getRelevantAnnouncementsForBuyer())}
-    ${actsHtml}
-    <div class="sec-head"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__goView('kategori')">Lihat Semua →</button></div>
+    <div class="sec-head hm-sec-first"><h2>Kategori Pilihan</h2><button class="lihat" onclick="window.__goView('kategori')">Lihat Semua →</button></div>
     <div class="hm-cats">${homeCats}</div>${hmActive ? typeChipsHtml : ''}
     <div id="hm-near-anchor"></div>
     ${filterPill}
     <div class="sec-head"><h2>📍 Pedagang di Sekitar Kamu</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
     ${near.length ? `<div class="hm-vrow three">${near.slice(0, 3).map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml(hmActive ? hmActive.short : '')}
-    <div style="margin-top:14px;">${bannerHtml}</div>
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
     ${recs.length ? `<div class="hm-vgrid">${recs.slice(0, 6).map(renderHmNearVCard).join('')}</div>` : (buyerLoc ? '<div class="nb-empty">Belum ada rekomendasi dalam radius 50 km.</div>' : '<div class="nb-empty">Tidak ada pedagang.</div>')}
+    <div style="margin-top:16px;">${bannerHtml}</div>
   `;
   initAnnSlider();
 }
@@ -2691,7 +2713,7 @@ function nearbyVendors(list) {
     .filter(vendorIsShowable)
     .map(v => { const p = vendorDisplayLatLng(v); return { v, d: haversineMeters(buyerLoc.lat, buyerLoc.lng, p.lat, p.lng) }; })
     .filter(x => x.d <= NEARBY_MAX_M)
-    .sort((a, b) => a.d - b.d)
+    .sort((a, b) => (hmStatus(a.v).rank - hmStatus(b.v).rank) || (a.d - b.d)) // buka dulu, lalu segera buka, lalu tutup; di tiap kelompok yang terdekat
     .map(x => x.v);
 }
 
@@ -2751,11 +2773,11 @@ function renderNearbyHtml(list) {
 // ---------- DAFTAR TOKO: daftar semua pedagang + kolom cari ----------
 let tokoQuery = '', tokoOnlyOpen = false, tokoLimit = 30;
 function renderTokoRow(v) {
-  const d = vendorDistanceLabel(v), open = hmIsOpen(v), rt = hmRating(v);
+  const d = vendorDistanceLabel(v), st = hmStatus(v), rt = hmRating(v);
   return `<button type="button" class="tk-row" onclick="window.__openVendorSheet('${v.id}')">
     <span class="tk-ph" ${hmVendorPhoto(v)}>${hmVendorEmoji(v)}</span>
     <span class="tk-b">
-      <span class="tk-top"><span class="tk-name">${escapeHtml(v.name)}</span><span class="hm-pill ${open ? '' : 'off'}">${open ? 'Buka' : 'Tutup'}</span></span>
+      <span class="tk-top"><span class="tk-name">${escapeHtml(v.name)}</span><span class="hm-pill ${st.cls}">${st.label}</span></span>
       <span class="tk-cat">${escapeHtml(hmCatLabel(v))}${v.claim_status === 'unclaimed' ? ' · <span style="color:#9CA3AF;">Belum diklaim</span>' : ''}</span>
       <span class="tk-foot"><span>${d ? '📍 ' + d : ''}</span><span>${rt}</span></span>
     </span>
