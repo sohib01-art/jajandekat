@@ -1365,3 +1365,25 @@ main{ overflow-x:clip; }
 /* ===== Chip kategori Cari: tanpa geser samping (v80) ===== */
 #cari-chips{ flex-wrap:wrap; overflow:visible; }
 .map-chip.more{ background:rgba(255,107,74,.12); border-color:transparent; color:var(--brand); font-weight:700; display:inline-flex; align-items:center; gap:4px; }
+
+/* ===== Peta: kartu geser tersinkron + pin terpilih (v81) ===== */
+.jd-cr{ position:absolute; left:0; right:0; bottom:calc(12px + env(safe-area-inset-bottom,0px)); z-index:1090; display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory; padding:4px 16px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.jd-cr::-webkit-scrollbar{ display:none; }
+.jd-cr-c{ flex:0 0 min(86%,340px); scroll-snap-align:center; display:flex; gap:10px; padding:10px; background:#fff; color:#111827; border:2px solid transparent; border-radius:18px; box-shadow:0 6px 18px rgba(0,0,0,.2); text-align:left; cursor:pointer; font-family:'Inter',sans-serif; }
+.jd-cr-c.sel{ border-color:#FF6B4A; }
+.jd-cr-ph{ flex:0 0 84px; height:84px; border-radius:12px; background:#F3F4F6 center/cover; display:flex; align-items:center; justify-content:center; font-size:30px; }
+.jd-cr-b{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.jd-cr-n{ font:700 14px/1.25 'Poppins',sans-serif; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.jd-cr-m{ font-size:12px; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.jd-cr-t{ font-size:12px; color:#4B5563; }
+.jd-cr-t b.ok{ color:#16A34A; } .jd-cr-t b.off{ color:#6B7280; }
+.jd-cr-a{ margin-top:auto; display:flex; }
+.jd-cr-a button{ border:0; background:#FF6B4A; color:#fff; border-radius:10px; padding:7px 16px; font:700 12px 'Poppins',sans-serif; cursor:pointer; }
+.jd-pt-map.has-route .jd-cr{ display:none; }
+.jd-pin-sel .jd-pin{ filter:drop-shadow(0 6px 8px rgba(0,0,0,.35)); animation:jdPinPop .25s ease; }
+@keyframes jdPinPop{ from{ transform:translateY(-6px) scale(.9); } to{ transform:none; } }
+@media (prefers-reduced-motion:reduce){ .jd-pin-sel .jd-pin{ animation:none; } }
+
+/* ===== Peta langsung layar penuh (v82) ===== */
+.jd-fs-list{ position:absolute; top:calc(12px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); z-index:1100; display:inline-flex; align-items:center; gap:6px; padding:9px 14px; background:#fff; color:#111827; border:0; border-radius:999px; box-shadow:0 3px 10px rgba(0,0,0,.2); font:600 12.5px 'Poppins',sans-serif; cursor:pointer; white-space:nowrap; }
+.jd-fs-list:active{ transform:translateX(-50%) scale(.96); }
