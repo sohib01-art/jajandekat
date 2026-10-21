@@ -790,7 +790,7 @@ window.__openProductForm = function (productId) {
       <div id="prod-photo-zone" onclick="window.__openPhotoChooser('prod-photo-input')" style="margin:4px 0 6px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         ${pendingProductPhotoPreview ? `<img src="${pendingProductPhotoPreview}" style="width:100%;max-width:160px;border-radius:10px;margin-bottom:6px;" /><span style="color:var(--brand);">Ganti foto</span>` : '📷 Tambah foto produk'}
       </div>
-      <div style="font-size:10px;color:var(--text-faint);margin:0 0 10px;">Gunakan foto produk milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk memastikan tidak melanggar privasi orang lain.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin:0 0 10px;">Gunakan foto produk milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk memastikan tidak melanggar privasi orang lain.</div>
       <label id="prod-photo-consent-wrap" style="display:none;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin:0 0 12px;cursor:pointer;">
         <input id="prod-photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
         <span>Saya konfirmasi foto ini milik saya sendiri dan saya bertanggung jawab penuh atas foto yang saya unggah.</span>
@@ -917,7 +917,7 @@ window.__openVerificationForm = async function (vendorId) {
       <div id="verify-ktp-zone" onclick="window.__triggerKtpCamera()" style="margin:4px 0 10px;border:1.5px dashed var(--stroke);border-radius:12px;padding:12px;text-align:center;color:var(--text-dim);font-size:12px;cursor:pointer;">
         📸 Ambil foto KTP (langsung dari kamera)
       </div>
-      <div style="font-size:10px;color:var(--text-faint);margin:-6px 0 10px;">Wajib foto langsung pakai kamera (nggak bisa dari galeri) untuk mencegah pemalsuan identitas. Foto KTP hanya dilihat admin untuk verifikasi, tidak ditampilkan ke publik.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin:-6px 0 10px;">Wajib foto langsung pakai kamera (nggak bisa dari galeri) untuk mencegah pemalsuan identitas. Foto KTP hanya dilihat admin untuk verifikasi, tidak ditampilkan ke publik.</div>
 
       <div id="verify-error" style="color:#f87171;font-size:12px;margin-bottom:10px;"></div>
 
@@ -1089,12 +1089,12 @@ window.__openPhotoChooser = function (inputId, opts = {}) {
         <button type="button" onclick="window.__photoChooserPick('camera')" style="flex:1;padding:16px 8px;border-radius:14px;border:none;background:linear-gradient(135deg,#FFE8D6,#FFD3B0);display:flex;flex-direction:column;align-items:center;gap:6px;">
           <span style="font-size:24px;">📸</span>
           <span style="font-weight:700;font-size:12px;color:#7A3E00;">Ambil Foto</span>
-          <span style="font-size:9.5px;color:#8A5A28;">Pakai kamera</span>
+          <span style="font-size:11px;color:#8A5A28;">Pakai kamera</span>
         </button>
         <button type="button" onclick="window.__photoChooserPick('gallery')" style="flex:1;padding:16px 8px;border-radius:14px;border:none;background:linear-gradient(135deg,#DCEBFF,#C3DBFF);display:flex;flex-direction:column;align-items:center;gap:6px;">
           <span style="font-size:24px;">🖼️</span>
           <span style="font-weight:700;font-size:12px;color:#1E4E8C;">Pilih dari Galeri</span>
-          <span style="font-size:9.5px;color:#3E6BA8;">Foto yang sudah ada</span>
+          <span style="font-size:11px;color:#3E6BA8;">Foto yang sudah ada</span>
         </button>
       </div>
       <button type="button" onclick="document.getElementById('photo-chooser-overlay').remove()" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-weight:700;font-size:13px;">Batal</button>
@@ -1655,6 +1655,12 @@ function renderPembeli() {
   const bannerHtml = bn.length ? renderBannerSlider(bn) : `
     <div class="hm-banner"><div><h2>Dukung Pedagang<br>Lokal di Sekitarmu</h2><p>Temukan kuliner, toko, dan jasa terdekat dengan mudah.</p><button onclick="window.__goView('cari')">Cari Sekarang →</button></div><div class="hm-banner-art">🧑‍🍳</div></div>`;
   const near = buyerLoc ? nearbyVendors(filteredVendors).slice(0, 8) : [];
+  // Semua pedagang terdekat sedang tutup: beri tahu, supaya pembeli tidak mengira aplikasinya kosong/rusak.
+  const nearStatuses = near.map(hmStatus);
+  const nearSoon = nearStatuses.filter(x => x.rank === 1).length;
+  const nearClosedNote = (near.length && nearStatuses.every(x => x.rank !== 0))
+    ? `<div class="hm-allclosed" role="status"><span aria-hidden="true">🌙</span><span><b>Semua pedagang di sekitarmu sedang tutup.</b> ${nearSoon ? `${nearSoon} akan segera buka.` : 'Cek lagi nanti, atau ketuk ♥ untuk memfavoritkan pedagang dan lihat kapan mereka buka.'}</span></div>`
+    : '';
   const filterPill = hmActive ? `<div class="hm-filterpill"><span>Menampilkan: <b>${hmActive.short}${homeType ? ' · ' + escapeHtml(homeType) : ''}</b></span><button type="button" onclick="window.__setCat('semua')" aria-label="Hapus filter">✕</button></div>` : '';
   const recs = recommendVendors(filteredVendors).map((v, i) => ({ v, i })).sort((a, b) => (hmStatus(a.v).rank - hmStatus(b.v).rank) || (a.i - b.i)).map(x => x.v).slice(0, 8);
 
@@ -1677,6 +1683,7 @@ function renderPembeli() {
     <div id="hm-near-anchor"></div>
     ${filterPill}
     <div class="sec-head"><h2>📍 Pedagang di Sekitar Kamu</h2>${near.length ? '<button class="lihat" onclick="window.__goView(\'terdekat\')">Lihat Semua →</button>' : ''}</div>
+    ${nearClosedNote}
     ${near.length ? `<div class="hm-vrow three">${near.slice(0, 3).map(renderHmNearVCard).join('')}</div>` : nearbyEmptyHtml(hmActive ? hmActive.short : '')}
     <div class="sec-head"><h2>👍 Rekomendasi Untuk Kamu</h2><button class="lihat" onclick="window.__goView('cari')">Lihat Semua →</button></div>
     ${recs.length ? `<div class="hm-vgrid">${recs.slice(0, 6).map(renderHmNearVCard).join('')}</div>` : (buyerLoc ? '<div class="nb-empty">Belum ada rekomendasi dalam radius 50 km.</div>' : '<div class="nb-empty">Tidak ada pedagang.</div>')}
@@ -1758,7 +1765,7 @@ async function renderArtikelListView() {
         ${a.cover_image ? `<img src="${a.cover_image}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="font-family:'Poppins';font-weight:700;font-size:13.5px;">${escapeHtml(a.title)}</div>
         ${a.excerpt ? `<div style="font-size:12px;color:var(--text-dim);">${escapeHtml(a.excerpt)}</div>` : ''}
-        <div style="font-size:10px;color:var(--text-faint);">${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+        <div style="font-size:11px;color:var(--text-faint);">${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
       </div>
     `).join('');
   } catch (e) {
@@ -1781,7 +1788,7 @@ async function renderArtikelDetailView(slug) {
       <button class="follow-btn" style="margin-bottom:12px;" onclick="window.__backFromArtikel()">← Kembali ke Artikel</button>
       ${data.cover_image ? `<img src="${data.cover_image}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ''}
       <div style="font-family:'Poppins';font-weight:800;font-size:18px;margin-bottom:6px;">${escapeHtml(data.title)}</div>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">${new Date(data.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
       <button id="art-share-inline" class="follow-btn" style="margin-bottom:14px;" onclick="window.__shareArtikel()">📤 Bagikan artikel</button>
       <div style="font-size:13.5px;line-height:1.7;">${renderMarkdownSafe(data.content)}</div>
       ${artikelJoinCardHtml()}
@@ -2651,7 +2658,7 @@ function renderVendorCardHtml(v, opts = {}) {
           ${catLabel ? `<span class="vp-cat">${catLabel}</span>` : ''}
         </div>
         ${isPromoActive(v) && v.promo_text ? `<div class="vp-promo-text">🔥 ${escapeHtml(v.promo_text)}</div>` : ''}
-        ${vendorScheduleLabel(v) ? `<div class="vp-schedule" style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
+        ${vendorScheduleLabel(v) ? `<div class="vp-schedule" style="font-size:11px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
         ${vendorClosedTodayNote(v) ? `<div class="vp-closed">${escapeHtml(vendorClosedTodayNote(v))}</div>` : ''}
         <div class="vp-foot">
           ${locLabel ? `<span class="vp-loc">${VP_ICON_PIN}<span>${locLabel}</span></span>` : ''}
@@ -2836,9 +2843,9 @@ function renderTerdekatView() {
 // ---------- FAVORIT (tab "Favorit" = pedagang yang diikuti) ----------
 function renderFavoritView() {
   const favs = sortVendorsForDisplay(vendors.filter(v => followedIds.has(v.id)));
-  const openCount = favs.filter(v => v.active).length;
+  const openCount = favs.filter(v => hmStatus(v).rank === 0).length;
   main.innerHTML = `
-    <div class="sec-head"><h2>💛 Pedagang yang Kamu Ikuti</h2>${favs.length ? `<span class="sec-count">${openCount} sedang buka</span>` : ''}</div>
+    <div class="sec-head"><h2>❤️ Pedagang Favoritmu</h2>${favs.length ? `<span class="sec-count">${openCount} sedang buka</span>` : ''}</div>
     ${favs.length
       ? hmGridHtml(favs)
       : `<div class="empty-state">
@@ -2966,7 +2973,7 @@ window.__openMitraInfo = function () {
         <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">
           <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:${tagColor[st[2]]};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">${i + 1}</div>
           <div style="min-width:0;">
-            <div style="font-size:12.5px;font-weight:700;">${st[0]} <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${tagColor[st[2]]};color:#fff;vertical-align:1px;">${st[2]}</span></div>
+            <div style="font-size:12.5px;font-weight:700;">${st[0]} <span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:${tagColor[st[2]]};color:#fff;vertical-align:1px;">${st[2]}</span></div>
             <div style="font-size:11.5px;color:var(--text-dim);line-height:1.5;margin-top:2px;">${st[1]}</div>
           </div>
         </div>`).join('')}
@@ -3873,7 +3880,7 @@ async function updateOfflineQueueBanner() {
     <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;background:#FEF3C7;color:#92400E;font-size:11px;margin-bottom:8px;">
       <span>📦</span>
       <span style="flex:1;">${items.length} toko menunggu dikirim${errCount ? ` (${errCount} gagal, perlu dicek)` : ' — nggak ada sinyal saat disimpan'}</span>
-      <button type="button" onclick="window.__retryOfflineQueue()" style="border:none;background:#92400E;color:#fff;font-weight:700;font-size:10.5px;padding:5px 10px;border-radius:8px;">Coba Lagi</button>
+      <button type="button" onclick="window.__retryOfflineQueue()" style="border:none;background:#92400E;color:#fff;font-weight:700;font-size:11px;padding:5px 10px;border-radius:8px;">Coba Lagi</button>
     </div>
   `;
 }
@@ -3974,7 +3981,7 @@ const BH_CSS = `
 .bh-times input{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
 .bh-menu{display:grid;grid-template-columns:24px minmax(0,1fr) 104px auto;gap:6px;align-items:end;margin-top:10px}
 .bh-num{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:9px}
-.bh-mf label{display:block;font-size:10.5px;color:var(--text-dim);margin-bottom:3px}
+.bh-mf label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px}
 .bh-mf input{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--text);font-family:inherit;font-size:12.5px;min-width:0}
 .bh-del{border:none;background:transparent;color:#DC2626;font-size:11.5px;font-weight:700;padding:10px 2px;cursor:pointer;font-family:inherit}
 .bh-add{width:100%;margin-top:12px;padding:11px;border-radius:10px;border:1px dashed var(--brand);background:transparent;color:var(--brand);font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer}
@@ -4054,7 +4061,7 @@ window.__openAddVendorModal = function () {
       </div>
 
       <input id="ba-whatsapp" type="tel" value="" oninput="window.__baUpdate('whatsapp', this.value)" placeholder="Nomor WhatsApp toko (contoh: 6281234567890)" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:6px;box-sizing:border-box;" />
-      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Nggak yakin nomornya? Isi saja nomor WhatsApp kamu sendiri sementara — pemilik toko bisa menggantinya lewat menu Edit Profil setelah klaim disetujui.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Nggak yakin nomornya? Isi saja nomor WhatsApp kamu sendiri sementara — pemilik toko bisa menggantinya lewat menu Edit Profil setelah klaim disetujui.</div>
 
       <style>
         #ba-pin-svg{position:absolute;left:-18px;top:-46px;transition:transform .18s ease;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));}
@@ -4064,7 +4071,7 @@ window.__openAddVendorModal = function () {
         @media (prefers-reduced-motion:reduce){#ba-pin-svg,#ba-pin-shadow{transition:none;}}
       </style>
       <div style="font-size:11.5px;font-weight:700;margin-bottom:2px;">Lokasi toko</div>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-bottom:8px;">Geser peta sampai pin tepat di lokasi toko/lapaknya. Cubit atau tekan + / − untuk memperbesar.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:8px;">Geser peta sampai pin tepat di lokasi toko/lapaknya. Cubit atau tekan + / − untuk memperbesar.</div>
       <div id="ba-map-wrap" style="position:relative;isolation:isolate;height:240px;border-radius:12px;overflow:hidden;border:1px solid var(--stroke);margin-bottom:6px;">
         <div id="ba-map" style="position:absolute;inset:0;"></div>
         <div id="ba-pin" aria-hidden="true" style="position:absolute;left:50%;top:50%;width:0;height:0;z-index:500;pointer-events:none;">
@@ -4073,7 +4080,7 @@ window.__openAddVendorModal = function () {
         </div>
         <button type="button" id="ba-loc-btn" aria-label="Pakai lokasi saya" onclick="window.__baCaptureLocation()" style="position:absolute;right:8px;bottom:8px;z-index:600;width:40px;height:40px;border-radius:50%;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:19px;cursor:pointer;">🎯</button>
       </div>
-      <div id="ba-loc-status" style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;min-height:14px;">Mencari lokasimu… atau geser peta ke lokasi toko.</div>
+      <div id="ba-loc-status" style="font-size:11px;color:var(--text-faint);margin-bottom:10px;min-height:14px;">Mencari lokasimu… atau geser peta ke lokasi toko.</div>
 
 
       <input id="ba-note" type="text" value="" oninput="window.__baUpdate('note', this.value)" placeholder="Catatan lokasi (opsional), misal: sebelah warung Bu Siti" style="width:100%;background:var(--bg);border:1px solid var(--stroke);border-radius:10px;padding:11px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:10px;box-sizing:border-box;" />
@@ -4526,7 +4533,7 @@ function jdInjectMapCss() {
     .jd-me-halo{position:absolute;inset:0;border-radius:50%;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.28)}
     .jd-me{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#2563EB;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);box-sizing:border-box}
     .leaflet-container{font-family:'Poppins',sans-serif;background:#F6F3EE}
-    .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.75)!important;border-radius:8px 0 0 0}
+    .leaflet-control-attribution{font-size:11px;background:rgba(255,255,255,.75)!important;border-radius:8px 0 0 0}
 
     .jd-pt-search{display:flex;align-items:center;gap:10px;background:#fff;border-radius:16px;padding:0 8px 0 14px;height:48px;box-shadow:0 2px 10px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.05);color:#6B7280}
     .jd-pt-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font:500 14px 'Poppins',sans-serif;color:#111827}
@@ -5260,7 +5267,7 @@ function renderCategoryPickerGrouped(selectedLabels, toggleFn, query) {
     const items = matches.filter(c => c.group === g);
     if (items.length === 0) return '';
     return `
-      <div style="font-size:10.5px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 6px;">${g}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 6px;">${g}</div>
       <div class="cat-picker-grid">
         ${items.map(c => `
           <button type="button" class="cat-picker-item ${selectedLabels.includes(c.label) ? 'picked' : ''}" onclick="${toggleFn}('${c.label.replace(/'/g, "\\'")}')">
@@ -5429,7 +5436,7 @@ function renderEditProfile(vendorId) {
             : `<button type="button" class="reg-photo-pick" onclick="window.__openPhotoChooser('edit-photo-input')">📷 Pilih Foto (kamera / galeri)</button>`}
         </div>
         ${editPhotoPreview ? `<button type="button" onclick="window.__openPhotoChooser('edit-photo-input')" style="margin-top:6px;width:100%;padding:9px;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--text-dim);font-size:12px;font-weight:700;">Ganti foto</button>` : ''}
-        <div style="font-size:10px;color:var(--text-faint);margin-top:6px;text-align:left;line-height:1.5;">Gunakan foto toko/produk milik sendiri (bukan foto orang lain tanpa izin). Anda bertanggung jawab penuh atas foto yang diunggah, termasuk kepatuhan terhadap privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar dapat dihapus tanpa pemberitahuan.</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:6px;text-align:left;line-height:1.5;">Gunakan foto toko/produk milik sendiri (bukan foto orang lain tanpa izin). Anda bertanggung jawab penuh atas foto yang diunggah, termasuk kepatuhan terhadap privasi pihak lain yang mungkin ikut terekam. Foto tidak pantas atau melanggar dapat dihapus tanpa pemberitahuan.</div>
         ${editPhotoFile ? `
         <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;text-align:left;">
           <input id="edit-photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
@@ -5456,17 +5463,17 @@ function renderEditProfile(vendorId) {
             <input id="edit-show-whatsapp" type="checkbox" ${v.show_whatsapp !== false ? 'checked' : ''} style="width:17px;height:17px;" />
             📱 Tampilkan nomor WhatsApp saya ke pembeli
           </label>
-          <div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:8px;">
+          <div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-top:8px;">
             ${vendorChatEnabled(v) ? 'Berapa pun pilihannya, pembeli tetap bisa hubungi Anda lewat <b>💬 Chat dalam app</b> — ini cuma soal apakah nomor WA Anda kelihatan juga atau tidak.' : 'WhatsApp adalah cara utama pembeli menghubungi Anda. Kalau nomor disembunyikan, pembeli tidak punya cara menghubungi Anda lewat JajanDekat.'} Bisa diubah kapan saja.
           </div>
-          <div style="font-size:10.5px;line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px dashed var(--stroke);">
+          <div style="font-size:11px;line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px dashed var(--stroke);">
             <b style="color:#25D366;">✅ Kalau nomor WA ditampilkan:</b> pembeli bisa langsung chat/telpon Anda di WA yang biasa dipakai, lebih cepat & familiar. <b style="color:#f87171;">Risikonya:</b> nomor Anda bisa disimpan/dihubungi orang di luar urusan jual-beli (promosi, spam, dll), dan riwayat chatnya bercampur dengan kontak pribadi Anda.
           </div>
           ${vendorChatEnabled(v) ? `
-          <div style="font-size:10.5px;line-height:1.6;margin-top:6px;">
+          <div style="font-size:11px;line-height:1.6;margin-top:6px;">
             <b style="color:#25D366;">✅ Kalau disembunyikan (chat app saja):</b> nomor pribadi Anda tetap privat, semua pesan jualan rapi di satu tempat (tab "💬 Pesan Pembeli"). <b style="color:#f87171;">Risikonya:</b> Anda perlu buka app ini untuk balas, tidak senotifikasi WA yang biasa Anda cek.
           </div>
-          ` : `<div style="font-size:10.5px;line-height:1.6;margin-top:6px;"><b style="color:#f87171;">⚠️ Kalau disembunyikan:</b> pembeli tidak bisa menghubungi Anda lewat JajanDekat, jadi Anda bisa kehilangan calon pembeli. Disarankan tetap ditampilkan.</div>`}
+          ` : `<div style="font-size:11px;line-height:1.6;margin-top:6px;"><b style="color:#f87171;">⚠️ Kalau disembunyikan:</b> pembeli tidak bisa menghubungi Anda lewat JajanDekat, jadi Anda bisa kehilangan calon pembeli. Disarankan tetap ditampilkan.</div>`}
         </div>
 
         <button onclick="window.__saveEditProfile('${vendorId}')">💾 Simpan Perubahan</button>
@@ -5690,7 +5697,7 @@ function pdCardHead(icon, title, desc) {
   .pd-panel[data-tab="toko"] .pd-tile-ic{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--pdsoft);font-size:0}
   .pd-panel[data-tab="toko"] .pd-tile-ic svg{width:26px;height:26px}
   .pd-panel[data-tab="toko"] .pd-tile-lbl{display:block;color:var(--pdn)}
-  .pd-panel[data-tab="toko"] .pd-tile-sub{font-size:10px;font-weight:600;color:#15803D}
+  .pd-panel[data-tab="toko"] .pd-tile-sub{font-size:11px;font-weight:600;color:#15803D}
   .pd-card{margin-top:14px;padding:16px;border-radius:20px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(27,42,78,.05),0 8px 20px -10px rgba(27,42,78,.16);text-align:left}
   .pd-card-hd{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
   .pd-card-ic{flex:0 0 auto;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--pdsoft)}
@@ -5715,7 +5722,7 @@ function pdCardHead(icon, title, desc) {
   .pd-fam{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin-bottom:8px;padding:10px 12px;border:1.5px solid var(--stroke,#E5E7EB);border-radius:12px;background:transparent;color:var(--pdn);font-size:12.5px;text-align:left;cursor:pointer}
   .pd-fam.cur{border-color:var(--pdo);background:var(--pdsoft)}
   .pd-fam b{font-weight:600}
-  .pd-fam small{font-size:10.5px;color:var(--text-faint,#7b8499);white-space:nowrap}
+  .pd-fam small{font-size:11px;color:var(--text-faint,#7b8499);white-space:nowrap}
   .pd-edit{display:flex;align-items:center;width:100%;box-sizing:border-box;min-height:50px;margin-top:14px;padding:0 16px;border:0;border-radius:14px;background:var(--pdo);color:#fff;font:700 12.5px/1.2 'Poppins',system-ui,sans-serif;cursor:pointer;box-shadow:0 10px 20px -10px var(--pdo);-webkit-tap-highlight-color:transparent}
   .pd-edit:active{transform:scale(.99)}
   .pd-edit .pd-btn-ic,.pd-edit .pd-btn-ch{color:#fff}
@@ -5764,7 +5771,7 @@ function pdCardHead(icon, title, desc) {
   .pd-stats{display:flex;gap:8px;margin-top:4px}
   .pd-stat{flex:1;padding:12px 8px;border-radius:14px;background:#F6F2EE;text-align:center}
   .pd-stat b{display:block;font:800 19px 'Poppins',system-ui,sans-serif;color:#FF5A2D}
-  .pd-stat small{display:block;margin-top:2px;font-size:10.5px;color:#6F7890}
+  .pd-stat small{display:block;margin-top:2px;font-size:11px;color:#6F7890}
   .pd-promo-sec{margin-top:14px;padding-top:14px;border-top:1px solid #EFE7E0}
   .pd-promo-sec h4{margin:0 0 3px;font:700 14px 'Poppins',system-ui,sans-serif;color:#1B2A4E}
   .pd-promo-row{display:flex;gap:8px;margin-top:10px;align-items:stretch}
@@ -5803,9 +5810,9 @@ let pdTab = ''; // '' = menu tertutup (tampilan Beranda seperti mockup); ketuk m
   .hs-ss{margin-top:3px;font-size:12.5px;line-height:1.45;color:#6F7890}
   .hs-up{flex:0 0 auto;width:86px;padding:10px 6px;border-radius:12px;background:#FFE3D8;text-align:center;cursor:pointer;color:#D93A12;font:600 11.5px/1.25 'Poppins',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
   .hs-up svg{width:30px;height:30px;display:block;margin:0 auto 4px}
-  .hs-up small{display:block;font-weight:500;font-size:10.5px;color:#E8502F}
+  .hs-up small{display:block;font-weight:500;font-size:11px;color:#E8502F}
   .hs-up img{width:100%;height:46px;object-fit:cover;border-radius:8px;display:block;margin-bottom:4px}
-  .hs-note{margin-top:8px;font-size:10px;line-height:1.5;color:var(--text-faint,#7b8499);text-align:left}
+  .hs-note{margin-top:8px;font-size:11px;line-height:1.5;color:var(--text-faint,#7b8499);text-align:left}
   .hs-go{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;box-sizing:border-box;min-height:66px;margin-top:14px;padding:10px 16px;border:0;border-radius:20px;color:#fff;cursor:pointer;background:linear-gradient(135deg,#FF7A47,#FF5A2D);box-shadow:0 12px 22px -12px #FF5A2D;-webkit-tap-highlight-color:transparent;transition:transform .12s}
   .hs-go:active{transform:scale(.985)}
   .hs-go.on{background:linear-gradient(135deg,#F0556A,#D62839);box-shadow:0 12px 22px -12px #D62839}
@@ -5858,7 +5865,7 @@ let pdTab = ''; // '' = menu tertutup (tampilan Beranda seperti mockup); ketuk m
   .pd-tab.on .pd-tab-ic{background:rgba(255,255,255,.26);animation:pdPop .5s cubic-bezier(.3,1.4,.5,1)}
   .pd-tab.on::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(110deg,transparent 32%,rgba(255,255,255,.55) 50%,transparent 68%);transform:translateX(-130%);animation:pdShine 3s ease-in-out infinite}
   .pd-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
-  .pd-tab-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#EF4444;color:#fff;font-size:9.5px;line-height:16px;text-align:center}
+  .pd-tab-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#EF4444;color:#fff;font-size:11px;line-height:16px;text-align:center}
   .pd-tab-badge[hidden]{display:none}
   .pd-panel[hidden]{display:none}
   .pd-panel.pd-in{animation:pdIn .32s ease-out}
@@ -5958,7 +5965,7 @@ function renderPedagang() {
                   ? `<div class="reg-photo-preview"><img src="${regPhotoPreview}" alt="Pratinjau foto toko" /><button type="button" class="reg-photo-remove" onclick="window.__regPhotoRemove()">✕ Hapus foto</button></div>`
                   : `<button type="button" class="reg-photo-pick" onclick="window.__openPhotoChooser('reg-photo-input')">📷 Ambil / Pilih Foto</button>`}
                 <div class="food-hint" style="margin-top:6px;">Boleh dilewati dan ditambahkan nanti lewat Edit Profil.</div>
-                <div style="font-size:10px;color:var(--text-faint);margin-top:4px;line-height:1.5;">Gunakan foto milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam.</div>
+                <div style="font-size:11px;color:var(--text-faint);margin-top:4px;line-height:1.5;">Gunakan foto milik sendiri. Anda bertanggung jawab penuh atas foto yang diunggah, termasuk privasi pihak lain yang mungkin ikut terekam.</div>
                 ${regPhotoFile ? `
                 <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-dim);margin-top:8px;cursor:pointer;">
                   <input id="reg-photo-consent" type="checkbox" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
@@ -6046,8 +6053,8 @@ function renderPedagang() {
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
             <div>
               <div style="font-size:12.5px;font-weight:700;">📍 Lokasi mangkal tetap: ${v.default_open !== false ? '<span style="color:#3DDC97;">Buka</span>' : '<span style="color:#f87171;">Tutup sementara</span>'}</div>
-              <div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">${v.default_open !== false ? 'Tokomu kelihatan di peta/daftar pembeli walau belum nyalain status di bawah.' : 'Tokomu disembunyikan dari peta/daftar sampai kamu buka lagi.'}</div>
-              ${vendorScheduleLabel(v) ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
+              <div style="font-size:11px;color:var(--text-faint);margin-top:2px;">${v.default_open !== false ? 'Tokomu kelihatan di peta/daftar pembeli walau belum nyalain status di bawah.' : 'Tokomu disembunyikan dari peta/daftar sampai kamu buka lagi.'}</div>
+              ${vendorScheduleLabel(v) ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">🕐 ${escapeHtml(vendorScheduleLabel(v))}</div>` : ''}
             </div>
             <button type="button" onclick="window.__toggleDefaultOpen('${v.id}')" style="flex-shrink:0;padding:8px 12px;border-radius:10px;border:none;font-weight:700;font-size:11.5px;${v.default_open !== false ? 'background:var(--surface-2);color:var(--text);' : 'background:#3DDC97;color:#fff;'}">${v.default_open !== false ? 'Tutup Sementara' : 'Buka Lagi'}</button>
           </div>
@@ -6271,10 +6278,10 @@ async function loadVendorChatInbox(vendorId) {
       <div onclick="window.__openVendorChatThread('${t.id}','${label}')" style="display:flex;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--stroke);cursor:pointer;">
         <div style="width:34px;height:34px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🙋</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:12.5px;font-weight:700;">${label} ${unread ? `<span style="background:#f87171;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;">${unread} baru</span>` : ''}</div>
+          <div style="font-size:12.5px;font-weight:700;">${label} ${unread ? `<span style="background:#f87171;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">${unread} baru</span>` : ''}</div>
           <div style="font-size:11px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(t.last_message_preview || '')}</div>
         </div>
-        <div style="font-size:9.5px;color:var(--text-faint);flex-shrink:0;">${timeStr}</div>
+        <div style="font-size:11px;color:var(--text-faint);flex-shrink:0;">${timeStr}</div>
       </div>
     `;
   }).join('');
@@ -6335,7 +6342,7 @@ function setPedagangDot(n) {
     if (!dot) {
       dot = document.createElement('span');
       dot.className = 'review-dot';
-      dot.style.cssText = 'display:inline-block;min-width:16px;height:16px;padding:0 4px;margin-left:6px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;';
+      dot.style.cssText = 'display:inline-block;min-width:16px;height:16px;padding:0 4px;margin-left:6px;border-radius:999px;background:#ef4444;color:#fff;font-size:11px;font-weight:800;line-height:16px;text-align:center;';
       btn.appendChild(dot);
     }
     dot.textContent = n > 9 ? '9+' : String(n);
@@ -6408,11 +6415,11 @@ window.__revealMyReviews = async function (vendorId) {
     <div style="padding:8px 0;border-bottom:1px solid var(--stroke);">
       <div style="display:flex;align-items:center;gap:6px;">
         <span style="color:#F5A623;font-size:13px;">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
-        ${r.status === 'pending_review' ? '<span style="font-size:9.5px;font-weight:700;color:#fff;background:#f87171;padding:2px 7px;border-radius:999px;">⚠️ ' + (CHAT_DALAM_APP_AKTIF ? 'Menunggu Anda balas' : 'Perlu ditindaklanjuti') + '</span>' : ''}
-        ${r.status === 'resolved' ? '<span style="font-size:9.5px;font-weight:700;color:var(--aktif);background:var(--aktif-dim);padding:2px 7px;border-radius:999px;">✓ Sudah ditindaklanjuti</span>' : ''}
+        ${r.status === 'pending_review' ? '<span style="font-size:11px;font-weight:700;color:#fff;background:#f87171;padding:2px 7px;border-radius:999px;">⚠️ ' + (CHAT_DALAM_APP_AKTIF ? 'Menunggu Anda balas' : 'Perlu ditindaklanjuti') + '</span>' : ''}
+        ${r.status === 'resolved' ? '<span style="font-size:11px;font-weight:700;color:var(--aktif);background:var(--aktif-dim);padding:2px 7px;border-radius:999px;">✓ Sudah ditindaklanjuti</span>' : ''}
       </div>
       ${r.comment ? `<div style="font-size:12px;color:var(--text);margin-top:3px;">${escapeHtml(r.comment)}</div>` : ''}
-      <div style="font-size:10px;color:var(--text-faint);margin-top:2px;">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-top:2px;">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
       ${r.status === 'pending_review' ? `<button class="follow-btn" style="margin-top:6px;padding:6px 10px;font-size:11px;" onclick="window.__resolveReview('${vendorId}','${r.id}')">✓ Tandai sudah ditindaklanjuti</button>` : ''}
     </div>
   `).join('');
@@ -7635,7 +7642,7 @@ window.__openOjekSheet = async function (vendorId) {
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--stroke);">
       <div style="flex:1;min-width:0;">
         <div style="font-weight:600;font-size:13px;">${escapeHtml(d.name)}</div>
-        <div style="font-size:10.5px;color:var(--text-faint);">Ojek terverifikasi</div>
+        <div style="font-size:11px;color:var(--text-faint);">Ojek terverifikasi</div>
       </div>
       <a href="https://wa.me/${d.whatsapp}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener"
          onclick="window.__ojekClick('wa','${d.id}','')"
@@ -7646,7 +7653,7 @@ window.__openOjekSheet = async function (vendorId) {
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--stroke);">
       <div style="flex:1;min-width:0;">
         <div style="font-weight:600;font-size:13px;">${escapeHtml(g.name)}</div>
-        <div style="font-size:10.5px;color:var(--text-faint);">Grup WhatsApp ojek</div>
+        <div style="font-size:11px;color:var(--text-faint);">Grup WhatsApp ojek</div>
       </div>
       <a href="${g.wa_link}" target="_blank" rel="noopener"
          onclick="window.__ojekClick('group','','${g.id}')"
@@ -7974,7 +7981,7 @@ async function renderAdminDashboard() {
         <div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--text-dim);">Tujuan saat banner diketuk</div>
         <select id="bn-dest" onchange="window.__bnDestChange()" style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;">${bnDestOptionsHtml()}</select>
         <div id="bn-dest-extra" style="margin-top:6px;"></div>
-        <div id="bn-dest-preview" style="font-size:10.5px;color:var(--text-faint);margin-top:4px;word-break:break-all;"></div>
+        <div id="bn-dest-preview" style="font-size:11px;color:var(--text-faint);margin-top:4px;word-break:break-all;"></div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <select id="bn-audience" onchange="bnAudienceTouched = true" style="flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12px;">
             <option value="semua">Semua</option>
@@ -7985,9 +7992,9 @@ async function renderAdminDashboard() {
         </div>
         <div style="margin-top:8px;">${wilSearchHtml('bn', 'Nasional (semua wilayah)')}</div>
         <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-end;">
-          <label style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);">Mulai tayang (kosong = langsung)
+          <label style="flex:1;min-width:0;font-size:11px;color:var(--text-faint);">Mulai tayang (kosong = langsung)
             <input id="bn-start" type="datetime-local" style="width:100%;box-sizing:border-box;margin-top:2px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;color:var(--text);font-size:12px;" /></label>
-          <label style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);">Berakhir (kosong = tanpa batas)
+          <label style="flex:1;min-width:0;font-size:11px;color:var(--text-faint);">Berakhir (kosong = tanpa batas)
             <input id="bn-end" type="datetime-local" style="width:100%;box-sizing:border-box;margin-top:2px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;color:var(--text);font-size:12px;" /></label>
         </div>
         <button onclick="window.__adminCreateBanner()" style="margin-top:12px;width:100%;background:var(--brand);border:none;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:13px;color:#fff;cursor:pointer;">🖼️ Tambah ke Slider</button>
@@ -8014,7 +8021,7 @@ async function renderAdminDashboard() {
           
         </div>
         <div style="margin-top:8px;">${wilSearchHtml('ann', 'Nasional (semua wilayah)')}</div>
-        <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Zona memakai daftar wilayah resmi (provinsi → kabupaten/kota → kecamatan). Pengumuman zona hanya tampil &amp; terkirim ke perangkat yang wilayahnya diketahui berada di dalam zona itu; pembeli yang belum membagikan lokasi hanya menerima yang Nasional.</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">Zona memakai daftar wilayah resmi (provinsi → kabupaten/kota → kecamatan). Pengumuman zona hanya tampil &amp; terkirim ke perangkat yang wilayahnya diketahui berada di dalam zona itu; pembeli yang belum membagikan lokasi hanya menerima yang Nasional.</div>
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:var(--text-dim);cursor:pointer;">
           <input type="checkbox" id="ann-send-push" style="margin-top:2px;" />
           <span>📣 Kirim juga sebagai notifikasi push (ada pratinjau jumlah penerima sebelum benar-benar dikirim)</span>
@@ -8045,23 +8052,23 @@ async function renderAdminDashboard() {
   statsEl.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
       <div style="font-family:'Poppins';font-weight:800;font-size:17px;">${totalPedagang}</div>
-      <div style="font-size:9.5px;color:var(--text-faint);">Total Pedagang</div>
+      <div style="font-size:11px;color:var(--text-faint);">Total Pedagang</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
       <div style="font-family:'Poppins';font-weight:800;font-size:17px;color:var(--aktif);">${aktifSekarang}</div>
-      <div style="font-size:9.5px;color:var(--text-faint);">Aktif Sekarang</div>
+      <div style="font-size:11px;color:var(--text-faint);">Aktif Sekarang</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
       <div style="font-family:'Poppins';font-weight:800;font-size:17px;color:var(--brand);">${totalPremium}</div>
-      <div style="font-size:9.5px;color:var(--text-faint);">Premium</div>
+      <div style="font-size:11px;color:var(--text-faint);">Premium</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
       <div style="font-family:'Poppins';font-weight:800;font-size:17px;">${totalFollows ?? 0}</div>
-      <div style="font-size:9.5px;color:var(--text-faint);">Total Follow</div>
+      <div style="font-size:11px;color:var(--text-faint);">Total Follow</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:12px;padding:10px;text-align:center;">
       <div style="font-family:'Poppins';font-weight:800;font-size:17px;color:var(--live-icon, var(--aktif));">${uniqueBuyers}</div>
-      <div style="font-size:9.5px;color:var(--text-faint);">Pembeli Unik</div>
+      <div style="font-size:11px;color:var(--text-faint);">Pembeli Unik</div>
     </div>
   `;
   // Ringkasan sebaran wilayah (kabupaten/kota), dari deteksi GPS otomatis saat daftar
@@ -8109,7 +8116,7 @@ async function renderAdminDashboard() {
   const maxWeekCount = Math.max(1, ...weekBuckets.map(w => w.count));
   const growthHtml = weekBuckets.map(w => `
     <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:4px;">
-      <div style="font-size:10px;font-weight:700;color:var(--text);">${w.count}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text);">${w.count}</div>
       <div style="width:100%;background:var(--stroke);border-radius:6px 6px 0 0;height:60px;display:flex;align-items:flex-end;overflow:hidden;">
         <div style="width:100%;background:var(--brand);border-radius:6px 6px 0 0;height:${(w.count / maxWeekCount) * 100}%;"></div>
       </div>
@@ -8249,10 +8256,10 @@ async function loadAdminRequests() {
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-weight:700;font-size:12.5px;">${escapeHtml(v.name)}</span>
-          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;">${label}</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;">${label}</span>
         </div>
         <div style="font-size:11px;color:var(--text-dim);" class="mono">WA: ${escapeHtml(v.whatsapp || '-')} · ${escapeHtml(v.category || '-')}</div>
-        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        <div style="font-size:11px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
           ${r.request_type === 'premium' ? `
             <button class="follow-btn" onclick="window.__adminHandleRequest('${r.id}','${v.id}','premium',1)">1 Bln</button>
@@ -8311,12 +8318,12 @@ async function loadAdminClaims() {
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;border-color:#F5A623;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-weight:700;font-size:12.5px;">${escapeHtml(v.name)}</span>
-          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:#E5E7EB;color:#374151;">Belum diklaim</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:#E5E7EB;color:#374151;">Belum diklaim</span>
         </div>
         <div style="font-size:11px;color:var(--text-dim);" class="mono">WA toko saat ini: ${escapeHtml(v.whatsapp || '-')}</div>
         <div style="font-size:11px;color:var(--brand);font-weight:700;" class="mono">WA pengklaim: ${escapeHtml(c.claimant_whatsapp || '-')}</div>
         ${c.note ? `<div style="font-size:11px;color:var(--text-dim);">📝 ${escapeHtml(c.note)}</div>` : ''}
-        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(c.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        <div style="font-size:11px;color:var(--text-faint);">${new Date(c.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
           <button class="follow-btn" onclick="window.__adminApproveClaim('${c.id}','${escapeHtml(v.name).replace(/'/g, "\\'")}','${escapeHtml(c.claimant_whatsapp || '').replace(/'/g, "\\'")}')">✅ Setujui Klaim</button>
           <button class="follow-btn" style="color:#f87171;" onclick="window.__adminRejectClaim('${c.id}')">✕ Tolak</button>
@@ -8399,12 +8406,12 @@ async function loadAdminAnnouncements() {
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
         ${a.image_url ? `<img src="${a.image_url}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="font-size:12px;white-space:pre-wrap;">${escapeHtml(a.message)}</div>
-        ${a.link ? `<div style="font-size:10px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(a.link)}</div>` : ''}
-        <div style="font-size:10px;color:var(--text-faint);">
+        ${a.link ? `<div style="font-size:11px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(a.link)}</div>` : ''}
+        <div style="font-size:11px;color:var(--text-faint);">
           🎯 ${ANN_AUDIENCE_LABEL[a.audience] || a.audience} · 📍 ${escapeHtml(annZoneLabel(a))}
         </div>
-        <div style="font-size:10px;color:${a.push_sent_at ? 'var(--brand)' : 'var(--text-faint)'};">${a.push_sent_at ? '📣 Push terkirim ' + fmt(a.push_sent_at) : '🔕 Belum dikirim sebagai push'}</div>
-        <div style="font-size:9.5px;color:var(--text-faint);">${fmt(a.created_at)}</div>
+        <div style="font-size:11px;color:${a.push_sent_at ? 'var(--brand)' : 'var(--text-faint)'};">${a.push_sent_at ? '📣 Push terkirim ' + fmt(a.push_sent_at) : '🔕 Belum dikirim sebagai push'}</div>
+        <div style="font-size:11px;color:var(--text-faint);">${fmt(a.created_at)}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="follow-btn" onclick="window.__adminBroadcastPush('announcement','${a.id}')">📣 ${a.push_sent_at ? 'Kirim Ulang Push' : 'Kirim Push'}</button>
           <button class="follow-btn" style="color:#f87171;" onclick="window.__adminDeactivateAnnouncement('${a.id}')">✕ Nonaktifkan</button>
@@ -8555,8 +8562,8 @@ function renderBnImagePreview() {
       <img src="${dataUrl}" alt="" style="width:100%;height:100%;display:block;" />
       <div style="position:absolute;inset:13.3% 4.9%;border:1.5px dashed rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.35);border-radius:6px;pointer-events:none;"></div>
     </div>
-    <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">Pratinjau persis seperti di slider. Kotak putus-putus = area aman teks (min. 16 px dari tepi). Hasil unggah: ${outW} × ${outH} px.</div>
-    ${warns.map(w => `<div style="font-size:10.5px;color:#f59e0b;margin-top:3px;">${w}</div>`).join('')}
+    <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">Pratinjau persis seperti di slider. Kotak putus-putus = area aman teks (min. 16 px dari tepi). Hasil unggah: ${outW} × ${outH} px.</div>
+    ${warns.map(w => `<div style="font-size:11px;color:#f59e0b;margin-top:3px;">${w}</div>`).join('')}
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
       ${canShift ? `<span style="font-size:11px;color:var(--text-dim);">Fokus potong:</span>${focusBtn(0, lbl[0])}${focusBtn(0.5, lbl[1])}${focusBtn(1, lbl[2])}` : ''}
       <button type="button" class="follow-btn" style="color:#f87171;margin-left:auto;" onclick="window.__bnImageClear()">✕ Hapus gambar</button>
@@ -8695,7 +8702,7 @@ window.__bnDestChange = async function () {
   const kind = document.getElementById('bn-dest').value;
   const extra = document.getElementById('bn-dest-extra');
   const fld = 'width:100%;box-sizing:border-box;font-family:inherit;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:10px;color:var(--text);font-size:12.5px;';
-  const note = (t) => `<div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">${t}</div>`;
+  const note = (t) => `<div style="font-size:11px;color:var(--text-faint);margin-top:4px;">${t}</div>`;
   let html = '';
   if (kind === 'wa_admin') {
     html = `<textarea id="bn-dest-wa" rows="2" maxlength="300" oninput="window.__bnDestUpdate()" style="${fld}">${escapeHtml(BANNER_WA_DEFAULT_MSG)}</textarea>${note('Pesan ini terisi otomatis di WhatsApp pedagang — mereka tinggal menekan kirim. Boleh diubah.')}`;
@@ -8769,13 +8776,13 @@ async function loadAdminBanners() {
       return `
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
         <div style="aspect-ratio:8/3;border-radius:16px;overflow:hidden;background:var(--surface-2);"><img src="${escapeHtml(b.image_url)}" alt="" onload="window.__annCheckRatio(this)" style="width:100%;height:100%;object-fit:cover;display:block;" /></div>
-        <div class="ann-ratio-note" style="font-size:10.5px;color:#f59e0b;"></div>
+        <div class="ann-ratio-note" style="font-size:11px;color:#f59e0b;"></div>
         <div style="font-size:12.5px;font-weight:700;">${i + 1}. ${escapeHtml(b.title)}</div>
-        <div style="font-size:10.5px;font-weight:600;">${statusLine(b)}</div>
-        <div style="font-size:10px;color:var(--text-faint);">🎯 ${BANNER_AUDIENCE_LABEL[b.audience] || b.audience} · 📍 ${escapeHtml(annZoneLabel(b))}</div>
-        <div style="font-size:10px;color:var(--text-faint);">🗓 ${b.start_at ? bnFmt(b.start_at) : 'langsung'} → ${b.end_at ? bnFmt(b.end_at) : 'tanpa batas'}</div>
-        ${b.link ? `<div style="font-size:10px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(b.link)}</div>` : ''}
-        <div style="font-size:10px;color:var(--text-faint);">👁 ${b.view_count || 0} tayangan · 👆 ${b.click_count || 0} klik${ctr}</div>
+        <div style="font-size:11px;font-weight:600;">${statusLine(b)}</div>
+        <div style="font-size:11px;color:var(--text-faint);">🎯 ${BANNER_AUDIENCE_LABEL[b.audience] || b.audience} · 📍 ${escapeHtml(annZoneLabel(b))}</div>
+        <div style="font-size:11px;color:var(--text-faint);">🗓 ${b.start_at ? bnFmt(b.start_at) : 'langsung'} → ${b.end_at ? bnFmt(b.end_at) : 'tanpa batas'}</div>
+        ${b.link ? `<div style="font-size:11px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(b.link)}</div>` : ''}
+        <div style="font-size:11px;color:var(--text-faint);">👁 ${b.view_count || 0} tayangan · 👆 ${b.click_count || 0} klik${ctr}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="follow-btn" ${i === 0 ? 'disabled style="opacity:.4"' : ''} onclick="window.__adminMoveBanner('${b.id}','up')">▲</button>
           <button class="follow-btn" ${i === list.length - 1 ? 'disabled style="opacity:.4"' : ''} onclick="window.__adminMoveBanner('${b.id}','down')">▼</button>
@@ -8942,7 +8949,7 @@ async function loadAdminArticles() {
             ${a.cover_image ? `<img src="${a.cover_image}" style="width:100%;border-radius:10px;" />` : ''}
             <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
             ${a.excerpt ? `<div style="font-size:11.5px;color:var(--text-dim);">${escapeHtml(a.excerpt)}</div>` : ''}
-            <div style="font-size:9.5px;color:var(--text-faint);">✨ ${a.source === 'ai' ? 'Ditulis AI' : 'Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <div style="font-size:11px;color:var(--text-faint);">✨ ${a.source === 'ai' ? 'Ditulis AI' : 'Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="follow-btn" onclick="window.__adminOpenArticleForm('${a.id}')">👀 Baca & Edit</button>
               <button class="follow-btn" style="color:var(--brand);font-weight:700;" onclick="window.__adminApproveArticle('${a.id}')">✅ Setujui & Terbitkan</button>
@@ -8961,9 +8968,9 @@ async function loadAdminArticles() {
         ${a.cover_image ? `<img src="${a.cover_image}" style="width:100%;border-radius:10px;" />` : ''}
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div style="font-family:'Poppins';font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div>
-          <span style="flex-shrink:0;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:999px;${badge.style}">${badge.label}</span>
+          <span style="flex-shrink:0;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;${badge.style}">${badge.label}</span>
         </div>
-        <div style="font-size:9.5px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}${a.push_sent_at ? ' · 📣 push terkirim' : ''}</div>
+        <div style="font-size:11px;color:var(--text-faint);">/${escapeHtml(a.slug)} · ${a.source === 'ai' ? '✨ AI' : '🧑 Admin'} · ${new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}${a.push_sent_at ? ' · 📣 push terkirim' : ''}</div>
         <div class="admin-row" style="margin-top:2px;">
           <button class="follow-btn" style="flex-shrink:0;" onclick="window.__adminOpenArticleForm('${a.id}')">✏️ Edit</button>
           <button class="icon-btn" title="${a.status === 'published' ? 'Jadikan draf' : 'Terbitkan'}" onclick="window.__adminTogglePublishArticle('${a.id}',${a.status !== 'published'})">${a.status === 'published' ? '🙈' : '🚀'}</button>
@@ -9583,11 +9590,11 @@ async function loadAdminReports() {
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${r.status === 'baru' ? 'border-color:#f87171;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-weight:700;font-size:12.5px;">${r.vendors?.name || '(pedagang dihapus)'}</span>
-          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${r.status === 'baru' ? '#FEE2E2' : r.status === 'diproses' ? '#FEF3C7' : '#DCFCE7'};color:${r.status === 'baru' ? '#DC2626' : r.status === 'diproses' ? '#92400E' : '#16A34A'};">${r.status}</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${r.status === 'baru' ? '#FEE2E2' : r.status === 'diproses' ? '#FEF3C7' : '#DCFCE7'};color:${r.status === 'baru' ? '#DC2626' : r.status === 'diproses' ? '#92400E' : '#16A34A'};">${r.status}</span>
         </div>
         <div style="font-size:11.5px;color:var(--brand);font-weight:600;">${r.reason}</div>
         ${r.detail ? `<div style="font-size:11px;color:var(--text-dim);">${r.detail}</div>` : ''}
-        <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        <div style="font-size:11px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
         ${r.status !== 'selesai' ? `
           <div style="display:flex;gap:6px;margin-top:4px;">
             ${r.status === 'baru' ? `<button class="follow-btn" onclick="window.__updateReportStatus('${r.id}','diproses')">Tandai Diproses</button>` : ''}
@@ -9624,9 +9631,9 @@ async function loadAdminTagSuggestions() {
       <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:8px;${t.status === 'rejected' ? 'opacity:.6;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
           <span style="font-weight:700;font-size:13px;">${escapeHtml(t.tag_display)}</span>
-          <span style="font-size:10px;padding:3px 9px;border-radius:999px;background:var(--brand-dim);color:var(--brand);font-weight:700;">${t.count}x dipakai</span>
+          <span style="font-size:11px;padding:3px 9px;border-radius:999px;background:var(--brand-dim);color:var(--brand);font-weight:700;">${t.count}x dipakai</span>
         </div>
-        <div style="font-size:10px;color:var(--text-faint);">
+        <div style="font-size:11px;color:var(--text-faint);">
           <b style="color:${statusCol[t.status]};">${statusLbl[t.status]}</b> · Pertama: ${new Date(t.first_seen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
         </div>
         <select onchange="window.__tagSetMain('${t.id}', this.value)" style="padding:8px;border-radius:10px;border:1px solid var(--stroke);font-size:12px;">
@@ -9698,7 +9705,7 @@ function wilSearchInner(px) {
   const empty = wilSearchEmpty[px];
   return `<input id="${px}-q" type="search" autocomplete="off" placeholder="🔍 Cari wilayah (min. 3 huruf), misal: sangatta" oninput="window.__wilSearchType('${px}', this.value)" style="${base}">
     <div id="${px}-res" style="margin-top:2px;"></div>
-    <div style="font-size:10px;color:var(--text-faint);margin-top:4px;">${empty ? 'Dikosongkan = ' + escapeHtml(empty) : 'Ketuk hasil pencarian untuk mengisi pilihan bertingkat di bawah.'}</div>`;
+    <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">${empty ? 'Dikosongkan = ' + escapeHtml(empty) : 'Ketuk hasil pencarian untuk mengisi pilihan bertingkat di bawah.'}</div>`;
 }
 function wilSearchHtml(px, emptyLabel, initial) {
   wilSearchEmpty[px] = emptyLabel || '';
@@ -9721,7 +9728,7 @@ window.__wilSearchType = function (px, q) {
       if (!cur || cur.value.trim() !== q) return; // pengetikan sudah berubah
       wilSearchRes[px] = data || [];
       res.innerHTML = wilSearchRes[px].length
-        ? wilSearchRes[px].map((r, i) => `<button type="button" onclick="window.__wilSearchPick('${px}', ${i})" style="display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 10px;margin-top:4px;color:var(--text);font-size:12px;cursor:pointer;"><span style="font-size:9.5px;color:var(--brand);font-weight:700;">${WIL_LEVEL_LABEL[r.level] || ''}</span><br>${escapeHtml(r.label)}</button>`).join('')
+        ? wilSearchRes[px].map((r, i) => `<button type="button" onclick="window.__wilSearchPick('${px}', ${i})" style="display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 10px;margin-top:4px;color:var(--text);font-size:12px;cursor:pointer;"><span style="font-size:11px;color:var(--brand);font-weight:700;">${WIL_LEVEL_LABEL[r.level] || ''}</span><br>${escapeHtml(r.label)}</button>`).join('')
         : '<div style="font-size:11px;color:var(--text-faint);padding:6px 2px;">Tidak ditemukan. Coba ejaan lain.</div>';
     } catch (e) {
       res.innerHTML = `<div style="font-size:11px;color:#f87171;padding:6px 2px;">Gagal mencari: ${escapeHtml(e.message)}</div>`;
@@ -9827,7 +9834,7 @@ function ojekPanelHtml() {
       <input id="oj-wa" type="tel" placeholder="Nomor WhatsApp (08xxxxxxxxxx)" style="${inp}" />
       <input id="oj-plate" type="text" maxlength="15" placeholder="Plat nomor (opsional)" style="${inp}" />
       <select id="oj-group" style="${inp}"><option value="">Mitra: memuat…</option></select>
-      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wilayah ojek otomatis mengikuti wilayah mitra. Belum ada mitranya? Buat dulu di bagian "Tambah mitra" di bawah.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">Wilayah ojek otomatis mengikuti wilayah mitra. Belum ada mitranya? Buat dulu di bagian "Tambah mitra" di bawah.</div>
       <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:11.5px;color:var(--text-dim);line-height:1.4;">
         <input id="oj-consent" type="checkbox" style="margin-top:2px;flex-shrink:0;" />
         <span>Ojek ini sudah setuju nama &amp; nomor WhatsApp-nya ditampilkan ke pembeli.</span>
@@ -9842,7 +9849,7 @@ function ojekPanelHtml() {
 
     <div class="section-label" style="font-size:11px;color:var(--brand);">🤝 Tambah mitra</div>
     <div class="vendor-hero" style="text-align:left;margin-bottom:12px;">
-      <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;">Mitra bisa RT, RW, grup WhatsApp ojek, atau yang lain. Nama mitra kamu yang tentukan; jenis dan keterangan hanya acuan untuk admin.</div>
+      <div style="font-size:11px;color:var(--text-faint);line-height:1.5;">Mitra bisa RT, RW, grup WhatsApp ojek, atau yang lain. Nama mitra kamu yang tentukan; jenis dan keterangan hanya acuan untuk admin.</div>
       <select id="og-jenis" onchange="window.__mitraJenisChanged()" style="${inp}">
         <option value="grup">💬 Grup WhatsApp ojek</option>
         <option value="rw">🏘️ RW</option>
@@ -9851,11 +9858,11 @@ function ojekPanelHtml() {
       </select>
       <input id="og-name" type="text" maxlength="80" placeholder="Nama mitra" style="${inp}" />
       <input id="og-link" type="url" placeholder="https://chat.whatsapp.com/xxxxxxxx" style="${inp}" />
-      <div id="og-link-hint" style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Wajib untuk jenis grup.</div>
-      <div style="font-size:10.5px;font-weight:700;margin-top:10px;">📍 Wilayah (seluruh Indonesia, minimal sampai kecamatan)</div>
+      <div id="og-link-hint" style="font-size:11px;color:var(--text-faint);margin-top:4px;">Wajib untuk jenis grup.</div>
+      <div style="font-size:11px;font-weight:700;margin-top:10px;">📍 Wilayah (seluruh Indonesia, minimal sampai kecamatan)</div>
       ${wilSearchHtml('mts', '')}
       ${wilPickerAdminHtml('mt')}
-      <div style="font-size:10.5px;color:var(--text-faint);margin-top:4px;">Dipakai juga untuk menentukan pembeli mana yang melihat mitra ini.</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">Dipakai juga untuk menentukan pembeli mana yang melihat mitra ini.</div>
       <input id="og-ket" type="text" maxlength="200" placeholder="Keterangan acuan, misal: RW 05 Perum Griya Asri, ketua Pak Budi (tidak tampil ke pembeli)" style="${inp}" />
       <input id="og-area" type="text" maxlength="120" placeholder="Area layanan, misal: Perum Griya Asri RW 05 (opsional)" style="${inp}" />
       <input id="og-note" type="text" maxlength="300" placeholder="Catatan admin (opsional, tidak tampil ke pembeli)" style="${inp}" />
@@ -9940,13 +9947,13 @@ function renderAdminMitraTable() {
   const sum = (k) => rows.reduce((n, m) => n + (Number(m[k]) || 0), 0);
   const card = (label, val, warn) => `<div style="flex:1;min-width:70px;background:var(--surface-2);border:1px solid var(--stroke);border-radius:10px;padding:8px;text-align:center;">
       <div style="font-size:16px;font-weight:800;${warn ? 'color:#DC2626;' : ''}">${val}</div>
-      <div style="font-size:9.5px;color:var(--text-faint);">${label}</div></div>`;
+      <div style="font-size:11px;color:var(--text-faint);">${label}</div></div>`;
   if (sEl) sEl.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
       ${card('Mitra', rows.length)}${card('Ojek aktif', sum('ojek_aktif'))}${card('Menunggu', sum('ojek_pending'))}
       ${card('Laporan baru', sum('laporan_baru'), sum('laporan_baru') > 0)}${card('Klik 30 hari', sum('klik_30_hari'))}</div>`;
   if (!rows.length) { tEl.innerHTML = '<div style="color:var(--text-faint);font-size:11.5px;">Belum ada mitra yang cocok.</div>'; return; }
   const fmt = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'belum pernah';
-  const th = 'text-align:left;padding:8px 6px;border-bottom:1px solid var(--stroke);font-size:10px;color:var(--text-faint);white-space:nowrap;';
+  const th = 'text-align:left;padding:8px 6px;border-bottom:1px solid var(--stroke);font-size:11px;color:var(--text-faint);white-space:nowrap;';
   const td = 'padding:8px 6px;border-bottom:1px solid var(--stroke);vertical-align:top;';
   tEl.innerHTML = `<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px;">
     <thead><tr><th style="${th}">Mitra</th><th style="${th}">Jenis</th><th style="${th}">Status</th><th style="${th}">Ojek (aktif / menunggu / tangguh)</th><th style="${th}">Laporan (baru / total)</th><th style="${th}">Klik 7h / 30h</th><th style="${th}">Akun</th><th style="${th}">Aksi</th></tr></thead>
@@ -9954,17 +9961,17 @@ function renderAdminMitraTable() {
       const vs = m.verification_status || 'verified';
       const [bg, fg] = OJEK_STATUS_COLOR[vs] || OJEK_STATUS_COLOR.pending;
       const baru = Number(m.laporan_baru) || 0;
-      const b = 'class="follow-btn" style="padding:4px 8px;font-size:10.5px;"';
+      const b = 'class="follow-btn" style="padding:4px 8px;font-size:11px;"';
       return `<tr style="${m.active ? '' : 'opacity:.6;'}">
         <td style="${td}"><div style="font-weight:700;">${escapeHtml(m.name)}</div>
-          <div style="color:var(--text-faint);font-size:10px;">📍 ${escapeHtml(m.wilayah || 'wilayah belum diisi')}</div>
-          ${m.keterangan ? `<div style="color:var(--text-dim);font-size:10px;font-style:italic;">${escapeHtml(m.keterangan)}</div>` : ''}</td>
+          <div style="color:var(--text-faint);font-size:11px;">📍 ${escapeHtml(m.wilayah || 'wilayah belum diisi')}</div>
+          ${m.keterangan ? `<div style="color:var(--text-dim);font-size:11px;font-style:italic;">${escapeHtml(m.keterangan)}</div>` : ''}</td>
         <td style="${td}">${escapeHtml(MITRA_JENIS_LABEL[m.jenis] || m.jenis || '-')}</td>
-        <td style="${td}"><span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${bg};color:${fg};white-space:nowrap;">${OJEK_STATUS_LABEL[vs] || vs}</span>${m.active ? '' : '<div style="font-size:9.5px;color:var(--text-faint);">nonaktif</div>'}</td>
+        <td style="${td}"><span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${bg};color:${fg};white-space:nowrap;">${OJEK_STATUS_LABEL[vs] || vs}</span>${m.active ? '' : '<div style="font-size:11px;color:var(--text-faint);">nonaktif</div>'}</td>
         <td style="${td}">${Number(m.ojek_aktif) || 0} / ${Number(m.ojek_pending) || 0} / ${Number(m.ojek_ditangguhkan) || 0}</td>
         <td style="${td}"><span style="${baru > 0 ? 'color:#DC2626;font-weight:800;' : ''}">${baru}</span> / ${Number(m.laporan_total) || 0}</td>
         <td style="${td}">${Number(m.klik_7_hari) || 0} / ${Number(m.klik_30_hari) || 0}</td>
-        <td style="${td}">${Number(m.jumlah_akun) || 0} akun<div style="color:var(--text-faint);font-size:10px;">login: ${fmt(m.terakhir_login)}</div></td>
+        <td style="${td}">${Number(m.jumlah_akun) || 0} akun<div style="color:var(--text-faint);font-size:11px;">login: ${fmt(m.terakhir_login)}</div></td>
         <td style="${td}"><div style="display:flex;gap:4px;flex-wrap:wrap;">
           ${vs !== 'verified' ? `<button ${b} onclick="window.__adminMitraSetStatus('${m.id}','verified')">✔ Setujui</button>` : ''}
           ${vs !== 'suspended' ? `<button ${b} onclick="window.__adminMitraSetStatus('${m.id}','suspended')">⏸ Tangguhkan</button>` : ''}
@@ -10025,13 +10032,13 @@ async function loadAdminOjek() {
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:700;font-size:12.5px;">🛵 ${escapeHtml(d.name)}</span>
-        <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${bg};color:${fg};white-space:nowrap;">${OJEK_STATUS_LABEL[d.status] || d.status}</span>
+        <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${bg};color:${fg};white-space:nowrap;">${OJEK_STATUS_LABEL[d.status] || d.status}</span>
       </div>
       <div style="font-size:11px;color:var(--text-dim);">📱 ${escapeHtml(d.whatsapp)}${d.plate_number ? ' · ' + escapeHtml(d.plate_number) : ''}</div>
-      <div style="font-size:10.5px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(d.region_id))} · dibuat ${fmt(d.created_at)}</div>
-      ${d.group_id ? `<div style="font-size:10.5px;color:var(--text-faint);">💬 Grup: ${escapeHtml((groups.find(x => x.id === d.group_id) || {}).name || '(grup dihapus)')}</div>` : ''}
-      <div style="font-size:10.5px;color:${d.consent_show_at ? 'var(--text-faint)' : '#B45309'};">${d.consent_show_at ? '✅ Setuju tampil (' + fmt(d.consent_show_at) + (d.consent_by ? ', dicatat ' + escapeHtml(d.consent_by) : '') + ')' : '⚠️ Belum ada persetujuan tampil'}${d.consent_note ? '<br>📝 ' + escapeHtml(d.consent_note) : ''}</div>
-      <div style="font-size:10.5px;font-weight:600;color:${tampil ? '#15803D' : 'var(--text-faint)'};">${tampil ? '👀 Tampil ke pembeli' : '🙈 Tidak tampil ke pembeli'}</div>
+      <div style="font-size:11px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(d.region_id))} · dibuat ${fmt(d.created_at)}</div>
+      ${d.group_id ? `<div style="font-size:11px;color:var(--text-faint);">💬 Grup: ${escapeHtml((groups.find(x => x.id === d.group_id) || {}).name || '(grup dihapus)')}</div>` : ''}
+      <div style="font-size:11px;color:${d.consent_show_at ? 'var(--text-faint)' : '#B45309'};">${d.consent_show_at ? '✅ Setuju tampil (' + fmt(d.consent_show_at) + (d.consent_by ? ', dicatat ' + escapeHtml(d.consent_by) : '') + ')' : '⚠️ Belum ada persetujuan tampil'}${d.consent_note ? '<br>📝 ' + escapeHtml(d.consent_note) : ''}</div>
+      <div style="font-size:11px;font-weight:600;color:${tampil ? '#15803D' : 'var(--text-faint)'};">${tampil ? '👀 Tampil ke pembeli' : '🙈 Tidak tampil ke pembeli'}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">
         ${d.status !== 'verified' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','verified')">✔ Verifikasi</button>` : ''}
         ${d.status !== 'suspended' ? `<button ${btn} onclick="window.__adminOjekSetStatus('${d.id}','suspended')">⏸ Tangguhkan</button>` : ''}
@@ -10055,25 +10062,25 @@ async function loadAdminOjek() {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:700;font-size:12.5px;">${jenisIcon} ${escapeHtml(g.name)}</span>
         <span style="display:flex;gap:4px;">
-          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--stroke);">${escapeHtml(MITRA_JENIS_LABEL[g.jenis] || 'Grup WA')}</span>
-          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${vbg};color:${vfg};">${OJEK_STATUS_LABEL[vs] || vs}</span>
-          <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${g.active ? '#DCFCE7' : '#F3F4F6'};color:${g.active ? '#15803D' : '#6B7280'};">${g.active ? 'Aktif' : 'Nonaktif'}</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--stroke);">${escapeHtml(MITRA_JENIS_LABEL[g.jenis] || 'Grup WA')}</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${vbg};color:${vfg};">${OJEK_STATUS_LABEL[vs] || vs}</span>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${g.active ? '#DCFCE7' : '#F3F4F6'};color:${g.active ? '#15803D' : '#6B7280'};">${g.active ? 'Aktif' : 'Nonaktif'}</span>
         </span>
       </div>
-      ${g.service_area ? `<div style="font-size:10.5px;color:var(--text-dim);">🏘️ ${escapeHtml(g.service_area)}</div>` : ''}
-      <div style="font-size:10.5px;color:var(--text-faint);">👥 ${memberCount}/${g.max_drivers || 20} ojek tercatat di aplikasi</div>
-      ${g.keterangan ? `<div style="font-size:10.5px;color:var(--text-dim);font-style:italic;">🗒️ ${escapeHtml(g.keterangan)}</div>` : ''}
-      <div style="font-size:10.5px;color:var(--text-faint);">🗺️ ${escapeHtml(mt.wilayah || 'wilayah baku belum diisi')}</div>
-      <div style="font-size:10.5px;color:var(--text-faint);">🧑‍💼 Akun pengelola (${cos.length}/${MITRA_MAX_AKUN})${cos.length ? '' : ': belum ada'}</div>
-      ${cos.map(co => `<div style="font-size:10.5px;color:var(--text-dim);display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--stroke);padding-top:5px;">
+      ${g.service_area ? `<div style="font-size:11px;color:var(--text-dim);">🏘️ ${escapeHtml(g.service_area)}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-faint);">👥 ${memberCount}/${g.max_drivers || 20} ojek tercatat di aplikasi</div>
+      ${g.keterangan ? `<div style="font-size:11px;color:var(--text-dim);font-style:italic;">🗒️ ${escapeHtml(g.keterangan)}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-faint);">🗺️ ${escapeHtml(mt.wilayah || 'wilayah baku belum diisi')}</div>
+      <div style="font-size:11px;color:var(--text-faint);">🧑‍💼 Akun pengelola (${cos.length}/${MITRA_MAX_AKUN})${cos.length ? '' : ': belum ada'}</div>
+      ${cos.map(co => `<div style="font-size:11px;color:var(--text-dim);display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--stroke);padding-top:5px;">
         <span><b>${escapeHtml(co.name)}</b> (${escapeHtml(co.whatsapp)}) · ${co.status === 'active' ? 'aktif' : '<span style="color:#DC2626;">ditangguhkan</span>'} · ${co.terms_accepted_at ? 'ketentuan disetujui' : '<span style="color:#B45309;">belum setuju ketentuan</span>'}${co.last_login_at ? ' · masuk ' + fmt(co.last_login_at) : ''}</span>
         ${sup ? `<span style="display:flex;gap:4px;">
           <button ${btn} onclick="window.__adminResetCoordPin('${co.id}')">🔑 Reset PIN</button>
           <button ${btn} onclick="window.__adminCoordStatus('${co.id}','${co.status === 'active' ? 'suspended' : 'active'}')">${co.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}</button></span>` : ''}
       </div>`).join('')}
-      ${g.wa_link ? `<div style="font-size:10.5px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(g.wa_link)}</div>` : ''}
-      <div style="font-size:10.5px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(g.region_id))}</div>
-      ${g.admin_note ? `<div style="font-size:10.5px;color:var(--text-dim);">📝 ${escapeHtml(g.admin_note)}</div>` : ''}
+      ${g.wa_link ? `<div style="font-size:11px;color:var(--text-faint);word-break:break-all;">🔗 ${escapeHtml(g.wa_link)}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-faint);">📍 ${escapeHtml(ojekRegionLabel(g.region_id))}</div>
+      ${g.admin_note ? `<div style="font-size:11px;color:var(--text-dim);">📝 ${escapeHtml(g.admin_note)}</div>` : ''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         ${vs !== 'verified' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','verified')">✔ Setujui grup</button>` : ''}
         ${vs !== 'suspended' ? `<button ${btn} onclick="window.__adminGroupVerify('${g.id}','suspended')">⏸ Tangguhkan grup</button>` : ''}
@@ -10092,11 +10099,11 @@ async function loadAdminOjek() {
     <div class="vendor-card" style="flex-direction:column;align-items:stretch;gap:6px;${r.status === 'baru' ? 'border-color:#f87171;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <span style="font-weight:700;font-size:12.5px;">${escapeHtml(nameOf(r))}</span>
-        <span style="font-size:9.5px;padding:3px 8px;border-radius:999px;background:${r.status === 'baru' ? '#FEE2E2' : r.status === 'diproses' ? '#FEF3C7' : '#DCFCE7'};color:${r.status === 'baru' ? '#DC2626' : r.status === 'diproses' ? '#B45309' : '#15803D'};">${r.status}</span>
+        <span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${r.status === 'baru' ? '#FEE2E2' : r.status === 'diproses' ? '#FEF3C7' : '#DCFCE7'};color:${r.status === 'baru' ? '#DC2626' : r.status === 'diproses' ? '#B45309' : '#15803D'};">${r.status}</span>
       </div>
       <div style="font-size:11.5px;color:var(--brand);font-weight:600;">${OJEK_REASON_LABEL[r.reason] || escapeHtml(r.reason)}</div>
       ${r.detail ? `<div style="font-size:11px;color:var(--text-dim);white-space:pre-wrap;">${escapeHtml(r.detail)}</div>` : ''}
-      <div style="font-size:9.5px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+      <div style="font-size:11px;color:var(--text-faint);">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
       ${r.status !== 'selesai' ? `<div style="display:flex;gap:6px;">
         ${r.status === 'baru' ? `<button ${btn} onclick="window.__adminOjekReportStatus('${r.id}','diproses')">Tandai Diproses</button>` : ''}
         <button ${btn} onclick="window.__adminOjekReportStatus('${r.id}','selesai')">Tandai Selesai</button>
@@ -10317,8 +10324,8 @@ async function loadAdminMetrics() {
   const card = (label, main, sub) => `
     <div class="vendor-hero" style="padding:12px 8px;text-align:center;margin:0;">
       <div style="font-family:'Poppins';font-weight:800;font-size:20px;color:var(--brand);">${main}</div>
-      <div style="font-size:10.5px;font-weight:600;margin-top:2px;">${label}</div>
-      ${sub ? `<div style="font-size:9.5px;color:var(--text-faint);margin-top:2px;">${sub}</div>` : ''}
+      <div style="font-size:11px;font-weight:600;margin-top:2px;">${label}</div>
+      ${sub ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">${sub}</div>` : ''}
     </div>`;
 
   const daily = m.daily || [];
@@ -10349,13 +10356,13 @@ async function loadAdminMetrics() {
     <div class="section-label" style="font-size:11px;color:var(--brand);">📅 Buka app per hari</div>
     <div class="vendor-hero" style="text-align:left;margin-bottom:12px;padding:12px 14px;">
       <div style="display:flex;align-items:flex-end;gap:2px;height:80px;">${bars}</div>
-      <div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--text-faint);margin-top:4px;"><span>${daily[0] ? daily[0].date : ''}</span><span>puncak ${n(maxOpen === 1 && !daily.some(d => d.app_open) ? 0 : maxOpen)}/hari</span><span>${daily.length ? daily[daily.length - 1].date : ''}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-faint);margin-top:4px;"><span>${daily[0] ? daily[0].date : ''}</span><span>puncak ${n(maxOpen === 1 && !daily.some(d => d.app_open) ? 0 : maxOpen)}/hari</span><span>${daily.length ? daily[daily.length - 1].date : ''}</span></div>
     </div>
 
     ${listBlock('📍 Wilayah teratas (perangkat)', m.top_regions || [], r => `<span>${escapeHtml(r.name)}</span><b>${n(r.devices)}</b>`, 'Belum ada data wilayah.')}
     ${listBlock('🛵 Ojek paling sering dihubungi', m.top_ojek || [], r => `<span>${escapeHtml(r.name)}</span><b>${n(r.wa_opens)}×</b>`, 'Belum ada.')}
     ${listBlock('💬 Grup paling sering diklik', m.top_groups || [], r => `<span>${escapeHtml(r.name)}</span><b>${n(r.clicks)}×</b>`, 'Belum ada.')}
-    ${listBlock('🏪 Interaksi pedagang', vRows, ([k, v]) => `<span>${VK[k] || escapeHtml(k)}</span><span><b>${n(v.events)}</b> <span style="color:var(--text-faint);font-size:10.5px;">(${n(v.devices)} perangkat)</span></span>`, 'Belum ada.')}
+    ${listBlock('🏪 Interaksi pedagang', vRows, ([k, v]) => `<span>${VK[k] || escapeHtml(k)}</span><span><b>${n(v.events)}</b> <span style="color:var(--text-faint);font-size:11px;">(${n(v.devices)} perangkat)</span></span>`, 'Belum ada.')}
   `;
 }
 
@@ -10702,11 +10709,11 @@ function jdWakePref() { try { return localStorage.getItem(JD_WAKE_PREF_KEY) === 
 function jdWakeRowHtml() {
   if (jdTrackConsent !== true) return '';
   if (!jdWakeSupported()) {
-    return '<div style="font-size:10.5px;color:var(--text-faint);margin-bottom:10px;">Browser/HP ini tidak mendukung opsi "jaga layar tetap menyala".</div>';
+    return '<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px;">Browser/HP ini tidak mendukung opsi "jaga layar tetap menyala".</div>';
   }
   return `<label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:10px;cursor:pointer;">
     <input type="checkbox" ${jdWakePref() ? 'checked' : ''} onchange="window.__toggleWakeLock(this.checked)" style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" />
-    <span><b>Jaga layar tetap menyala saat jualan</b><br><span style="font-size:10.5px;color:var(--text-faint);line-height:1.5;">Jejak jadi lebih rapat, tapi baterai lebih boros. Cocok kalau HP dipasang di gerobak atau sedang dicas.</span></span>
+    <span><b>Jaga layar tetap menyala saat jualan</b><br><span style="font-size:11px;color:var(--text-faint);line-height:1.5;">Jejak jadi lebih rapat, tapi baterai lebih boros. Cocok kalau HP dipasang di gerobak atau sedang dicas.</span></span>
   </label>`;
 }
 
