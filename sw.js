@@ -9,7 +9,7 @@
 // Naikkan angka versi ini setiap kali kamu deploy perubahan besar
 // pada app shell (index.html/style.css/app.js/config.js), supaya
 // cache lama otomatis dibuang dan pengguna dapat versi baru.
-const CACHE_VERSION = 'v64';
+const CACHE_VERSION = 'v65';
 const STATIC_CACHE = `jajandekat-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `jajandekat-runtime-${CACHE_VERSION}`;
 
@@ -55,6 +55,8 @@ const APP_SHELL = [
   // Halaman & portal koordinator ojek
   '/privacy.html',
   '/terms.html',
+  '/investor.html',
+  '/icons/jajandekat-promo.webp',
   '/koordinator.html',
   // Ikon browser/iOS yang dirujuk index.html
   '/favicon.ico',
